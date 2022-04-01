@@ -1,0 +1,146 @@
+<?xml version="1.0"?>
+<Events>
+
+    <Event id="armDisarm" filter="self">
+        <Name>Panel Arming Events</Name>
+          <ConfigUI>
+            <Field id="indigoTrigger" type="list">
+              <Label>Arming Event</Label>
+              <List>
+                <Option value="OPEN">Disarmed</Option>
+                <Option value="ARM_AWAY">Armed Away</Option>
+                <Option value="ARM_STAY">Armed Stay</Option>
+              </List>
+            </Field>
+
+            <Field id="panelPartitionNumber" type="menu" defaultValue='1'>
+              <Label>Partition Number:</Label>
+              <List>
+                <Option value="1">1</Option>
+                <Option value="2">2</Option>
+                <Option value="3">3</Option>
+                <Option value="4">4</Option>
+                <Option value="5">5</Option>
+                <Option value="6">6</Option>
+                <Option value="7">7</Option>
+                <Option value="8">8</Option>
+              </List> 
+            </Field>
+          </ConfigUI>
+    </Event> 
+
+    <Event id="systemEvents" filter="self">
+        <Name>System Status Events</Name>
+          <ConfigUI>
+            <Field id="indigoTrigger" type="list">
+              <Label>System Event</Label>
+              <List>
+                <Option value="ACLOSS">AC Power Lost</Option>
+                <Option value="AC_RESTORE">AC Power Restore</Option>
+                <Option value="LOWBAT">Battery low</Option>
+                <Option value="LOWBAT_RESTORE">Battery Restore</Option>
+                <Option value="RFLOWBAT">Battery low</Option>
+                <Option value="RFLOWBAT_RESTORE">Battery Restore</Option>
+                <Option value="TROUBLE">Trouble</Option>
+                <Option value="TROUBLE_RESTORE">Trouble Restore</Option>
+              </List>
+            </Field>
+
+            <Field id="panelPartitionNumber" type="menu" defaultValue='1'>
+              <Label>Partition Number:</Label>
+              <List>
+                <Option value="1">1</Option>
+                <Option value="2">2</Option>
+                <Option value="3">3</Option>
+                <Option value="4">4</Option>
+                <Option value="5">5</Option>
+                <Option value="6">6</Option>
+                <Option value="7">7</Option>
+                <Option value="8">8</Option>
+              </List> 
+            </Field>
+          </ConfigUI>
+    </Event> 
+
+    <Event id="alarmEvents" filter="self">
+        <Name>Alarm Events</Name>
+          <ConfigUI>
+            <Field id="caveat" type="label" alignText="center" fontColor="green">
+              <Label>These events require either a real or emulated LRR</Label>
+            </Field>
+
+            <Field id="space" type="label">
+              <Label> </Label>
+            </Field>
+
+            <Field id="indigoTrigger" type="list">
+              <Label>Alarm Event</Label>
+              <List>
+                <Option value="ALARM_PANIC">Panic Alarm</Option>
+                <Option value="ALARM_FIRE">Fire Alarm</Option>
+                <Option value="ALARM_AUDIBLE">Audible Alarm</Option>
+                <Option value="ALARM_SILENT">Silent Alarm</Option>
+                <Option value="ALARM_ENTRY">Entry Alarm</Option>
+                <Option value="ALARM_AUX">Aux Alarm</Option>
+                <Option value="ALARM_PERIMETER">Perimeter Alarm</Option>       
+                <Option value="ALARM_TRIPPED">Alarm Tripped: Countdown started</Option>
+              </List>
+            </Field>
+
+            <Field id="panelPartitionNumber" type="menu" defaultValue='1'>
+              <Label>Partition Number:</Label>
+              <List>
+                <Option value="1">1</Option>
+                <Option value="2">2</Option>
+                <Option value="3">3</Option>
+                <Option value="4">4</Option>
+                <Option value="5">5</Option>
+                <Option value="6">6</Option>
+                <Option value="7">7</Option>
+                <Option value="8">8</Option>
+              </List> 
+            </Field>
+          </ConfigUI>
+      </Event>  
+
+    <Event id="userEvents" filter="self">
+        <Name>User Actions</Name>
+          <ConfigUI>
+            <Field id="caveat" type="label" alignText="center" fontColor="green">
+              <Label>These events require either a real or emulated LRR</Label>
+            </Field>
+
+            <Field id="space" type="label">
+              <Label> </Label>
+            </Field>
+
+            <Field id="userNumber" type="textfield">
+              <Label>User Number:</Label>
+            </Field>
+
+            <Field id="indigoTrigger" type="list">
+              <Label>User Initated Event</Label>
+              <List>
+                <Option value="OPEN">Disarm</Option>
+                <Option value="ARM_AWAY">Armed Away</Option>
+                <Option value="ARM_STAY">Armed Stay</Option>
+              </List>
+            </Field>
+
+            <Field id="panelPartitionNumber" type="menu" defaultValue='1'>
+              <Label>Partition Number:</Label>
+              <List>
+                <Option value="1">1</Option>
+                <Option value="2">2</Option>
+                <Option value="3">3</Option>
+                <Option value="4">4</Option>
+                <Option value="5">5</Option>
+                <Option value="6">6</Option>
+                <Option value="7">7</Option>
+                <Option value="8">8</Option>
+              </List> 
+            </Field>
+          </ConfigUI>
+      </Event>  
+        
+</Events>
