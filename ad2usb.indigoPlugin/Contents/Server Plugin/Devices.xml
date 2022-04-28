@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <Devices>
 
-<!-- #################################### zone device  #################################### -->	
+<!-- #################################### zone device  #################################### -->
 	<Device type="custom" id="alarmZone">
 		<Name>Alarm Zone</Name>
-		<ConfigUI>	
+		<ConfigUI>
 			<!-- Test field for the sensor device type -->
 			<Field id="SupportsOnState" type="checkbox" defaultValue="false" hidden="true">
 				<Label>Show ON/OFF state:</Label>
@@ -13,16 +13,16 @@
 			<Field id="isAdvanced" type="checkbox" hidden="true" >
 				<Label/>
 				<!-- Hidden field for passing the operating mode -->
-			</Field>			
+			</Field>
 
 			<Field id="space" type="label">
 				<Label></Label>
 			</Field>
-			
+
 			<Field id="zoneNumber" type="textfield">
 				<Label>Zone Number:</Label>
 			</Field>
-			
+
 			<Field id="zonePartitionNumber" type="menu" defaultValue="1">
 				<Label>Partition Number:</Label>
 				<!-- <List class="self" method="getPartitionList"/>   Indigo won"t let us set defaultValue on a dynamic list-->
@@ -35,21 +35,21 @@
 					<Option value="6">6</Option>
 					<Option value="7">7</Option>
 					<Option value="8">8</Option>
-				</List>	
+				</List>
 			</Field>
-			
+
 			<Field id="simpleSeparator1" type="separator"  visibleBindingId="isAdvanced" visibleBindingValue="true" />
-			
+
 			<Field id="ad2usbZoneType" type="menu" defaultValue="None" visibleBindingId="isAdvanced" visibleBindingValue="true">
 				<Label>Zone Type:</Label>
-				<List>				
+				<List>
 					<Option value="None">--Select a Zone Type--</Option>
 					<Option value="zoneTypeREL">Main Board</Option>
 					<Option value="zoneTypeEXP">Expander Module</Option>
 					<Option value="zoneTypeRFX">Wireless</Option>
 				</List>
 			</Field>
-			
+
 			<Field id="ad2usbZoneTypeREL_Board" type="menu" visibleBindingId="ad2usbZoneType" visibleBindingValue="zoneTypeREL" defaultValue="12">
 			 	<Label>Relay board address (12-15):</Label>
 				<List>
@@ -68,7 +68,7 @@
 					<Option value="4">4</Option>
 				</List>
 			</Field>
-			
+
 			<Field id="ad2usbZoneTypeEXP_Board" type="menu" visibleBindingId="ad2usbZoneType" visibleBindingValue="zoneTypeEXP" defaultValue="7">
 			 	<Label>Expander module address
 	(7-16):</Label>
@@ -107,22 +107,22 @@
 					<Option value="2">2</Option>
 			 		<Option value="3">3</Option>
 					<Option value="4">4</Option>
-				</List>			 	
+				</List>
 			</Field>
-			
+
 			<Field id="ad2usbZoneTypeRFX_Id" type="textfield" visibleBindingId="ad2usbZoneType" visibleBindingValue="zoneTypeRFX">
 			 	<Label>Wireless tag number:</Label>
 			</Field>
-			
+
 			<Field id="space1" type="label" visibleBindingId="isAdvanced" visibleBindingValue="true">
 				<Label></Label>
 			</Field>
-			
+
 			<Field type="checkbox" id="zoneLogChanges" defaultValue="0">
 				<Label>Log: </Label>
 				<Description>Zone Changes</Description>
 			</Field>
-			
+
 			<Field type="checkbox" id="logSupervision" visibleBindingId="ad2usbZoneType" visibleBindingValue="zoneTypeRFX" defaultValue="1">
 				<Label>Log:</Label>
 				<Description>Supervision messages</Description>
@@ -136,7 +136,7 @@
 			<Field id="address" type="textfield"  hidden="true" >
 				<Label/>
 			</Field>
-			
+
 		</ConfigUI>
 		<!-- <UiDisplayStateId>zoneState</UiDisplayStateId>	 -->
 		<UiDisplayStateId>displayState</UiDisplayStateId>
@@ -145,14 +145,14 @@
 				<ValueType>
 					<List>
 						<Option value="faulted">Fault</Option>
-						<Option value="Clear">Clear</Option>				
+						<Option value="Clear">Clear</Option>
 					</List>
 				</ValueType>
 				<TriggerLabel>Any change in state</TriggerLabel>
 				<TriggerLabelPrefix>Zone State Changed to </TriggerLabelPrefix>
 				<ControlPageLabel> -- Select a Zone State -- </ControlPageLabel>
 				<ControlPageLabelPrefix>Current State </ControlPageLabelPrefix>
-			</State>			
+			</State>
 			<State id="onOffState">
 				<ValueType boolType="onOff">Boolean</ValueType>
 				<TriggerLabel>Zone onOff state</TriggerLabel>
@@ -174,42 +174,42 @@
 <!-- #################################### Zone Group Device #################################### -->
 	<Device type="custom" id="zoneGroup">
 		<Name>Zone Group</Name>
-		<ConfigUI>	
+		<ConfigUI>
 			<Field id="zoneDeviceList" type="list"  rows="16">
 				<Label>Zone:</Label>
 				<List class="self" method="getZoneDevList" dynamicReload="yes"/>
 			</Field>
-			
+
 			<Field type="checkbox" id="zoneLogChanges" defaultValue="0">
 				<Label>Log: </Label>
 				<Description>Log Zone Changes</Description>
 			</Field>
-			<Field id="zoneGroupLabel_1" type="label" fontSize="small" fontColor="darkgray" align="center">	
+			<Field id="zoneGroupLabel_1" type="label" fontSize="small" fontColor="darkgray" align="center">
 				<Label>Log changes from clear to faulted one any zone in the group becomes faulted. Log changes to clear when all zones become clear.</Label>
 			</Field>
 		</ConfigUI>
-		
+
 		<UiDisplayStateId>displayState</UiDisplayStateId>
 		<States>
 			<State id="zoneState">
 				<ValueType>
 					<List>
 						<Option value="faulted">Fault</Option>
-						<Option value="Clear">Clear</Option>				
+						<Option value="Clear">Clear</Option>
 					</List>
 				</ValueType>
 				<TriggerLabel>Any change in state</TriggerLabel>
 				<TriggerLabelPrefix>Zone State Changed to </TriggerLabelPrefix>
 				<ControlPageLabel> -- Select a Zone State -- </ControlPageLabel>
 				<ControlPageLabelPrefix>Current State </ControlPageLabelPrefix>
-			</State>			
-			
+			</State>
+
 			<State id="onOffState">
 				<ValueType boolType="onOff">Boolean</ValueType>
 				<TriggerLabel>Zone onOff state</TriggerLabel>
 				<ControlPageLabel>Zone onOff state</ControlPageLabel>
 			</State>
-			
+
 			<State id="displayState">
 				<ValueType>String</ValueType>
 				<TriggerLabel> </TriggerLabel>
@@ -222,11 +222,11 @@
 <!-- #################################### Virtual Zone Device #################################### -->
 	<Device type="custom" id="alarmZoneVirtual">
 		<Name>Indigo Managed Virtual Zone</Name>
-		<ConfigUI>			
+		<ConfigUI>
 			<Field id="zoneNumber" type="textfield">
 				<Label>Zone Number:</Label>
 			</Field>
-			
+
 			<Field id="zonePartitionNumber" type="menu" defaultValue="1">
 				<Label>Partition Number:</Label>
 				<!-- <List class="self" method="getPartitionList"/>   Indigo won"t let us set defaultValue on a dynamic list-->
@@ -239,20 +239,20 @@
 					<Option value="6">6</Option>
 					<Option value="7">7</Option>
 					<Option value="8">8</Option>
-				</List>	
+				</List>
 			</Field>
-			
+
 			<Field id="space0" type="label">
 				<Label></Label>
 			</Field>
-			
+
 			<Field id="ad2usbZoneType" type="menu"  defaultValue="zoneTypeEXP" hidden="true">
 				<Label>Zone Type:</Label>
 				<List>
 					<Option value="zoneTypeEXP">ad2usb Virtual EXPander Board</Option>
 				</List>
 			</Field>
-			
+
 			<Field id="ad2usbZoneTypeEXP_Board" type="menu" visibleBindingId="ad2usbZoneType" visibleBindingValue="zoneTypeEXP" defaultValue="7">
 			 	<Label>Assign virtual Expansion board address
 	(7-11):</Label>
@@ -295,35 +295,35 @@
 					<Option value="8">8</Option>
 				</List>
 			</Field>
-			
+
 			<Field id="space1" type="label">
 				<Label></Label>
 			</Field>
-			
+
 			<Field type="checkbox" id="zoneLogChanges" defaultValue="0">
 				<Label>Log Changes:</Label>
 				<Description></Description>
 			</Field>
-			
+
 			<Field id="address" type="textfield"  hidden="true" >
 				<Label/>
 			</Field>
-			
+
 		</ConfigUI>
-		<UiDisplayStateId>displayState</UiDisplayStateId>	
+		<UiDisplayStateId>displayState</UiDisplayStateId>
 		<States>
 			<State id="zoneState">
 				<ValueType>
 					<List>
 						<Option value="faulted">Fault</Option>
-						<Option value="Clear">Clear</Option>				
+						<Option value="Clear">Clear</Option>
 					</List>
 				</ValueType>
 				<TriggerLabel>Zone State Changed</TriggerLabel>
 				<TriggerLabelPrefix>Zone State Changed to</TriggerLabelPrefix>
 				<ControlPageLabel>Current State</ControlPageLabel>
 				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
-			</State>			
+			</State>
 			<State id="onOffState">
 				<ValueType boolType="onOff">Boolean</ValueType>
 				<TriggerLabel>Zone onOff state</TriggerLabel>
@@ -343,12 +343,12 @@
 	</Device>
 
 
-<!-- #################################### ad2usb keypad device  #################################### -->	
+<!-- #################################### ad2usb keypad device  #################################### -->
 	<Device type="custom" id="ad2usbInterface">
 		<Name>ad2usb Keypad</Name>
-		<ConfigUI>	
+		<ConfigUI>
 
-			<Field id="numPartitions" type="textfield" hidden="true" defaultFalue="1">
+			<Field id="numPartitions" type="textfield" hidden="true" defaultValue="1">
 				<Label/>
 				<!-- Hidden field for passing the number of partitions -->
 			</Field>
@@ -364,12 +364,12 @@
 					<Option value="6">6</Option>
 					<Option value="7">7</Option>
 					<Option value="8">8</Option>
-				</List>	
+				</List>
 			</Field>
 
 			<Field id="panelKeypadAddress" type="menu" visibleBindingId="numPartitions" visibleBindingValue="2,3,4,5,6,7,8">
 				<Label>Enter a keypad address assigned to this partition:</Label>
-				<List>					
+				<List>
 					<Option value="0">00</Option>
 					<Option value="1">01</Option>
 					<Option value="2">02</Option>
@@ -380,7 +380,7 @@
 					<Option value="7">07</Option>
 					<Option value="8">08</Option>
 					<Option value="9">09</Option>
-					<Option value="10">10</Option>				
+					<Option value="10">10</Option>
 					<Option value="11">11</Option>
 					<Option value="12">12</Option>
 					<Option value="13">13</Option>
@@ -390,7 +390,7 @@
 					<Option value="17">17</Option>
 					<Option value="18">18</Option>
 					<Option value="19">19</Option>
-					<Option value="20">20</Option>				
+					<Option value="20">20</Option>
 					<Option value="21">21</Option>
 					<Option value="22">22</Option>
 					<Option value="23">23</Option>
@@ -402,9 +402,9 @@
 					<Option value="29">29</Option>
 					<Option value="30">30</Option>
 					<Option value="31">31</Option>
-				</List>	
+				</List>
 			</Field>
-			
+
 			<Field id="note" type="label" fontSize="small" alignText="right" fontColor="darkgray" alignWithControl="true" visibleBindingId="panelPartitionNumber" visibleBindingValue="1">
 				<Label>Leave un-selected to automaticaly assign the ad2usb's address </Label>.
 			</Field>
@@ -413,7 +413,7 @@
 				<Label/>
 			</Field>
 		</ConfigUI>
-		
+
 		<UiDisplayStateId>displayState</UiDisplayStateId>
 		<States>
 			<State id="panelState">
@@ -422,7 +422,7 @@
 						<Option value="ready">Ready to Arm</Option>
 						<Option value="Fault">Faulted</Option>
 						<Option value="armedStay">Armed Stay</Option>
-						<Option value="armedAway">Armed Away</Option>				
+						<Option value="armedAway">Armed Away</Option>
 					</List>
 				</ValueType>
 				<TriggerLabel>Alarm State Changed</TriggerLabel>
@@ -444,17 +444,17 @@
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Programming Mode</TriggerLabel>
 				<ControlPageLabel>Programming Mode</ControlPageLabel>
-			</State>		
+			</State>
 			<State id="zonesBypassed">
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Zones Bypassed</TriggerLabel>
 				<ControlPageLabel>Zones Bypassed</ControlPageLabel>
-			</State>	
+			</State>
 			<State id="panelReady">
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Panel is Ready</TriggerLabel>
 				<ControlPageLabel>Panel is Ready</ControlPageLabel>
-			</State>		
+			</State>
 			<State id="panelArmed">
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Panel is Armed</TriggerLabel>
@@ -465,9 +465,9 @@
 					<List>
 						<Option value="unArmed">Not Armed</Option>
 						<Option value="armedStay">Armed Stay</Option>
-						<Option value="armedAway">Armed Away</Option>	
-						<Option value="armedMax">Armed Max</Option>					
-						<Option value="armedInstant">Armed Instant</Option>				
+						<Option value="armedAway">Armed Away</Option>
+						<Option value="armedMax">Armed Max</Option>
+						<Option value="armedInstant">Armed Instant</Option>
 					</List>
 				</ValueType>
 				<TriggerLabel>Alarm Armed State</TriggerLabel>
@@ -484,7 +484,7 @@
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Chime Mode</TriggerLabel>
 				<ControlPageLabel>Chime Mode</ControlPageLabel>
-			</State>	
+			</State>
 			<State id="alarmOccurred">
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Alarm Occurred</TriggerLabel>
@@ -494,12 +494,12 @@
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Panel Alarm Bell On</TriggerLabel>
 				<ControlPageLabel>Panel Alarm Bell On</ControlPageLabel>
-			</State>	
+			</State>
 			<State id="batteryLow">
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Battery Low</TriggerLabel>
 				<ControlPageLabel>Battery Low</ControlPageLabel>
-			</State>	
+			</State>
 			<State id="fireAlarm">
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Fire Alarm On</TriggerLabel>
@@ -519,7 +519,7 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>Last change by</TriggerLabel>
 				<ControlPageLabel>Last change by</ControlPageLabel>
-			</State>	
+			</State>
 			<State id="lastChgTo">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Last change to</TriggerLabel>
@@ -529,7 +529,7 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>Last change at</TriggerLabel>
 				<ControlPageLabel>Last change at</ControlPageLabel>
-			</State>	
+			</State>
 			<State id="alarmedZone">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Zone which tripped the alarm</TriggerLabel>
