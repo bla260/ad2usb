@@ -5,7 +5,7 @@
 # Developed and copyright by Richard Perlman -- indigo AT perlman DOT com
 
 from berkinet import logger
-from indigoPluginUpdateChecker import updateChecker
+# from indigoPluginUpdateChecker import updateChecker
 import inspect
 import re
 import time
@@ -33,21 +33,25 @@ def addPanelDev(self, dev, mode, ad2usbKeyPadAddress):
         alarmPartition = dev.pluginProps['panelPartitionNumber']
     except:
         alarmPartition = "1"
-        self.log.logError("%s: Partition number not found for keypad device '%s' Assigning partition 1.\nPlease reconfigure the keypad device to resolve this problem." % (funcName, dev.name), self.logName)
+        self.log.logError("%s: Partition number not found for keypad device '%s' Assigning partition 1.\nPlease reconfigure the keypad device to resolve this problem." % (
+            funcName, dev.name), self.logName)
 
     try:
         alarmPartitionAddress = dev.pluginProps['panelKeypadAddress']
     except:
         alarmPartitionAddress = ad2usbKeyPadAddress
-        self.log.logError("%s: Panel Keypad Address not found for keypad device '%s' Assigning address %s.\nPlease reconfigure the keypad device to resolve this problem." % (funcName, alarmPartition, dev.name), self.logName)
+        self.log.logError("%s: Panel Keypad Address not found for keypad device '%s' Assigning address %s.\nPlease reconfigure the keypad device to resolve this problem." % (
+            funcName, alarmPartition, dev.name), self.logName)
 
     self.panelsDict[alarmPartitionAddress] = {'devId': dev.id, 'name': dev.name, 'partition': alarmPartition}
-    self.log.log(3, dbFlg, "%s: Added address to partition record:%s" % (funcName, self.panelsDict[alarmPartitionAddress]), self.logName)
+    self.log.log(3, dbFlg, "%s: Added address to partition record:%s" %
+                 (funcName, self.panelsDict[alarmPartitionAddress]), self.logName)
 
-     # If advanced mode, add a reverse lookup: partition to keypad address
+    # If advanced mode, add a reverse lookup: partition to keypad address
     if mode == 'advanced':
         self.partition2address[alarmPartition] = {'devId': dev.id, 'name': dev.name, 'address': alarmPartitionAddress}
-        self.log.log(3, dbFlg, "%s: Added partition to address record:%s" % (funcName, self.partition2address[alarmPartition]), self.logName)
+        self.log.log(3, dbFlg, "%s: Added partition to address record:%s" %
+                     (funcName, self.partition2address[alarmPartition]), self.logName)
 
     self.log.log(3, dbFlg, "%s completed" % (funcName), self.logName)
 
@@ -62,14 +66,16 @@ def addGroupDev(self, dev):
 
     zoneDeviceList = dev.pluginProps[u'zoneDeviceList']
     zoneLogChanges = dev.pluginProps[u'zoneLogChanges']
-    self.log.log(3, dbFlg, "%s: Received: zoneDevceList:%s, zoneLogChanges:%s" % (funcName, zoneDeviceList, zoneLogChanges), self.logName)
+    self.log.log(3, dbFlg, "%s: Received: zoneDevceList:%s, zoneLogChanges:%s" %
+                 (funcName, zoneDeviceList, zoneLogChanges), self.logName)
 
     try:
         for zone in zoneDeviceList:
             self.log.log(3, dbFlg, "%s:        Found:%s" % (funcName, zone), self.logName)
-             # Create a zone number to zoneGroup device table
+            # Create a zone number to zoneGroup device table
             if zone in self.zone2zoneGroupDevDict:
-                self.log.log(3, dbFlg, "%s:IF        got here for:%s, %s" % (funcName, zone, self.zone2zoneGroupDevDict[zone]), self.logName)
+                self.log.log(3, dbFlg, "%s:IF        got here for:%s, %s" %
+                             (funcName, zone, self.zone2zoneGroupDevDict[zone]), self.logName)
                 self.zone2zoneGroupDevDict[zone].append(int(dev.id))
             else:
                 self.log.log(3, dbFlg, "%s:IF NOT       got here for:%s" % (funcName, zone), self.logName)
@@ -83,10 +89,12 @@ def addGroupDev(self, dev):
                 self.zoneGroup2zoneDict[dev.id] = {}
                 self.zoneGroup2zoneDict[dev.id][zone] = 'Clear'
 
-        self.log.log(3, dbFlg, "%s:        Returned zone2zoneGroupDevDict:%s" % (funcName, self.zone2zoneGroupDevDict), self.logName)
-        self.log.log(3, dbFlg, "%s:        Returned zoneGroup2zoneDict:%s" % (funcName, self.zoneGroup2zoneDict), self.logName)
-    except Exception, err:
-            self.log.logError("%s: Error adding group zone device:%s" % (funcName, str(err)), self.logName)
+        self.log.log(3, dbFlg, "%s:        Returned zone2zoneGroupDevDict:%s" %
+                     (funcName, self.zone2zoneGroupDevDict), self.logName)
+        self.log.log(3, dbFlg, "%s:        Returned zoneGroup2zoneDict:%s" %
+                     (funcName, self.zoneGroup2zoneDict), self.logName)
+    except Exception as err:
+        self.log.logError("%s: Error adding group zone device:%s" % (funcName, str(err)), self.logName)
 
      # for zone in self.zone2zoneGroupDevDict:
      #     self.log.log(0, dbFlg, "%s:zone2zoneGroupDevDict       Found:%s, %s" % (funcName, zone, self.zone2zoneGroupDevDict[zone]), self.logName)
@@ -105,13 +113,13 @@ def basicBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
     self.log.log(2, dbFlg, "%s Called for function:%s" % (funcName, funct), self.logName)
     self.log.log(4, dbFlg, "%s: received device:\n%s\n" % (funcName, dev), self.logName)
 
-     # This block is for adding new zones or keypads
+    # This block is for adding new zones or keypads
     if funct == 'add':
         if dev.deviceTypeId == 'alarmZone' or dev.deviceTypeId == 'alarmZoneVirtual':
             zoneDevId = dev.id
             zoneName = dev.name
-             # Make an excepton for pseudo zones, etc. that aren't supported in basic mode
-             # If the panel can't report it, neither can we.
+            # Make an excepton for pseudo zones, etc. that aren't supported in basic mode
+            # If the panel can't report it, neither can we.
             try:
                 zoneNumber = int(dev.pluginProps['zoneNumber'])
             except:
@@ -120,8 +128,10 @@ def basicBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
             zoneState = ""   # dev.states['zoneState']
             zoneLogChanges = dev.pluginProps['zoneLogChanges']
             zoneIndex = zoneNumber
-            self.zonesDict[zoneIndex] = {'devId': zoneDevId, 'number': zoneNumber, 'logChanges': zoneLogChanges, 'name': zoneName, 'state': zoneState}
-            self.log.log(3, dbFlg, "%s: Added record for Device:%s, Zone:%s" % (funcName, zoneName, zoneNumber), self.logName)
+            self.zonesDict[zoneIndex] = {'devId': zoneDevId, 'number': zoneNumber,
+                                         'logChanges': zoneLogChanges, 'name': zoneName, 'state': zoneState}
+            self.log.log(3, dbFlg, "%s: Added record for Device:%s, Zone:%s" %
+                         (funcName, zoneName, zoneNumber), self.logName)
             self.log.log(3, dbFlg, "%s: Wrote record:%s" % (funcName, self.zonesDict[zoneIndex]), self.logName)
 
         elif dev.deviceTypeId == 'ad2usbInterface':
@@ -137,7 +147,8 @@ def basicBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
             zoneName = dev.name
 
             del self.zonesDict[zoneNumber]
-            self.log.log(3, dbFlg, "%s: Deleted entry for Zone number:%s, Zone name:%s" % (funcName, zoneNumber, zoneName), self.logName)
+            self.log.log(3, dbFlg, "%s: Deleted entry for Zone number:%s, Zone name:%s" %
+                         (funcName, zoneNumber, zoneName), self.logName)
 
     self.log.log(3, dbFlg, "%s completed" % (funcName), self.logName)
 
@@ -146,10 +157,11 @@ def basicBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
 def advancedBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
     funcName = inspect.stack()[0][3]
     dbFlg = False
-    self.log.log(2, dbFlg, "%s Called for devce:%s,  Type:%s, function:%s" % (funcName, dev.name, dev.deviceTypeId, funct), self.logName)
+    self.log.log(2, dbFlg, "%s Called for devce:%s,  Type:%s, function:%s" %
+                 (funcName, dev.name, dev.deviceTypeId, funct), self.logName)
     self.log.log(4, dbFlg, "%s: received device:\n%s\n" % (funcName, dev), self.logName)
 
-     # This block is for adding new zones or keypads
+    # This block is for adding new zones or keypads
     if funct == 'add':
         if dev.deviceTypeId == 'alarmZone' or dev.deviceTypeId == 'alarmZoneVirtual':
             zoneType = dev.pluginProps['ad2usbZoneType']
@@ -185,8 +197,10 @@ def advancedBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
                 if len(zoneDevice) == 1:
                     zoneDevice = '0' + zoneDevice
 
-            self.advZonesDict[zoneIndex] = {'type': zoneType, 'board': zoneBoard, 'device': zoneDevice, 'devId': zoneDevId, 'number': zoneNumber, 'logChanges': zoneLogChanges, 'logSupervision': zoneLogSupervision, 'name': zoneName, 'state': zoneState, 'partition': zonePartition}
-            self.log.log(3, dbFlg, "%s: Added record for Device:%s, Zone:%s" % (funcName, zoneName, zoneNumber), self.logName)
+            self.advZonesDict[zoneIndex] = {'type': zoneType, 'board': zoneBoard, 'device': zoneDevice, 'devId': zoneDevId, 'number': zoneNumber,
+                                            'logChanges': zoneLogChanges, 'logSupervision': zoneLogSupervision, 'name': zoneName, 'state': zoneState, 'partition': zonePartition}
+            self.log.log(3, dbFlg, "%s: Added record for Device:%s, Zone:%s" %
+                         (funcName, zoneName, zoneNumber), self.logName)
             self.log.log(3, dbFlg, "%s: Wrote record:%s" % (funcName, self.advZonesDict[zoneIndex]), self.logName)
 
         elif dev.deviceTypeId == 'ad2usbInterface':
@@ -229,7 +243,8 @@ def advancedBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
                     zoneDevice = '0' + zoneDevice
 
             del self.advZonesDict[zoneIndex]
-            self.log.log(3, dbFlg, "%s: Deleted entry for Zone number:%s, Zone name:%s, Zone type" % (funcName, zoneNumber, zoneName, zoneType), self.logName)
+            self.log.log(3, dbFlg, "%s: Deleted entry for Zone number:%s, Zone name:%s, Zone type:%s" %
+                         (funcName, zoneNumber, zoneName, zoneType), self.logName)
 
     self.log.log(3, dbFlg, "%s completed" % (funcName), self.logName)
 
@@ -238,7 +253,7 @@ def advancedBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
 # Now, Let's get started...
 ################################################################################
 class Plugin(indigo.PluginBase):
-     ########################################
+    ########################################
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 
@@ -249,8 +264,9 @@ class Plugin(indigo.PluginBase):
         dbFlg = False
         self.log.log(2, dbFlg, "%s Called" % (funcName), self.logName)
 
-        self.updater = updateChecker(self, pluginId)
-        self.updater.checkVersionPoll()
+        # removing these since version check now provided by Indigo
+        # self.updater = updateChecker(self, pluginId)
+        # self.updater.checkVersionPoll()
 
         self.ad2usb = ad2usb(self)
         self.logUnknownDevices = pluginPrefs.get("logUnknownDevices", False)
@@ -300,7 +316,8 @@ class Plugin(indigo.PluginBase):
         if self.ad2usbIsAdvanced:
             mode = 'Advanced'
 
-        self.log.log(0, dbFlg, "Plugin setup completed. Ready to open link to the ad2usb in %s mode." % (mode), self.logName)
+        self.log.log(0, dbFlg, "Plugin setup completed. Ready to open link to the ad2usb in %s mode." %
+                     (mode), self.logName)
 
         self.log.log(3, dbFlg, "%s completed" % (funcName), self.logName)
 
@@ -320,7 +337,8 @@ class Plugin(indigo.PluginBase):
         funcName = inspect.stack()[0][3]
         dbFlg = False
         self.log.log(2, dbFlg, "%s Called" % (funcName), self.logName)
-        self.log.log(3, dbFlg, "%s: devName:%s, devId:%s, devTypeId:%s, clearAllOnRestart:%s" % (funcName, dev.name, dev.id, dev.deviceTypeId, self.clearAllOnRestart), self.logName)
+        self.log.log(3, dbFlg, "%s: devName:%s, devId:%s, devTypeId:%s, clearAllOnRestart:%s" %
+                     (funcName, dev.name, dev.id, dev.deviceTypeId, self.clearAllOnRestart), self.logName)
 
         # Always load the basic Dict because we need a zone number to device lookup in advanced mode too.
         basicBuildDevDict(self, dev, 'add', self.ad2usbKeyPadAddress)
@@ -341,7 +359,8 @@ class Plugin(indigo.PluginBase):
         funcName = inspect.stack()[0][3]
         dbFlg = False
         self.log.log(2, dbFlg, "%s Called" % (funcName), self.logName)
-        self.log.log(3, dbFlg, "%s: devName:%s, devId:%s, devTypeId:%s" % (funcName, dev.name, dev.id, dev.deviceTypeId), self.logName)
+        self.log.log(3, dbFlg, "%s: devName:%s, devId:%s, devTypeId:%s" %
+                     (funcName, dev.name, dev.id, dev.deviceTypeId), self.logName)
 
         # We always load the basic Dict because we need a zone number to device lookup in advanced mode too.
         try:
@@ -366,7 +385,8 @@ class Plugin(indigo.PluginBase):
         self.log.log(2, dbFlg, "%s Called" % (funcName), self.logName)
 
         try:
-            self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType, self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
+            self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType,
+                                  self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
             self.log.log(0, dbFlg, "ad2usb communication closed", self.logName)
         except:
             if self.ad2usbRestart:
@@ -379,7 +399,8 @@ class Plugin(indigo.PluginBase):
         if self.ad2usbRestart:
             self.ad2usbRestart = False
             self.log = logger(self)
-            self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType, self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
+            self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType,
+                                  self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
 
         self.log.log(3, dbFlg, "%s completed" % (funcName), self.logName)
 
@@ -403,7 +424,8 @@ class Plugin(indigo.PluginBase):
         self.ad2usb.stopComm()
         self.sleep(5)
         self.log.log(2, dbFlg, "%s: Starting" % (funcName), self.logName)
-        self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType, self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
+        self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType,
+                              self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
 
         self.log.log(3, dbFlg, "%s completed" % (funcName), self.logName)
 
@@ -430,8 +452,8 @@ class Plugin(indigo.PluginBase):
             virtPartition = virtDevice.pluginProps['vZonePartitionNumber']
             panelDevice = indigo.devices[self.partition2address[virtPartition]['devId']]
             panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
-             # Update device UI States
-             # This shouldn't be necessary, but the AD2USB doesn't send EXP messages for virtual zones
+            # Update device UI States
+            # This shouldn't be necessary, but the AD2USB doesn't send EXP messages for virtual zones
             if action == '0':   # Clear
                 uiValue = 'Clear'
                 zoneState = 'Clear'
@@ -440,27 +462,31 @@ class Plugin(indigo.PluginBase):
                     self.ad2usb.zoneStateDict[panelKeypadAddress].remove(int(virtZoneNumber))
                 except:
                     pass
-                self.log.log(3, dbFlg, "%s: Clear - state list:%s" % (funcName, self.ad2usb.zoneStateDict), self.logName)
+                self.log.log(3, dbFlg, "%s: Clear - state list:%s" %
+                             (funcName, self.ad2usb.zoneStateDict), self.logName)
             elif action == '1':   # Fault
                 uiValue = 'Fault'
                 displayStateValue = 'faulted'
                 zoneState = 'faulted'
                 self.ad2usb.zoneStateDict[panelKeypadAddress].append(int(virtZoneNumber))
                 self.ad2usb.zoneStateDict[panelKeypadAddress].sort()
-                self.log.log(3, dbFlg, "%s: Fault - state list:%s" % (funcName, self.ad2usb.zoneStateDict), self.logName)
+                self.log.log(3, dbFlg, "%s: Fault - state list:%s" %
+                             (funcName, self.ad2usb.zoneStateDict), self.logName)
             elif action == '2':   # Trouble
                 uiValue = 'Trouble'
                 displayStateValue = 'trouble'
                 self.ad2usb.zoneStateDict[panelKeypadAddress].append(int(virtZoneNumber))
                 self.ad2usb.zoneStateDict[panelKeypadAddress].sort()
-                self.log.log(3, dbFlg, "%s: Trouble - state list:%s" % (funcName, self.ad2usb.zoneStateDict), self.logName)
+                self.log.log(3, dbFlg, "%s: Trouble - state list:%s" %
+                             (funcName, self.ad2usb.zoneStateDict), self.logName)
             else:
-                 # ERROR
+                # ERROR
                 pass
 
             virtDevice.updateStateOnServer(key='zoneState', value=zoneState, uiValue=uiValue)
             virtDevice.updateStateOnServer(key='displayState', value=displayStateValue, uiValue=uiValue)
-            panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.ad2usb.zoneStateDict[panelKeypadAddress]))
+            panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
+                self.ad2usb.zoneStateDict[panelKeypadAddress]))
 
         self.log.log(3, dbFlg, "%s completed" % (funcName), self.logName)
 
@@ -543,7 +569,7 @@ class Plugin(indigo.PluginBase):
         valuesDict = pluginProps
         errorMsgDict = indigo.Dict()
 
-         # Override the device ConfigUI isAdvanced value here with the global value:
+        # Override the device ConfigUI isAdvanced value here with the global value:
         valuesDict["isAdvanced"] = self.pluginPrefs["isAdvanced"]
         valuesDict["numPartitions"] = self.numPartitions
 
@@ -589,7 +615,8 @@ class Plugin(indigo.PluginBase):
         funcName = inspect.stack()[0][3]
         dbFlg = False
         self.log.log(2, dbFlg, "%s Called" % (funcName), self.logName)
-        self.log.log(3, dbFlg, "%s: received:\n>>valuesDict\n%s\n>>typeId\n%s\n>>devId\n%s\n" % (funcName, valuesDict, typeId, devId), self.logName)
+        self.log.log(3, dbFlg, "%s: received:\n>>valuesDict\n%s\n>>typeId\n%s\n>>devId\n%s\n" %
+                     (funcName, valuesDict, typeId, devId), self.logName)
 
         errorMsgDict = indigo.Dict()
         areErrors = False
@@ -598,7 +625,8 @@ class Plugin(indigo.PluginBase):
             prId = "com.berkinet.ad2usb"
 
             for dev in indigo.devices.iter(prId):
-                if valuesDict[u'panelKeypadAddress'] == '' and valuesDict[u'panelPartitionNumber'] == '1':  # self.numPartitions == 1:
+                # self.numPartitions == 1:
+                if valuesDict[u'panelKeypadAddress'] == '' and valuesDict[u'panelPartitionNumber'] == '1':
                     valuesDict[u'panelKeypadAddress'] = self.ad2usbKeyPadAddress
 
                 if dev.deviceTypeId == 'ad2usbInterface' and dev.configured:
@@ -606,7 +634,8 @@ class Plugin(indigo.PluginBase):
                         if valuesDict[u'panelPartitionNumber'] == dev.pluginProps[u'panelPartitionNumber'] and dev.id != devId:
                             errorMsgDict[u'panelPartitionNumber'] = 'Found an existing panel device for the same parttion.\nOnly one panel device per partition is allowed.'
                             errorMsgDict[u'showAlertText'] = '-> Found an existing panel device for the same partition.\nOnly one panel device per partition is allowed.'
-                            self.log.logError("%s: -> Found an existing panel device for the same partition.\nOnly one panel device per partition is allowed." % (funcName), self.logName)
+                            self.log.logError(
+                                "%s: -> Found an existing panel device for the same partition.\nOnly one panel device per partition is allowed." % (funcName), self.logName)
                             areErrors = True
                     except:
                         valuesDict[u'panelPartitionNumber'] = "1"
@@ -615,7 +644,8 @@ class Plugin(indigo.PluginBase):
                         if valuesDict[u'panelKeypadAddress'] == dev.pluginProps[u'panelKeypadAddress'] and dev.id != devId:
                             errorMsgDict[u'panelKeypadAddress'] = 'Found an existing panel device with the same keypad address.\nOnly one panel device per address is allowed.'
                             errorMsgDict[u'showAlertText'] = '-> Found an existing panel device with the same keypad address.\nOnly one panel device per address is allowed.'
-                            self.log.logError("%s: -> Found an existing panel device with the same keypad address.\nOnly one panel device per address is allowed." % (funcName), self.logName)
+                            self.log.logError(
+                                "%s: -> Found an existing panel device with the same keypad address.\nOnly one panel device per address is allowed." % (funcName), self.logName)
                             areErrors = True
                     except:
                         valuesDict[u'panelKeypadAddress'] = self.ad2usbKeyPadAddress
@@ -623,7 +653,8 @@ class Plugin(indigo.PluginBase):
                     if int(valuesDict['panelPartitionNumber']) > self.numPartitions:
                         errorMsgDict[u'panelPartitionNumber'] = 'Partition number selected greater than configured partitions.'
                         errorMsgDict[u'showAlertText'] = '-> Partition number selected greater than configured partitions.'
-                        self.log.logError("%s: -> Partition number selected greater than configured partitions." % (funcName), self.logName)
+                        self.log.logError(
+                            "%s: -> Partition number selected greater than configured partitions." % (funcName), self.logName)
                         areErrors = True
 
             valuesDict[u'address'] = 'Keypad ' + valuesDict[u'panelKeypadAddress']
@@ -660,8 +691,8 @@ class Plugin(indigo.PluginBase):
         self.log.log(2, dbFlg, "%s Called" % (funcName), self.logName)
         self.log.log(3, dbFlg, "%s: Received: %s" % (funcName, valuesDict), self.logName)
 
-         # Build the ad2usb board configuration string
-         # The keypad address is required. Without it we cannot continue
+        # Build the ad2usb board configuration string
+        # The keypad address is required. Without it we cannot continue
         if valuesDict['msgControl'] == '2':
             errorMsgDict = indigo.Dict()
             errorMsgDict[u'ad2usbCommType'] = u"IP Address or USB device Invalid. "
@@ -719,7 +750,7 @@ class Plugin(indigo.PluginBase):
                 vr4 = 'Y'
             cRelays = '&REL=' + vr1 + vr2 + vr3 + vr4
 
-             # LRR
+            # LRR
             cLrr = '&LRR=N'
             if valuesDict['ad2usbLrr']:
                 cLrr = '&LRR=Y'
@@ -734,29 +765,34 @@ class Plugin(indigo.PluginBase):
 
             self.log.log(3, dbFlg, "%s: validation: ad2usb config string is:%s" % (funcName, cString), self.logName)
 
-             # figure out the url for communications with the ad2usb board
+            # figure out the url for communications with the ad2usb board
             if valuesDict['ad2usbCommType'] == 'IP':
                 theURL = 'socket://' + valuesDict['ad2usbAddress'] + ':' + valuesDict['ad2usbPort']
                 self.log.log(3, dbFlg, "%s: Validation: the url is:%s" % (funcName, theURL), self.logName)
 
-                 # Communication validation test and board config
+                # Communication validation test and board config
                 try:
                     testSocket = serial.serial_for_url(theURL, baudrate=115200)
                     # self.log.log(3, dbFlg, "%s: Starting config write with:\n%s: and\n%s" % (funcName, repr(cString), repr(cString2)), self.logName)
-                    self.log.log(3, dbFlg, "%s: Starting config write with:\n%s:" % (funcName, repr(cString)), self.logName)
+                    self.log.log(3, dbFlg, "%s: Starting config write with:\n%s:" %
+                                 (funcName, repr(cString)), self.logName)
                     testSocket.write(cString)
                     #time.sleep(1)
                     #testSocket.write(cString2)
-                    self.log.log(3, dbFlg, "%s: validation: ad2usb config string is: %s" % (funcName, cString), self.logName)
+                    self.log.log(3, dbFlg, "%s: validation: ad2usb config string is: %s" %
+                                 (funcName, cString), self.logName)
                     testSocket.close()
                     self.log.log(3, dbFlg, "%s: Completed config write" % (funcName), self.logName)
-                except Exception, err:
+                except Exception as err:
                     errorMsgDict = indigo.Dict()
-                    errorMsgDict[u'ad2usbAddress'] = u"Could not open connection to the IP Address and Port entered. " + str(err)
-                    self.log.logError("%s: Test connection failed: the url was:%s. err=%s" % (funcName, theURL, str(err)), self.logName)
+                    errorMsgDict[u'ad2usbAddress'] = u"Could not open connection to the IP Address and Port entered. " + \
+                        str(err)
+                    self.log.logError("%s: Test connection failed: the url was:%s. err=%s" %
+                                      (funcName, theURL, str(err)), self.logName)
                     return (False, valuesDict, errorMsgDict)
         else:
-            self.log.log(3, dbFlg, "%s: Validation: no test for USB device %s" % (funcName, valuesDict['ad2usbAddress']), self.logName)
+            self.log.log(3, dbFlg, "%s: Validation: no test for USB device %s" %
+                         (funcName, valuesDict['ad2usbAddress']), self.logName)
 
          # User choices look good, so return True (client will then close the dialog window).
         self.log.log(3, dbFlg, "%s completed" % (funcName), self.logName)
@@ -768,7 +804,8 @@ class Plugin(indigo.PluginBase):
         funcName = inspect.stack()[0][3]
         dbFlg = False
         self.log.log(2, dbFlg, "%s Called" % (funcName), self.logName)
-        self.log.log(3, dbFlg, "%s: received:\n>>valuesDict\n%s\n>>typeId\n%s\n>>devId\n%s\n" % (funcName, valuesDict, typeId, devId), self.logName)
+        self.log.log(3, dbFlg, "%s: received:\n>>valuesDict\n%s\n>>typeId\n%s\n>>devId\n%s\n" %
+                     (funcName, valuesDict, typeId, devId), self.logName)
 
         errorMsgDict = indigo.Dict()
         areErrors = False
@@ -798,7 +835,7 @@ class Plugin(indigo.PluginBase):
         self.log.log(2, dbFlg, "%s Called" % (funcName), self.logName)
         self.log.log(4, dbFlg, "%s: Received: %s" % (funcName, valuesDict), self.logName)
 
-         # figure out the url for communications with the ad2usb board
+        # figure out the url for communications with the ad2usb board
         if valuesDict['ad2usbCommType'] == 'IP':
             theURL = 'socket://' + valuesDict['ad2usbAddress'] + ':' + valuesDict['ad2usbPort']
             self.log.log(4, dbFlg, "%s: the url is:%s" % (funcName, theURL), self.logName)
@@ -833,16 +870,18 @@ class Plugin(indigo.PluginBase):
                         msg = adRead[8:-2]
                         valuesDict['msgControl'] = '1'
 
-                    self.log.log(4, dbFlg, "%s: readline:%s, %s" % ((funcName, str(adRead), str(linesRead))), self.logName)
+                    self.log.log(4, dbFlg, "%s: readline:%s, %s" %
+                                 ((funcName, str(adRead), str(linesRead))), self.logName)
                     linesRead += 1
 
                 if testSocket.isOpen():
                     testSocket.close()
-            except Exception, err:
+            except Exception as err:
                 if testSocket.isOpen():
                     testSocket.close()
                 valuesDict['msgControl'] = '2'
-                self.log.logError("%s: config read connection failed: the url was:%s. err=%s" % (funcName, theURL, str(err)), self.logName)
+                self.log.logError("%s: config read connection failed: the url was:%s. err=%s" %
+                                  (funcName, theURL, str(err)), self.logName)
                 return valuesDict
 
         self.log.log(4, dbFlg, "%s: the raw config is:%s" % (funcName, msg), self.logName)
@@ -937,7 +976,7 @@ class Plugin(indigo.PluginBase):
         myArray = []
         tempDict = {}
 
-         #for device in sorted(indigo.devices.iter("self")):
+        #for device in sorted(indigo.devices.iter("self")):
         for device in indigo.devices.iter("self"):
             if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
                 zoneNumber = device.pluginProps['zoneNumber']
@@ -947,7 +986,7 @@ class Plugin(indigo.PluginBase):
                 tempDict[zoneNumber] = value
 
         self.log.log(4, dbFlg, "%s:  tempDict:%s" % (funcName, tempDict), self.logName)
-         # Take the dict of zone numbers and names and turn it into a numerically sorted list
+        # Take the dict of zone numbers and names and turn it into a numerically sorted list
         sortedlist = [(k, tempDict[k]) for k in sorted(tempDict, key=self.asint)]
         self.log.log(3, dbFlg, "%s:  sortedlist:%s" % (funcName, sortedlist), self.logName)
         for key in sortedlist:
@@ -990,14 +1029,14 @@ class Plugin(indigo.PluginBase):
                 if user not in self.triggerDict:
                     self.triggerDict[user] = {}
                 self.triggerDict[user][partition] = {'tid': tid, 'event': event}
-            except Exception, err:
+            except Exception as err:
                 self.log.logError("%s: Error:%s" % (funcName, err), self.logName)
         else:
             try:
                 if event not in self.triggerDict:
                     self.triggerDict[event] = {}
                 self.triggerDict[event][partition] = tid
-            except Exception, err:
+            except Exception as err:
                 self.log.logError("%s: Error:%s" % (funcName, err), self.logName)
 
         self.log.log(2, dbFlg, "%s updated triggerDict:%s" % (funcName, self.triggerDict), self.logName)

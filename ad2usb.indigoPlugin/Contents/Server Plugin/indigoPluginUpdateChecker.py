@@ -67,19 +67,19 @@
 #
 #		Sample VersionInfo.html file:
 #
-			# Version: 1.3.1
-			# EmailSubject: DSC Alarm Indigo Plugin Update
-			# EmailBody: The DSC Alarm Plugin you are using with Indigo has been updated.
+# Version: 1.3.1
+# EmailSubject: DSC Alarm Indigo Plugin Update
+# EmailBody: The DSC Alarm Plugin you are using with Indigo has been updated.
 
-			# The changes are:
-			# - Change 1
-			# - Change 2
+# The changes are:
+# - Change 1
+# - Change 2
 
-			# The update can be downloaded at the link below.
-			# http://www.frightideas.com/hobbies/dscAlarm/DSC_Alarm_Plugin.zip
+# The update can be downloaded at the link below.
+# http://www.frightideas.com/hobbies/dscAlarm/DSC_Alarm_Plugin.zip
 
-			# This email was sent to you by Indigo at the request of the plugin.  You will
-			# only be emailed once per release.  To disable these emails see the plugin's config.
+# This email was sent to you by Indigo at the request of the plugin.  You will
+# only be emailed once per release.  To disable these emails see the plugin's config.
 
 
 import indigo
@@ -88,7 +88,7 @@ import time
 from urllib2 import urlopen
 
 
-class updateChecker(object):
+class NO_LONGER_USED_updateChecker(object):
 
 	def __init__(self, plugin, pluginid, daysBetweenChecks=1):
 		self.plugin = plugin
@@ -100,8 +100,7 @@ class updateChecker(object):
 		self.nextCheck = int(self.plugin.pluginPrefs.get('updaterLastCheck', '0')) + self.secondsBetweenAutoChecks
 
 	def errorLog(self, log):
-		self.plugin.debugLog(log) #, isError=True)
-
+		self.plugin.debugLog(log)  # , isError=True)
 
 	def checkVersionPoll(self):
 		# Did we check if there was an update within the last
@@ -109,7 +108,6 @@ class updateChecker(object):
 		# If the version wasn't checked within our time period then check
 		if timeNow > self.nextCheck:
 			self.checkVersionNow()
-
 
 	def checkVersionNow(self):
 
@@ -145,7 +143,6 @@ class updateChecker(object):
 			self.errorLog(u"versionCheck: Error parsing the server's verson file.")
 			return
 
-
 		# Compare the version in the server file to ours
 		if myVersion < latestVersion:
 			self.errorLog(u"You are running v%s. A newer version, v%s is available." % (myVersion, latestVersion))
@@ -153,7 +150,6 @@ class updateChecker(object):
 			self.plugin.debugLog(u'Your plugin version, v%s, is current.' % myVersion)
 			# This version is current so we might as well exit
 			return
-
 
 		########################################################
 		# Email code only from here down

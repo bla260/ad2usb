@@ -70,7 +70,8 @@ class ad2usb(object):
         funcName = inspect.stack()[0][3]
         dbFlg = False
         self.log(2, dbFlg, "%s Called" % (funcName), self.logName)
-        self.log(3, dbFlg, "%s: Received: partition:%s, user:%s, event:%s" % (funcName, partition, user, event), self.logName)
+        self.log(3, dbFlg, "%s: Received: partition:%s, user:%s, event:%s" %
+                 (funcName, partition, user, event), self.logName)
 
         if event in self.plugin.triggerDict:
             self.log(3, dbFlg, "%s: Found event trigger:%s" % (funcName, self.plugin.triggerDict[event]), self.logName)
@@ -78,19 +79,22 @@ class ad2usb(object):
                 if self.plugin.triggerDict[event][partition]:
                     # We have a winner
                     indigo.trigger.execute(int(self.plugin.triggerDict[event][partition]))
-                    self.log(3, dbFlg, "%s: Matched event trigger:%s" % (funcName, self.plugin.triggerDict[event][partition]), self.logName)
+                    self.log(3, dbFlg, "%s: Matched event trigger:%s" %
+                             (funcName, self.plugin.triggerDict[event][partition]), self.logName)
             except:
                 pass
         if isinstance(user, int):
             user = str(int(user))  # get rid of the leading zeroes
             if user in self.plugin.triggerDict:
-                self.log(3, dbFlg, "%s: Found user trigger:%s" % (funcName, self.plugin.triggerDict[user]), self.logName)
+                self.log(3, dbFlg, "%s: Found user trigger:%s" %
+                         (funcName, self.plugin.triggerDict[user]), self.logName)
                 try:
                     if self.plugin.triggerDict[user][partition]:
                         if self.plugin.triggerDict[user][partition]['event'] == event:
                             # We have a winner
                             indigo.trigger.execute(int(self.plugin.triggerDict[user][partition]['tid']))
-                            self.log(3, dbFlg, "%s: Matched user trigger:%s" % (funcName, self.plugin.triggerDict[user][partition]), self.logName)
+                            self.log(3, dbFlg, "%s: Matched user trigger:%s" %
+                                     (funcName, self.plugin.triggerDict[user][partition]), self.logName)
                 except:
                     pass
 
@@ -112,7 +116,7 @@ class ad2usb(object):
                     address = "0" + address
                 panelMsg = 'K' + address + str(panelMsg)
                 self.plugin.conn.write(panelMsg)
-        except Exception, err:
+        except Exception as err:
             self.logError("%s: Unable to write panel message:%s" % (funcName, panelMsg), self.logName)
             self.logError("%s: The error message was: %s, %s" % (funcName, str(err), sys.exc_info()[0]), self.logName)
 
@@ -157,16 +161,20 @@ class ad2usb(object):
 
         isFaulted = False
 
-        self.log(2, dbFlg, "%s: zoneIndex:%s contains:%s" % (funcName, zoneIndex, self.plugin.zone2zoneGroupDevDict[zoneIndex]), self.logName)
+        self.log(2, dbFlg, "%s: zoneIndex:%s contains:%s" %
+                 (funcName, zoneIndex, self.plugin.zone2zoneGroupDevDict[zoneIndex]), self.logName)
         for zoneGroupDev in self.plugin.zone2zoneGroupDevDict[zoneIndex]:
             groupZoneDevice = indigo.devices[int(zoneGroupDev)]
             groupState = groupZoneDevice.states['zoneState']
             self.log(3, dbFlg, "%s: zoneGroupDev:%s" % (funcName, zoneGroupDev), self.logName)
-            self.log(3, dbFlg, "%s: BEFORE... zoneGroupDev:%s" % (funcName, self.plugin.zoneGroup2zoneDict[zoneGroupDev]), self.logName)
+            self.log(3, dbFlg, "%s: BEFORE... zoneGroupDev:%s" %
+                     (funcName, self.plugin.zoneGroup2zoneDict[zoneGroupDev]), self.logName)
             self.plugin.zoneGroup2zoneDict[zoneGroupDev][zoneIndex] = zoneState
-            self.log(3, dbFlg, "%s: AFTER... zoneGroupDev:%s" % (funcName, self.plugin.zoneGroup2zoneDict[zoneGroupDev]), self.logName)
+            self.log(3, dbFlg, "%s: AFTER... zoneGroupDev:%s" %
+                     (funcName, self.plugin.zoneGroup2zoneDict[zoneGroupDev]), self.logName)
             for zone in self.plugin.zoneGroup2zoneDict[zoneGroupDev]:
-                self.log(2, dbFlg, "%s: DETAIL... zone:%s, zoneGroupDev:%s" % (funcName, zone, self.plugin.zoneGroup2zoneDict[zoneGroupDev][zone]), self.logName)
+                self.log(2, dbFlg, "%s: DETAIL... zone:%s, zoneGroupDev:%s" %
+                         (funcName, zone, self.plugin.zoneGroup2zoneDict[zoneGroupDev][zone]), self.logName)
                 if self.plugin.zoneGroup2zoneDict[zoneGroupDev][zone] == 'Faulted':
                     isFaulted = True
                     break
@@ -186,9 +194,11 @@ class ad2usb(object):
 
             if groupZoneDevice.pluginProps[u'zoneLogChanges']:
                 if groupState != stateMsg:
-                    self.log(0, dbFlg, "Zone Group: %s, state changed to: (%s)" % (groupZoneDevice.name, stateMsg), self.logName)
+                    self.log(0, dbFlg, "Zone Group: %s, state changed to: (%s)" %
+                             (groupZoneDevice.name, stateMsg), self.logName)
 
-        self.log(2, dbFlg, "Zone Group: %s, state was:%s, and now is: (%s)" % (groupZoneDevice.name, zoneState, stateMsg), self.logName)
+        self.log(2, dbFlg, "Zone Group: %s, state was:%s, and now is: (%s)" %
+                 (groupZoneDevice.name, zoneState, stateMsg), self.logName)
         self.log(2, dbFlg, "%s Completed" % (funcName), self.logName)
 
     ########################################
@@ -255,22 +265,26 @@ class ad2usb(object):
                 panelDevice = indigo.devices[panelDevId]
                 panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
 
-                self.log(3, dbFlg, "%s: Found zone info: zType=%s, zDevId=%s, zBoard=%s, zDevice=%s, zNumber=%s, zLastState=%s, zName=%s, zPartition=%s." % (funcName, zType, zDevId, zBoard, zDevice, zNumber, zLastState, zName, zPartition), self.logName)
-                self.log(3, dbFlg, "%s: found panel info: DB%s, dev=%s" % (funcName, self.plugin.partition2address[zPartition], panelDevice), self.logName)
+                self.log(3, dbFlg, "%s: Found zone info: zType=%s, zDevId=%s, zBoard=%s, zDevice=%s, zNumber=%s, zLastState=%s, zName=%s, zPartition=%s." % (
+                    funcName, zType, zDevId, zBoard, zDevice, zNumber, zLastState, zName, zPartition), self.logName)
+                self.log(3, dbFlg, "%s: found panel info: DB%s, dev=%s" %
+                         (funcName, self.plugin.partition2address[zPartition], panelDevice), self.logName)
 
                 self.log(3, dbFlg, "%s: Indigo Device found:%s" % (funcName, zName), self.logName)
                 validDev = True
 
-            except Exception, e:  # An unrecognized device
+            except Exception as err:  # An unrecognized device
                 if self.plugin.logUnknownDevices:
-                    self.logError("%s: Error:%s\nMessage from unrecognized Zone device: %s" % (funcName, e, rawData), self.logName)
+                    self.logError("%s: Error:%s\nMessage from unrecognized Zone device: %s" %
+                                  (funcName, err, rawData), self.logName)
 
             # We'll start with RELay & EXPander Zones since they are treated alike
             if validDev:
                 if zType == 'REL' or zType == 'EXP':  # For Relay (on-board) and Expander zones
                     self.log(3, dbFlg, "%s: Ready to update Indigo REL & EXP" % (funcName), self.logName)
                     if zoneState == zoneOn:
-                        self.log(3, dbFlg, "%s: zoneOn zoneNumber:%s, and States list:%s" % (funcName, zNumber, self.zoneStateDict), self.logName)
+                        self.log(3, dbFlg, "%s: zoneOn zoneNumber:%s, and States list:%s" %
+                                 (funcName, zNumber, self.zoneStateDict), self.logName)
                         indigoDevice.updateStateOnServer(key='zoneState', value='faulted')
                         indigoDevice.updateStateOnServer(key='onOffState', value=True)
                         indigoDevice.updateStateOnServer(key='displayState', value='faulted', uiValue=u'Fault')
@@ -278,11 +292,13 @@ class ad2usb(object):
                         # Maintain the zone fault state
                         self.zoneStateDict[panelKeypadAddress].append(int(zNumber))
                         self.zoneStateDict[panelKeypadAddress].sort()
-                        panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[panelKeypadAddress]))
+                        panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
+                            self.zoneStateDict[panelKeypadAddress]))
 
                         stateMsg = 'Faulted'
                     elif zoneState == zoneOff:
-                        self.log(3, dbFlg, "%s: zoneOff zoneNumber:%s, and States list:%s" % (funcName, zNumber, self.zoneStateDict), self.logName)
+                        self.log(3, dbFlg, "%s: zoneOff zoneNumber:%s, and States list:%s" %
+                                 (funcName, zNumber, self.zoneStateDict), self.logName)
                         indigoDevice.updateStateOnServer(key='zoneState', value='Clear')
                         indigoDevice.updateStateOnServer(key='onOffState', value=False)
                         indigoDevice.updateStateOnServer(key='displayState', value='enabled', uiValue=u'Clear')
@@ -291,12 +307,15 @@ class ad2usb(object):
                         try:
                             self.zoneStateDict[panelKeypadAddress].remove(int(zNumber))
                         except:
-                            self.logError("%s: Unable to update state table for zone %s, address %s." % (funcName, zNumber, panelKeypadAddress), self.logName)
-                        panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[panelKeypadAddress]))
+                            self.logError("%s: Unable to update state table for zone %s, address %s." %
+                                          (funcName, zNumber, panelKeypadAddress), self.logName)
+                        panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
+                            self.zoneStateDict[panelKeypadAddress]))
 
                         stateMsg = 'Clear'
                     else:
-                        self.logError("%s: Zone %s %s has an UNKNOWN ZONE STATE: %s" % (funcName, zNumber, zName, rawData), self.logName)
+                        self.logError("%s: Zone %s %s has an UNKNOWN ZONE STATE: %s" %
+                                      (funcName, zNumber, zName, rawData), self.logName)
 
                 elif zType == 'RFX':  # for RF zones
                     self.log(3, dbFlg, "%s: Ready to update Indigo RFX (Wireless)" % (funcName), self.logName)
@@ -309,10 +328,12 @@ class ad2usb(object):
                         elif not zoneStateDict[wirelessLoop]:
                             zoneStateDict[wirelessLoop] = True
                         else:
-                            self.logError("%s: State: %s not found in %s" % (funcName, zoneState, self.plugin.advZonesDict[zoneIndex]), self.logName)
+                            self.logError("%s: State: %s not found in %s" %
+                                          (funcName, zoneState, self.plugin.advZonesDict[zoneIndex]), self.logName)
 
                     if zoneStateDict[wirelessLoop]:
-                        self.log(3, dbFlg, "%s: zoneOn zoneNumber:%s, and States list:%s" % (funcName, zNumber, self.zoneStateDict), self.logName)
+                        self.log(3, dbFlg, "%s: zoneOn zoneNumber:%s, and States list:%s" %
+                                 (funcName, zNumber, self.zoneStateDict), self.logName)
                         indigoDevice.updateStateOnServer(key='zoneState', value='faulted')
                         indigoDevice.updateStateOnServer(key='onOffState', value=True, uiValue=u'Fault')
                         indigoDevice.updateStateOnServer(key='displayState', value='faulted', uiValue=u'Fault')
@@ -321,13 +342,15 @@ class ad2usb(object):
                         try:
                             self.zoneStateDict[panelKeypadAddress].append(int(zNumber))
                             self.zoneStateDict[panelKeypadAddress].sort()
-                            panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[panelKeypadAddress]))
+                            panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
+                                self.zoneStateDict[panelKeypadAddress]))
                         except:
                             pass  # probably a non-numeric zone
 
                         stateMsg = 'Faulted'
                     elif not zoneStateDict[wirelessLoop]:
-                        self.log(3, dbFlg, "%s: zoneOff zoneNumber:%s, and States list:%s" % (funcName, zNumber, self.zoneStateDict), self.logName)
+                        self.log(3, dbFlg, "%s: zoneOff zoneNumber:%s, and States list:%s" %
+                                 (funcName, zNumber, self.zoneStateDict), self.logName)
                         indigoDevice.updateStateOnServer(key='zoneState', value='Clear')
                         indigoDevice.updateStateOnServer(key='onOffState', value=False, uiValue=u'Clear')
                         indigoDevice.updateStateOnServer(key='displayState', value='enabled', uiValue=u'Clear')
@@ -335,31 +358,36 @@ class ad2usb(object):
                         # Maintain the zone fault state
                         try:
                             self.zoneStateDict[panelKeypadAddress].remove(int(zNumber))
-                            panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[panelKeypadAddress]))
+                            panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
+                                self.zoneStateDict[panelKeypadAddress]))
                         except:
                             pass  # probably a non-numeric zone
 
                         stateMsg = 'Clear'
                     else:
-                        self.logError("%s: State: %s not found in %s" % (funcName, zoneState, self.plugin.advZonesDict[zoneIndex]), self.logName)
+                        self.logError("%s: State: %s not found in %s" %
+                                      (funcName, zoneState, self.plugin.advZonesDict[zoneIndex]), self.logName)
 
                     if zoneStateDict['sup']:
                         supervisionMessage = True
                         if zLogSupervision:  # make sure we want this logged
-                            self.log(0, dbFlg, "Zone: %s supervision received. (%s)" % (zName, rawData[1:-2]), self.logName)
+                            self.log(0, dbFlg, "Zone: %s supervision received. (%s)" %
+                                     (zName, rawData[1:-2]), self.logName)
                             # Add update here to save last supervised to zone states
 
                 else:  # An unrecognized message type
-                    self.logError("%s: Unrecognized message type for received data: %s" % (funcName, rawData), self.logName)
+                    self.logError("%s: Unrecognized message type for received data: %s" %
+                                  (funcName, rawData), self.logName)
 
                 # If we are supposed to log zone changes, this is where we do it (unless this was a supervision message)
                 if zLogChanges and not supervisionMessage:
-                    self.log(3, dbFlg, "Zone: %s - %s state changed to: (%s)" % (zNumber, zName, stateMsg), self.logName)
+                    self.log(3, dbFlg, "Zone: %s - %s state changed to: (%s)" %
+                             (zNumber, zName, stateMsg), self.logName)
 
                 try:
                     if not supervisionMessage:
                         self.updateZoneGroups(zNumber, stateMsg)
-                except Exception, err:
+                except Exception as err:
                     self.logError("%s: updateZoneGroups Error: %s" % (funcName, str(err)), self.logName)
 
         else:
@@ -415,7 +443,7 @@ class ad2usb(object):
 
         try:
             self.updateZoneGroups(str(zoneIndex), zoneState)
-        except Exception, err:
+        except Exception as err:
             self.logError("%s: updateZoneGroups Error: %s" % (funcName, str(err)), self.logName)
 
         # If we are supposed to log zone changes, this is where we do it (unless this was a supervision message)
@@ -432,7 +460,8 @@ class ad2usb(object):
         funcName = inspect.stack()[0][3]
         dbFlg = False
         self.log(2, dbFlg, "%s Called" % (funcName), self.logName)
-        self.log(3, dbFlg, "%s: Received rawData:%s, msgBitMap:%s, msgZoneNum:%s, msgText:%s, msgKey:%s" % (funcName, rawData, msgBitMap, msgZoneNum, msgText, msgKey), self.logName)
+        self.log(3, dbFlg, "%s: Received rawData:%s, msgBitMap:%s, msgZoneNum:%s, msgText:%s, msgKey:%s" %
+                 (funcName, rawData, msgBitMap, msgZoneNum, msgText, msgKey), self.logName)
 
         systemReady = False
         if msgBitMap[0] == '1':
@@ -456,7 +485,8 @@ class ad2usb(object):
             try:
                 # If this succeeds, the zone was already in the list
                 newZonePos = self.plugin.faultList.index(msgZoneNum)
-                self.log(3, dbFlg, "%s: Found zone: %d in the list at pos: %d" % (funcName, msgZoneNum, newZonePos), self.logName)
+                self.log(3, dbFlg, "%s: Found zone: %d in the list at pos: %d" %
+                         (funcName, msgZoneNum, newZonePos), self.logName)
 
             except:
                 # If it failed, we need to insert the zone into the list
@@ -469,7 +499,8 @@ class ad2usb(object):
 
                 self.updateIndigoBasicMode(zoneIndex, 'faulted', panelDevice)
 
-                self.log(3, dbFlg, "%s: Created new in the list, zone: %d at pos: %d" % (funcName, msgZoneNum, newZonePos), self.logName)
+                self.log(3, dbFlg, "%s: Created new in the list, zone: %d at pos: %d" %
+                         (funcName, msgZoneNum, newZonePos), self.logName)
 
             # Now that we are sure the zone is in the list, we can continue
             # Find the position of the last zone
@@ -478,32 +509,39 @@ class ad2usb(object):
             except:
                 oldZonePos = 0
 
-            self.log(3, dbFlg, "%s: Last zone: %s, pos in the list: %d" % (funcName, self.plugin.lastZoneFaulted, oldZonePos), self.logName)
+            self.log(3, dbFlg, "%s: Last zone: %s, pos in the list: %d" %
+                     (funcName, self.plugin.lastZoneFaulted, oldZonePos), self.logName)
 
             if msgZoneNum == self.plugin.lastZoneFaulted:
                 for zoneCheck in range(newZonePos + 1, len(self.plugin.faultList)):
                     removeList.append(self.plugin.faultList[zoneCheck])
-                    self.log(3, dbFlg, "%s: a) ZoneCheck: %d, pos %d" % (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
+                    self.log(3, dbFlg, "%s: a) ZoneCheck: %d, pos %d" %
+                             (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
                 for zoneCheck in range(0, newZonePos):
                     removeList.append(self.plugin.faultList[zoneCheck])
-                    self.log(3, dbFlg, "%s: b) ZoneCheck: %d, pos %d" % (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
+                    self.log(3, dbFlg, "%s: b) ZoneCheck: %d, pos %d" %
+                             (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
             elif msgZoneNum > self.plugin.lastZoneFaulted:
                 for zoneCheck in range(oldZonePos + 1, newZonePos):
                     removeList.append(self.plugin.faultList[zoneCheck])
-                    self.log(3, dbFlg, "%s: c) ZoneCheck: %d, pos %d" % (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
+                    self.log(3, dbFlg, "%s: c) ZoneCheck: %d, pos %d" %
+                             (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
             elif msgZoneNum < self.plugin.lastZoneFaulted:
                 for zoneCheck in range(oldZonePos + 1, len(self.plugin.faultList)):
                     removeList.append(self.plugin.faultList[zoneCheck])
-                    self.log(3, dbFlg, "%s: d) ZoneCheck: %d, pos %d" % (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
+                    self.log(3, dbFlg, "%s: d) ZoneCheck: %d, pos %d" %
+                             (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
                 for zoneCheck in range(0, newZonePos):   # Changed to end at new pos instead of new pos -1
                     removeList.append(self.plugin.faultList[zoneCheck])
-                    self.log(3, dbFlg, "%s: e) ZoneCheck: %d, pos %d" % (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
+                    self.log(3, dbFlg, "%s: e) ZoneCheck: %d, pos %d" %
+                             (funcName, self.plugin.faultList[zoneCheck], zoneCheck), self.logName)
 
             removeList = sorted(removeList, reverse=True)
 
             for clearZone in removeList:
                 remZonePos = self.plugin.faultList.index(clearZone)
-                self.log(3, dbFlg, "%s: Deleting zone:%d, at pos:%d" % (funcName, self.plugin.faultList[remZonePos], remZonePos), self.logName)
+                self.log(3, dbFlg, "%s: Deleting zone:%d, at pos:%d" %
+                         (funcName, self.plugin.faultList[remZonePos], remZonePos), self.logName)
 
                 zoneIndex = self.plugin.faultList[remZonePos]
 
@@ -513,12 +551,14 @@ class ad2usb(object):
 
             self.plugin.lastZoneFaulted = msgZoneNum
         else:  # systemReady is true
-            self.log(3, dbFlg, "%s: %d zones cleared. List was: %s" % (funcName, len(self.plugin.faultList), self.plugin.faultList), self.logName)
+            self.log(3, dbFlg, "%s: %d zones cleared. List was: %s" %
+                     (funcName, len(self.plugin.faultList), self.plugin.faultList), self.logName)
 
             while len(self.plugin.faultList) > 0:
                 remZonePos = len(self.plugin.faultList) - 1
 
-                self.log(3, dbFlg, "%s: Deleting zone:%d, at pos:%d" % (funcName, self.plugin.faultList[remZonePos], remZonePos), self.logName)
+                self.log(3, dbFlg, "%s: Deleting zone:%d, at pos:%d" %
+                         (funcName, self.plugin.faultList[remZonePos], remZonePos), self.logName)
                 self.log(3, dbFlg, "%s: Deleting position:%d" % (funcName, remZonePos), self.logName)
 
                 zoneIndex = self.plugin.faultList[remZonePos]
@@ -527,7 +567,8 @@ class ad2usb(object):
 
                 del self.plugin.faultList[remZonePos]
 
-        self.log(3, dbFlg, "%s: Ready: %s, Fault:%s, Zone:%d --" % (funcName, systemReady, zoneFault, msgZoneNum), self.logName)
+        self.log(3, dbFlg, "%s: Ready: %s, Fault:%s, Zone:%d --" %
+                 (funcName, systemReady, zoneFault, msgZoneNum), self.logName)
         self.log(3, dbFlg, "%s: The List:%s" % (funcName, self.plugin.faultList), self.logName)
 
         self.log(2, dbFlg, "%s Completed" % (funcName), self.logName)
@@ -551,7 +592,7 @@ class ad2usb(object):
                         if self.shutdown is False:
                             self.logError("%s: AD2USB Connection Error" % (funcName), self.logName)
                         return  # exit()
-            except Exception, err:
+            except Exception as err:
                 if self.shutdown is True:
                     self.log(0, dbFlg, "%s: Connection Closed:" % (funcName), self.logName)
                     self.shutdownComplete = True
@@ -592,31 +633,39 @@ class ad2usb(object):
                                 foundKeypadAddress = panelKeypadAddress
                                 readThisMessage = True
                             else:
-                                keypadAddressField = rawData[30:38]                     # The msg sub-string with the keypad addresses (in hex)
-                                addrHex = self.hex2bin(keypadAddressField)              # Convert the address field to a binary string
+                                # The msg sub-string with the keypad addresses (in hex)
+                                keypadAddressField = rawData[30:38]
+                                # Convert the address field to a binary string
+                                addrHex = self.hex2bin(keypadAddressField)
                                 self.log(3, dbFlg, "%s: addrHex:%s" % (funcName, addrHex), self.logName)
                                 for panelKeypadAddress in self.plugin.panelsDict:       # loop through the keypad device dict
                                     bitPosition = -1  # reset this each pass through the loop
                                     panelAddress = -1  # reset this each pass through the loop
                                     panelAddress = int(panelKeypadAddress)
                                     self.log(3, dbFlg, "%s: panelAddress:%s" % (funcName, panelAddress), self.logName)
-                                    bitPosition = 8 - (panelAddress % 8) + int(panelAddress / 8) * 8   # determine the bit position for the current address
-                                    self.log(3, dbFlg, "%s: bitPosition:%s, bit at bitPosition:%s" % (funcName, bitPosition, addrHex[bitPosition-1]), self.logName)
+                                    # determine the bit position for the current address
+                                    bitPosition = 8 - (panelAddress % 8) + int(panelAddress / 8) * 8
+                                    self.log(3, dbFlg, "%s: bitPosition:%s, bit at bitPosition:%s" %
+                                             (funcName, bitPosition, addrHex[bitPosition-1]), self.logName)
                                     if addrHex[bitPosition-1] == '1':                   # See if we have a one in our slot
-                                        self.log(3, dbFlg, "%s:  matched key=%s" % (funcName, panelKeypadAddress), self.logName)
+                                        self.log(3, dbFlg, "%s:  matched key=%s" %
+                                                 (funcName, panelKeypadAddress), self.logName)
                                         foundKeypadAddress = panelKeypadAddress
                                         readThisMessage = True   # Yes, we can read this message
                                         if foundAddress:
-                                            self.logError("%s: More than one matching keypad address. previous:%s, current:%s" % (funcName, lastAddress, panelKeypadAddress), self.logName)
+                                            self.logError("%s: More than one matching keypad address. previous:%s, current:%s" % (
+                                                funcName, lastAddress, panelKeypadAddress), self.logName)
                                         foundAddress = True
                                         lastAddress = panelKeypadAddress
 
-                        except Exception, e:
-                            self.logError("%s: Keypad Address Error = %s. Data: keypadAddressField=%s, panelAddress=%s, bitPosition=%s" % (funcName, e, keypadAddressField, panelAddress, bitPosition), self.logName)
+                        except Exception as e:
+                            self.logError("%s: Keypad Address Error = %s. Data: keypadAddressField=%s, panelAddress=%s, bitPosition=%s" % (
+                                funcName, e, keypadAddressField, panelAddress, bitPosition), self.logName)
 
                         if readThisMessage:
                             # Now look to see if the message has changed since the last one we processed
-                            self.log(3, dbFlg, "%s: Panel Message: Before:=%s, Current=%s" % (funcName, rawData, lastPanelMsg), self.logName)
+                            self.log(3, dbFlg, "%s: Panel Message: Before:=%s, Current=%s" %
+                                     (funcName, rawData, lastPanelMsg), self.logName)
                             # If it hasn't, start again
                             if rawData == lastPanelMsg:  # The alarm status has not changed
                                 self.debugLog("no panel status change")
@@ -675,13 +724,15 @@ class ad2usb(object):
 
                                 lastPanelMsg = rawData
                                 panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
-                                self.log(3, dbFlg, "%s: Found dev: %s, id:%s" % (funcName, panelDevice.name, panelDevice.id), self.logName)
+                                self.log(3, dbFlg, "%s: Found dev: %s, id:%s" %
+                                         (funcName, panelDevice.name, panelDevice.id), self.logName)
 
                                 # panelDevice = indigo.devices[self.plugin.alarmDevId]
                                 panelDevice.updateStateOnServer(key='LCDLine1', value=rawData[61:77])
                                 panelDevice.updateStateOnServer(key='LCDLine2', value=rawData[77:93])
                                 panelDevice.updateStateOnServer(key='panelState', value=panelTxtStatus)
-                                panelDevice.updateStateOnServer(key='displayState', value=displayState, uiValue=displayStateUi)
+                                panelDevice.updateStateOnServer(
+                                    key='displayState', value=displayState, uiValue=displayStateUi)
                                 panelDevice.updateStateOnServer(key='programMode', value=apProgramMode)
                                 panelDevice.updateStateOnServer(key='zonesBypassed', value=apZonesBypassed)
                                 panelDevice.updateStateOnServer(key='acPower', value=apACPower)
@@ -700,9 +751,11 @@ class ad2usb(object):
                                     apAlarmedZone = splitMsg[3]
                                     panelDevice.updateStateOnServer(key='alarmedZone', value=apAlarmedZone)
                                     if apAlarmBellOn == '1':
-                                        self.log(0, dbFlg, "Alarm tripped by zone: %s" % (funcName, apAlarmedZone), self.logName)
+                                        self.log(0, dbFlg, "Alarm tripped by zone: %s" %
+                                                 (funcName, apAlarmedZone), self.logName)
                                     else:
-                                        self.log(3, dbFlg, "Fire Alarm tripped by zone: %s" % (funcName, apAlarmedZone), self.logName)
+                                        self.log(3, dbFlg, "Fire Alarm tripped by zone: %s" %
+                                                 (funcName, apAlarmedZone), self.logName)
 
                                 else:
                                     panelDevice.updateStateOnServer(key='alarmedZone', value='n/a')
@@ -716,16 +769,18 @@ class ad2usb(object):
                                         partition = panelDevice.pluginProps['panelPartitionNumber']
                                         function = 'ALARM_TRIPPED'
                                         user = 'unknown'
-                                        self.log(3, dbFlg, "%s: Alarm Tripped :%s, partition:%s, function:%s" % (funcName, user, partition, function), self.logName)
+                                        self.log(3, dbFlg, "%s: Alarm Tripped :%s, partition:%s, function:%s" %
+                                                 (funcName, user, partition, function), self.logName)
 
                                         panelDevice.updateStateOnServer(key='lastChgBy', value=user)
                                         panelDevice.updateStateOnServer(key='lastChgTo', value=function)
                                         panelDevice.updateStateOnServer(key='lastChgAt', value=timeStamp)
                                         if self.plugin.logArmingEvents:
-                                            self.log(0, dbFlg, "Alarm partition %s set to %s caused/entered by %s." % (partition, function, user), self.logName)
+                                            self.log(0, dbFlg, "Alarm partition %s set to %s caused/entered by %s." %
+                                                     (partition, function, user), self.logName)
 
                                         self.eventQueueManager(partition, user, function)
-                                except Exception, err:
+                                except Exception as err:
                                     self.errorLog('ALARM TRIPPED: %s' % (str(err)))
 
                             # Setup some variables for the next few steps
@@ -748,11 +803,13 @@ class ad2usb(object):
                                 zName = zoneData['name']
                                 indigoDevice = indigo.devices[zDevId]
 
-                            self.log(3, dbFlg, "%s: current:%s, last %s" % (funcName, apZonesBypassed, self.lastApZonesBypassed), self.logName)
+                            self.log(3, dbFlg, "%s: current:%s, last %s" %
+                                     (funcName, apZonesBypassed, self.lastApZonesBypassed), self.logName)
 
                             # Manage bypassed zones
                             if apZonesBypassed != self.lastApZonesBypassed:
-                                self.log(4, dbFlg, "GOT HERE 1 %s: current:%s, last %s" % (funcName, apZonesBypassed, self.lastApZonesBypassed), self.logName)
+                                self.log(4, dbFlg, "GOT HERE 1 %s: current:%s, last %s" %
+                                         (funcName, apZonesBypassed, self.lastApZonesBypassed), self.logName)
                                 # There has been a change is the bypass list
                                 if apZonesBypassed == "0":
                                     self.log(4, dbFlg, "%s GOT HERE 2" % (funcName), self.logName)
@@ -763,22 +820,28 @@ class ad2usb(object):
                                         bZDevid = bZoneData['devId']
                                         bIndigoDevice = indigo.devices[bZDevid]
                                         bIndigoDevice.updateStateOnServer(key='bypassState', value=False)
-                                        bIndigoDevice.updateStateOnServer(key='displayState', value="enabled", uiValue="Clear")
-                                        self.log(3, dbFlg, "%s Clearing bypass state for zone %s, devid %s" % (funcName, zone, bZDevid), self.logName)
-                                        self.log(4, dbFlg, "%s: \tIndex:%s, Data: %s" % (funcName, zone, self.plugin.zonesDict[zone]), self.logName)
+                                        bIndigoDevice.updateStateOnServer(
+                                            key='displayState', value="enabled", uiValue="Clear")
+                                        self.log(3, dbFlg, "%s Clearing bypass state for zone %s, devid %s" %
+                                                 (funcName, zone, bZDevid), self.logName)
+                                        self.log(4, dbFlg, "%s: \tIndex:%s, Data: %s" %
+                                                 (funcName, zone, self.plugin.zonesDict[zone]), self.logName)
                                     # and now clear the list of bypassed zones
                                     self.zoneBypassDict.clear()
 
                             if apZonesBypassed == "1" and msgKey == "BYPAS" and realZone is True:
                                 # A zone has been bypassed.
                                 if bMsgZoneNum in self.zoneBypassDict:
-                                    self.log(3, dbFlg, "%s: Zone bypass state for zone number %s zone name %s already recorded" % (funcName, bMsgZoneNum, zName), self.logName)
+                                    self.log(3, dbFlg, "%s: Zone bypass state for zone number %s zone name %s already recorded" % (
+                                        funcName, bMsgZoneNum, zName), self.logName)
                                 else:
                                     self.zoneBypassDict[bMsgZoneNum] = {True}
-                                    self.log(0, dbFlg, "%s: Zone number %s zone name %s has been bypassed" % (funcName, bMsgZoneNum, zName), self.logName)
+                                    self.log(0, dbFlg, "%s: Zone number %s zone name %s has been bypassed" %
+                                             (funcName, bMsgZoneNum, zName), self.logName)
                                     self.lastApZonesBypassed = apZonesBypassed
                                     indigoDevice.updateStateOnServer(key='bypassState', value=True)
-                                    indigoDevice.updateStateOnServer(key='displayState', value="bypass", uiValue="bypass")
+                                    indigoDevice.updateStateOnServer(
+                                        key='displayState', value="bypass", uiValue="bypass")
                                     #indigoDevice.setErrorStateOnServer(u'bypass')
 
                             # OK, Now let's see if we have a zone event
@@ -788,21 +851,25 @@ class ad2usb(object):
 
                                 if msgKey == "FAULT" or apReadyMode == '1':
                                     self.log(3, dbFlg, "%s: Ready to call basic msg handler" % (funcName), self.logName)
-                                    self.basicReadZoneMessage(rawData, msgBitMap, msgZoneNum, msgText, msgKey, panelDevice)
+                                    self.basicReadZoneMessage(rawData, msgBitMap, msgZoneNum,
+                                                              msgText, msgKey, panelDevice)
 
                 elif rawData[1:9] == u'SER2SOCK' or len(rawData) == 0:
-                    self.log(3, dbFlg, "%s: SER2SOCK connection or null Message: we passed on this one" % (funcName), self.logName)
+                    self.log(3, dbFlg, "%s: SER2SOCK connection or null Message: we passed on this one" %
+                             (funcName), self.logName)
                     pass  # Ignore system messages
 
                 elif rawData[1:4] == 'LRR':   # panel state information  - mostly for events
-                    self.log(3, dbFlg, "%s: Processing LRR Message:%s, logging option:%s" % (funcName, rawData, self.plugin.logArmingEvents), self.logName)
+                    self.log(3, dbFlg, "%s: Processing LRR Message:%s, logging option:%s" %
+                             (funcName, rawData, self.plugin.logArmingEvents), self.logName)
                     # EVENT DATA - Either the User Number who preformed the action or the zone that was bypassed.
                     # PARTITION - The panel partition the event applies to. 0 indicates all partitions such as ACLOSS event.
                     # EVENT TYPES - One of the following events. Note: the programming mode for enabling each type is also provided.
                     # eg. !LRR:002,1,OPEN
 
                     try:
-                        self.log(3, dbFlg, "%s: Processing LRR Message:%s, logging option:%s" % (funcName, rawData, self.plugin.logArmingEvents), self.logName)
+                        self.log(3, dbFlg, "%s: Processing LRR Message:%s, logging option:%s" %
+                                 (funcName, rawData, self.plugin.logArmingEvents), self.logName)
                         splitMsg = re.split('[!:,]', rawData)
                         user = splitMsg[2]
                         partition = splitMsg[3]
@@ -810,7 +877,8 @@ class ad2usb(object):
                         function = function[0:-2]  # lose the newline
 
                         if function in kEventStateDict:
-                            self.log(3, dbFlg, "%s: LRR Decode- user:%s, partition:%s, function:%s" % (funcName, user, partition, function), self.logName)
+                            self.log(3, dbFlg, "%s: LRR Decode- user:%s, partition:%s, function:%s" %
+                                     (funcName, user, partition, function), self.logName)
                             now = datetime.now()
                             timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -820,10 +888,11 @@ class ad2usb(object):
                             panelDevice.updateStateOnServer(key='lastChgTo', value=function)
                             panelDevice.updateStateOnServer(key='lastChgAt', value=timeStamp)
                             if self.plugin.logArmingEvents:
-                                self.log(0, dbFlg, "Alarm partition %s set to %s caused/entered by %s." % (partition, function, user), self.logName)
+                                self.log(0, dbFlg, "Alarm partition %s set to %s caused/entered by %s." %
+                                         (partition, function, user), self.logName)
 
                             self.eventQueueManager(partition, user, function)
-                    except Exception, err:
+                    except Exception as err:
                         self.logError("%s: LRR Error:%s" % (funcName, str(err)), self.logName)
 
                 else:
@@ -837,7 +906,7 @@ class ad2usb(object):
 
                 self.log(2, dbFlg, "%s: panelMsgRead End" % (funcName), self.logName)
 
-            except Exception, err:
+            except Exception as err:
                 self.logError('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), self.logName)
                 self.logError("%s: Error: %s" % (funcName, str(err)), self.logName)
 
@@ -850,7 +919,8 @@ class ad2usb(object):
         funcName = inspect.stack()[0][3]
         dbFlg = False
         self.log(2, dbFlg, "%s Called" % (funcName), self.logName)
-        self.log(3, dbFlg, "%s: isAdvanced:%s, commType:%s, address:%s, port:%s, serialPort:%s" % (funcName, ad2usbIsAdvanced, ad2usbCommType, ad2usbAddress, ad2usbPort, ad2usbSerialPort), self.logName)
+        self.log(3, dbFlg, "%s: isAdvanced:%s, commType:%s, address:%s, port:%s, serialPort:%s" %
+                 (funcName, ad2usbIsAdvanced, ad2usbCommType, ad2usbAddress, ad2usbPort, ad2usbSerialPort), self.logName)
 
         self.log(3, dbFlg, "%s: Read alarm status dict:%s" % (funcName, self.plugin.ALARM_STATUS), self.logName)
         self.log(3, dbFlg, "%s: Loading zonesDict" % (funcName), self.logName)
@@ -880,8 +950,9 @@ class ad2usb(object):
                 self.plugin.serialOpen = True
                 self.panelMsgRead(ad2usbIsAdvanced)
                 self.log(3, dbFlg, "%s: Returned from panelMessageRead()" % (funcName), self.logName)
-            except Exception, err:
-                self.logError("%s: Could not open connection to the IP Address and Port entered %s" % (funcName, theURL), self.logName)
+            except Exception as err:
+                self.logError("%s: Could not open connection to the IP Address and Port entered %s" %
+                              (funcName, theURL), self.logName)
                 self.logError("           The error message was: %s" % (str(err)), self.logName)
 
             if not self.shutdown:
@@ -899,7 +970,8 @@ class ad2usb(object):
                     retryTime = 1800
                     retryText = '30 minutes'
 
-                self.logError("%s: Failed connection to %s. Will retry in %s\n" % (funcName, theURL, retryText), self.logName)
+                self.logError("%s: Failed connection to %s. Will retry in %s\n" %
+                              (funcName, theURL, retryText), self.logName)
 
                 retryTime = retryTime * 2  # check every 0.5 seconds
                 while retryTime > 0 and not self.shutdown:
@@ -919,6 +991,6 @@ class ad2usb(object):
             try:
                 self.log(3, dbFlg, "%s Started" % (funcName), self.logName)
                 self.plugin.conn.close()
-            except Exception, err:
+            except Exception as err:
                 self.logError('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), self.logName)
                 self.logError("%s: Error: %s" % (funcName, str(err)), self.logName)
