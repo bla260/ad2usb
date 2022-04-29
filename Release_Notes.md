@@ -1,9 +1,10 @@
-v 1.6.2 May 5, 2022
+v 1.6.2 Planned for May 5, 2022
 - Corrected a typo in Devices.xml that may have resulted in keypad device not having a valid default partition number on initial creation of the device. This likely only impacted new installations.
+- Removed the Configuration settings and associated feature for receiving plugin updates via email. Indigo provides plugin update information within the application's Plugin, Manage Plugins menu.
 - Updated README file to add more documentation.
 - Updated this Release Notes file to be a markdown document in the root of the GitHub directory for easy access.
-- PLANNED - Updated logging. Logging is now done via Indigo's logging API. There are now two logging level options in the Configuration. One is for the Indigo Event log and another is for the separate plugin log. This allows you to keep your Indigo Event log at a different log level than the dedicated plugin log file.
-- PLANNED - Internal changes to logging and error handing to support Python 3 migration
+- Changed error handing **except** syntax to support Python 2 and 3
+- PLANNED - Logging is now done via Indigo's logging API. There are now two logging level options in the Configuration. One is for the Indigo Event log and another is for the separate plugin log. This allows you to keep your Indigo Event log at a different log level than the dedicated plugin log file.
 
 v1.6.1 Apr 1, 2022
 - First release on GitHub - functionally identical to 1.6.0
