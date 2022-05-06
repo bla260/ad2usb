@@ -19,6 +19,7 @@ from ad2usb import ad2usb
 # Globals
 ################################################################################
 kLoggingLevelNames = {'CRITICAL': 50, 'ERROR': 40, 'WARNING': 30, 'INFO': 20, 'DEBUG': 10}
+kLoggingLevelNumbers = {50: 'CRITICAL', 40: 'ERROR', 30: 'WARNING', 20: 'INFO', 10: 'DEBUG'}
 
 ########################################################
 # Support functions for building basic and advanced data structures
@@ -1158,14 +1159,16 @@ class Plugin(indigo.PluginBase):
         # we're using level names as strings in the PluginConfig.xml and logging uses integers
         if self.indigoLoggingLevel in kLoggingLevelNames.keys():
             self.indigo_log_handler.setLevel(kLoggingLevelNames[self.indigoLoggingLevel])
-            self.logger.info(u"Indigo logging level set to:{}".format(kLoggingLevelNames[self.indigoLoggingLevel]))
+            self.logger.info(u"Indigo logging level set to:{} ({})".format(
+                self.indigoLoggingLevel, kLoggingLevelNames[self.indigoLoggingLevel]))
         else:
             self.indigo_log_handler.setLevel(logging.INFO)
             self.logger.error(u"Invalid Indigo logging level:{} - setting level to INFO".format(self.indigoLoggingLevel))
 
         if self.pluginLoggingLevel in kLoggingLevelNames.keys():
             self.plugin_file_handler.setLevel(kLoggingLevelNames[self.pluginLoggingLevel])
-            self.logger.info(u"Plugin logging level set to:{}".format(kLoggingLevelNames[self.pluginLoggingLevel]))
+            self.logger.info(u"Plugin logging level set to:{} ({})".format(
+                self.pluginLoggingLevel, kLoggingLevelNames[self.pluginLoggingLevel]))
         else:
             self.plugin_file_handler.setLevel(logging.INFO)
             self.logger.error(
