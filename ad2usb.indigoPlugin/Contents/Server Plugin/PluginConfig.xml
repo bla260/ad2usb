@@ -186,6 +186,39 @@
 
 	<Field id="pcSep1" type="separator" />
 
+	<Field id="sectionLabel4" type="label">
+		<Label>Log Configuration</Label>
+	</Field>
+
+	<Field id="indigoLoggingLevel" type="menu" defaultValue="INFO">
+		<Label>Indigo Event Log Level:</Label>
+		<List>
+			<Option value="CRITICAL">Critical Errors</Option>
+			<Option value="ERROR">Errors</Option>
+			<Option value="WARNING">Warnings</Option>
+			<Option value="INFO">Informational (default)</Option>
+			<Option value="DEBUG">Verbose Debugging</Option>
+		</List>
+	</Field>
+
+	<Field id="pluginLoggingLevel" type="menu" defaultValue="INFO">
+		<Label>Plugin Log Level:</Label>
+		<List>
+			<Option value="CRITICAL">Critical Errors</Option>
+			<Option value="ERROR">Errors</Option>
+			<Option value="WARNING">Warnings</Option>
+			<Option value="INFO">Informational (default)</Option>
+			<Option value="DEBUG">Verbose Debugging</Option>
+		</List>
+	</Field>
+
+	<Field id="isPanelLoggingEnabled" type="checkbox" defaultValue="false">
+		<Label>Log Panel Messages:</Label>
+		<Description>(logs panel messages to a seperate file)</Description>
+	</Field>
+
+<!--
+
 	<Field id="showDebugInfo1" type="menu" defaultValue="1">
 		<Label>Logging level:</Label>
 		<List>
@@ -209,6 +242,8 @@
 	<Field id="v3" type="label" visibleBindingId="showDebugInfo1" visibleBindingValue="3,4" alignText="right">
 		<Label>If you are having problems with the plugin (or you are instructed by support), you can enable debugging Use with icaution. This level is not suggested for regular operation.</Label>
 	</Field>
+
+-->
 
 <!-- 	<Field type="checkbox" id="showDebugInfo">
 		<Label>Enable debuging:</Label>

@@ -1,10 +1,13 @@
-v 1.6.2 Planned for May 5, 2022
+v 1.6.2-BETA (released - May 5, 2022)
+- Requires Indigo 7.0 or later
+- Changes to logging. Logging is now done via [Indigo's logging API](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:plugin_guide#logging) which uses Python's standard logger facility. There are now two logging level options in the Configuration dialog. One is for the Indigo Event log and the other is for the separate plugin log. This allows you to have your Indigo Event log at a different log level than the dedicated plugin log file. For example, you can keep the plugin log at DEBUG to capture verbose details while setting the Indigo Event Log to INFO to not overwhelm the Indigo logs. Your previous plugin log settings will be migrated as follows: None (0) is converted to ERROR. Normal (1) and Verbose (2) are converted to INFO. Debug (3) and Intense Debug (4) are converted to DEBUG. Note that if you downgrade or rollback to version 1.6.1 after upgrading to this version your log settings will be reset to the 1.6.1 default of Normal (1). See the updated plugin's store "About" page or the [README on the GitHub page](https://github.com/bla260/ad2usb) for details about the logging levels.
+- Added new Panel Message Log. In addition to the logging changes above you can now optionally set via the Configuration a new log file that is written to in the same directory as the plugin's log file. This file is an alarm panel message log. If enabled, the messages AlarmDecoder receives are logged in this file. Thirty (30) days of panel messages are kept. The log file format is a simple timestamp and message.
 - Corrected a typo in Devices.xml that may have resulted in keypad device not having a valid default partition number on initial creation of the device. This likely only impacted new installations.
-- Removed the Configuration settings and associated feature for receiving plugin updates via email. Indigo provides plugin update information within the application's Plugin, Manage Plugins menu.
-- Updated README file to add more documentation.
-- Updated this Release Notes file to be a markdown document in the root of the GitHub directory for easy access.
-- Changed error handing **except** syntax to support Python 2 and 3
-- PLANNED - Logging is now done via Indigo's logging API. There are now two logging level options in the Configuration. One is for the Indigo Event log and another is for the separate plugin log. This allows you to keep your Indigo Event log at a different log level than the dedicated plugin log file.
+- Corrected some errors around Zone Group states being displayed for new Zone Groups and when a Zone Group change states. There are still some error messages in the logs that indicate there are likely issues when Zones are deleted but still exist in Zone Groups and when Zone Groups are deleted. Most of these would likely be resolved by restarting the plugin. These potential issues will be addressed in a future release.
+- Removed the Configuration settings and the associated feature for receiving notification of plugin updates via email. Indigo provides plugin update information within the application's Plugin, Manage Plugins menu.
+- Internal code change to error handing `except` syntax to support Python 2 and 3.
+- Updated **README** to add more documentation. The README can be found on GitHub or the About page of the Plugin Store for this plugin.
+- Updated **Release Notes** to be a markdown document in the root of the GitHub directory for easy access.
 
 v1.6.1 Apr 1, 2022
 - First release on GitHub - functionally identical to 1.6.0

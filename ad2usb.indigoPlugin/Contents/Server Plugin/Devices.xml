@@ -185,7 +185,7 @@
 				<Description>Log Zone Changes</Description>
 			</Field>
 			<Field id="zoneGroupLabel_1" type="label" fontSize="small" fontColor="darkgray" align="center">
-				<Label>Log changes from clear to faulted one any zone in the group becomes faulted. Log changes to clear when all zones become clear.</Label>
+				<Label>Zone Groups change to Fault when ANY of their Zone's change from Clear to Fault. Zone Groups change to Clear once ALL of their Zones are Clear.</Label>
 			</Field>
 		</ConfigUI>
 

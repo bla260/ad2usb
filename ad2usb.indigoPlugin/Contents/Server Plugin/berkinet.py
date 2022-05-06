@@ -24,7 +24,8 @@ import indigo
 #		logLevel = self.logger.logLevel
 #
 
-class logger(object):
+
+class OLD_logger(object):
 
 	def __init__(self, plugin):
 		self.plugin = plugin
@@ -51,7 +52,8 @@ class logger(object):
 
 		# If this is the first run
 		if(oldLevel is None):
-			self.log(0, False, "Log level preferences are set to \"%s\"." % kLogLevelList[self.logLevel], self.plugin.pluginDisplayName)
+			self.log(0, False, "Log level preferences are set to \"%s\"." %
+			         kLogLevelList[self.logLevel], self.plugin.pluginDisplayName)
 		# or are we just checking for a change in log level
 		elif oldLevel != self.logLevel:
 			self.log(1, "Log level preferences changed to \"%s\"." % kLogLevelList[self.logLevel], self.plugin.pluginDisplayName)
@@ -65,8 +67,5 @@ class logger(object):
 			# 	type = type + " DEBUG"
 			# 	indigo.server.log(logMsg, type)
 
-
 	def logError(self, logMsg, type):
 		indigo.server.log(logMsg, type=type, isError=True)
-
-	
