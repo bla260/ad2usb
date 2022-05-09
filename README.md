@@ -73,24 +73,26 @@ Alarm Events | Detect when your panel has any of these Alarm events: Panic Alarm
 User Actions | Detect when an alarm panel user ID you specify has initiated any these events: Disarmed, Armed Stay, Armed Away. **NOTE:** These events require either a real or emulated LRR. More information is *TBP*.
 
 ## Configuration and Setup
-See Indigo's [Managing Plugins](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:getting_started#managing_plugins) documentation for details on installing and upgrading plugins.
+You need to be familiar with how to program your Alarm panel, setup and configure your AlarmDecoder, and installing Indigo plugins. Refer to your Alarm panel programming guide on how to add a keypad device. See [NuTech's AlarmDecoder website](https://www.alarmdecoder.com/index.php) to install and configure your AlarmDecoder. See Indigo's [Managing Plugins](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:getting_started#managing_plugins) documentation for details on installing and upgrading plugins.
 
 ### Quick Start - First Install
-1. Download the plugin from the Plugin Store
-2. Double-click the plugin icon to install the plugin within Indigo. Choose "Install and Enable the Plugin"
-3. Choose "AD2SUB Alarm Interface" from the Plugins menu and choose Configure.
-4. Configure the plugin's IP address or Serial settings for communication to your AlarmDecoder.
-5. Configure the plugin's Keypad address to be the same keypad address you set in AlarmDecoder and on your alarm panel.
-6. Save the Configuration with write the save your preference **AND** write the configuration to the AlarmDecoder.
+1. Program your alarm panel to support the NuTech AlarmDecoder as a new keypad device.
+2. Install and configure your NuTech AlarmDecoder. For network devices make sure you know the IP address and port (default is 10000) to communicate with the AlarmDecoder.
+3. Download this plugin from the Indigo Plugin Store.
+4. Double-click the plugin icon to install the plugin within Indigo. Choose "Install and Enable the Plugin"
+5. Choose "AD2SUB Alarm Interface" from the Plugins menu and choose Configure.
+6. Configure the plugin's IP address and port or the Serial settings for communication to your AlarmDecoder.
+7. Configure the plugin's Keypad address to be the same keypad address you set in AlarmDecoder and on your alarm panel.
+8. Save the Configuration with write the save your preference **AND** write the configuration to the AlarmDecoder.
 
 ### Quick Start - Upgrading the ad2usb plugin
 1. Refer to Indigo's [Plugins Menu](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:getting_started#plugin_menus_in_indigo) documentation.
 2. Go to Indigo's Plugins -> Manage Plugins menu
-3. Look to see if ad2usb plugin has an upgrade and if it is compatible with your version of Indigo.
-4. Disable the ad2usb plugin
-5. Download the latest version of the plugin if it is compatible with your version of Indigo
-6. In the MacOS Finder, double-click on the downloaded plugin. Choose "Install and Enable"
-7. Verify the new version of the plugin is running via the Plugins -> Manage Plugins menu. The running version number is shown after the plugin name.
+3. Look to see if ad2usb plugin has an upgrade and if it is compatible with your version of Indigo. If it has an upgrade:
+  - Disable the ad2usb plugin
+  - Download the latest version of the plugin if it is compatible with your version of Indigo
+  - In the MacOS Finder, double-click on the downloaded plugin. Choose "Install and Enable"
+  - Verify the new version of the plugin is running via the Plugins -> Manage Plugins menu. The running version number is shown after the plugin name.
 
 
 ### AD2USB Configuration
@@ -100,7 +102,7 @@ See Indigo's [Managing Plugins](https://wiki.indigodomo.com/doku.php?id=indigo_2
 2. Operating parameters
   - Most users will be fine with Basic Mode (the default). If Advanced Mode is needed enable it here.
   - Choose whether to log arm/disarm events. These events are logged with the log level of INFO and will only be visible in the logs if you log level setting are INFO or DEBUG.
-  
+
 
 ### Basic Mode
 *TBP*
