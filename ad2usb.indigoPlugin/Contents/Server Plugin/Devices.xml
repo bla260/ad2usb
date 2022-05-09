@@ -189,7 +189,7 @@
 			</Field>
 		</ConfigUI>
 
-		<UiDisplayStateId>displayState</UiDisplayStateId>
+		<UiDisplayStateId>zoneState</UiDisplayStateId>
 		<States>
 			<State id="zoneState">
 				<ValueType>
@@ -199,22 +199,24 @@
 					</List>
 				</ValueType>
 				<TriggerLabel>Any change in state</TriggerLabel>
-				<TriggerLabelPrefix>Zone State Changed to </TriggerLabelPrefix>
+				<TriggerLabelPrefix>Zone State Changed to</TriggerLabelPrefix>
 				<ControlPageLabel> -- Select a Zone State -- </ControlPageLabel>
-				<ControlPageLabelPrefix>Current State </ControlPageLabelPrefix>
+				<ControlPageLabelPrefix>Current State</ControlPageLabelPrefix>
 			</State>
 
 			<State id="onOffState">
 				<ValueType boolType="onOff">Boolean</ValueType>
-				<TriggerLabel>Zone onOff state</TriggerLabel>
-				<ControlPageLabel>Zone onOff state</ControlPageLabel>
+				<TriggerLabel>Zone Group On/Off state</TriggerLabel>
+				<ControlPageLabel>Zone Group On/Off state</ControlPageLabel>
 			</State>
 
+<!--
 			<State id="displayState">
 				<ValueType>String</ValueType>
 				<TriggerLabel> </TriggerLabel>
 				<ControlPageLabel> </ControlPageLabel>
 			</State>
+-->
 		</States>
 	</Device>
 
