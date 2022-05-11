@@ -291,6 +291,12 @@ class Plugin(indigo.PluginBase):
         self.pluginDisplayName = pluginDisplayName
         self.pluginPrefs = pluginPrefs
 
+        try:
+            self.pythonVersion = sys.version_info.major
+        except Exception as err:
+            self.logger.warning(u"Unable to determine Python version 2 or 3; assuming 2. Error:{}".format(str(err)))
+            self.pythonVersion = 2
+
         # adding new logging object introduced in API 2.0
         self.logger.info(u"completed")
 
