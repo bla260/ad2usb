@@ -387,7 +387,9 @@ class ad2usb(object):
 
                 try:
                     if not supervisionMessage:
-                        self.updateZoneGroups(zNumber, stateMsg)
+                        # replacing update Zone Group method
+                        # self.updateZoneGroups(zNumber, stateMsg)
+                        self.updateAllZoneGroups()
                 except Exception as err:
                     self.logger.error(u"updateZoneGroups Error:{}".format(str(err)))
 
@@ -439,9 +441,13 @@ class ad2usb(object):
             zoneState = 'Faulted'
 
         try:
-            self.updateZoneGroups(str(zoneIndex), zoneState)
+            # old
+            # self.updateZoneGroups(str(zoneIndex), zoneState)
+            # new
+            # now that zones have been updated we can refresh the zone groups
+            self.plugin.updateAllZoneGroups()
         except Exception as err:
-            self.logger.error(u"updateZoneGroups Error:{}".format(str(err)))
+            self.logger.error(u"updateAllZoneGroups error:{}".format(str(err)))
 
         # If we are supposed to log zone changes, this is where we do it (unless this was a supervision message)
         if zLogChanges:

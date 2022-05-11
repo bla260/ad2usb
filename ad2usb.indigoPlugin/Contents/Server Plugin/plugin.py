@@ -18,8 +18,14 @@ from ad2usb import ad2usb
 ################################################################################
 # Globals
 ################################################################################
+# Log levels dictionary and reverse dictionary name->number
 kLoggingLevelNames = {'CRITICAL': 50, 'ERROR': 40, 'WARNING': 30, 'INFO': 20, 'DEBUG': 10}
 kLoggingLevelNumbers = {50: 'CRITICAL', 40: 'ERROR', 30: 'WARNING', 20: 'INFO', 10: 'DEBUG'}
+
+# Custom Zone State - see Devices.xml
+kZoneStateDisplayValues = {'faulted': 'Fault', 'clear': 'Clear'}
+k_CLEAR = 'clear'
+k_FAULT = 'faulted'  # should convert to 'fault'
 
 ########################################################
 # Support functions for building basic and advanced data structures
@@ -285,6 +291,12 @@ class Plugin(indigo.PluginBase):
         self.pluginDisplayName = pluginDisplayName
         self.pluginPrefs = pluginPrefs
 
+        try:
+            self.pythonVersion = sys.version_info.major
+        except Exception as err:
+            self.logger.warning(u"Unable to determine Python version 2 or 3; assuming 2. Error:{}".format(str(err)))
+            self.pythonVersion = 2
+
         # adding new logging object introduced in API 2.0
         self.logger.info(u"completed")
 
@@ -333,8 +345,23 @@ class Plugin(indigo.PluginBase):
         if self.ad2usbIsAdvanced:
             advancedBuildDevDict(self, dev, 'add', self.ad2usbKeyPadAddress)
 
+        # migrate state from old displayState to zoneState
+        if (dev.deviceTypeId == 'zoneGroup'):
+            if dev.displayStateId == 'displayState':
+                # refresh from updated Devices.xml
+                self.logger.info(u"Upgrading states on device:{}".format(dev.name))
+                self.logger.debug(u"current device:{}".format(dev))
+                dev.stateListOrDisplayStateIdChanged()
+                self.setDeviceState(dev, k_CLEAR)
+                self.logger.debug(u"revised device:{}".format(dev))
+
+        # new method to start the device
+        if (dev.deviceTypeId == 'zoneGroup'):
+            if dev.displayStateValRaw == "" or self.clearAllOnRestart:
+                self.setDeviceState(dev, k_CLEAR)
+
         # For new devices (Those whose state or dsplayState = "") set them to Clear/off
-        if (dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'zoneGroup'):
+        if (dev.deviceTypeId == 'alarmZone'):
             if dev.states['zoneState'] == "" or dev.states['displayState'] == "" or self.clearAllOnRestart:
                 dev.updateStateOnServer(key='zoneState', value='Clear', uiValue='Clear')
                 dev.updateStateOnServer(key='displayState', value='enabled', uiValue='Clear')
@@ -985,6 +1012,224 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"completed")
 
         return myArray
+
+    def getAllZoneGroups(self):
+        """
+        returns an array of device.id [integer] for all Zone Group devices
+        """
+        self.logger.debug(u"called")
+
+        zoneGroups = []
+
+        try:
+            # all devices
+            for device in indigo.devices.iter("self"):
+                # just the Zone Groups
+                if device.deviceTypeId == 'zoneGroup':
+                    zoneGroups.append(device.id)
+
+            return zoneGroups
+
+        except Exception as err:
+            self.logger.error(u"error retrieving Zone Groups from Indigo, msg:{}".format(str(err)))
+
+            # return an empty dictionary
+            return []
+
+    def getZoneNumbersForZoneGroup(self, zoneGroupDeviceId=0):
+        """
+        returns an array of Zone Numbers (Address) [string] for a single Zone Group devices
+
+        **parameters**:
+        zoneGroupDeviceId -- an integer that is the device.id of the Zone Group
+        """
+
+        self.logger.debug(u"called with device id:{}".format(zoneGroupDeviceId))
+
+        try:
+            # get the Zone Group device provided
+            device = indigo.devices[zoneGroupDeviceId]
+            # check if we have the proptery
+            if 'zoneDeviceList' in device.pluginProps.keys():
+                # return if it is a list
+                zoneList = device.pluginProps['zoneDeviceList']
+                if isinstance(zoneList, list):
+                    return zoneList
+                else:
+                    return []
+            else:
+                return []
+
+        except Exception as err:
+            self.logger.error(u"error retrieving Zones for Zone Groups:{} from Indigo, msg:{}".format(
+                zoneGroupDeviceId, str(err)))
+
+            # return an empty dictionary
+            return []
+
+    def getAllZoneGroupsForZone(self, forZoneNumber=''):
+        """
+        returns an array of device.id [integer] that is all the Zone Group devices for the Zone Number (Address) provided
+
+        **parameters**:
+        forZoneNumber -- an string that is the Zone Number (Address)
+        """
+
+        self.logger.debug(u"called with zone address:{}".format(forZoneNumber))
+
+        zoneGroups = []
+        try:
+            # for each zone group
+            for deviceId in self.getAllZoneGroups():
+                # for each zone address in the zone group
+                for zone in self.getZoneNumbersForZoneGroup(deviceId):
+                    # if the zone address is what we are looking for
+                    if zone == forZoneNumber:
+                        # append it to the list
+                        zoneGroups.append(deviceId)
+
+            self.logger.debug(u"Zone:{} is in Groups:{}".format(forZoneNumber, zoneGroups))
+            return zoneGroups
+
+        except Exception as err:
+            self.logger.error(
+                u"error retrieving Zone Groups for Zone Address:{} - error:{}".format(forZoneNumber, str(err)))
+            return []
+
+    def getDeviceIdForZoneNumber(self, forZoneNumber=''):
+        """
+        returns the device.id (integer) for the Zone Number (Address) provided or 0 if not found
+
+        **parameters**:
+        forZoneNumber -- an string that is the Zone Number (Address)
+        """
+
+        self.logger.debug(u"called with zone number:{}".format(forZoneNumber))
+
+        try:
+            for device in indigo.devices.iter("self"):
+                if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
+                    zoneNumber = device.pluginProps.get('zoneNumber', "NONE")
+                    if zoneNumber == forZoneNumber:
+                        return device.id
+
+            # did not find device
+            self.logger.error(u"Unable to find device id for zone number:{}".format(forZoneNumber))
+            return 0
+
+        except Exception as err:
+            self.logger.error("Error trying to get device id for zone number:{}, error:{}".format(
+                forZoneNumber, str(err)))
+            return 0
+
+    def getZoneStateForDeviceId(self, forDeviceId=0):
+        """
+        returns the state property "zoneState" (string) for device id.
+        returns 'NOT_FOUND' if the device exists but the Zone State does not
+        returns 'ERROR' if an error is encountered
+
+        **parameters**:
+        forDeviceId -- an integer that is the indigo.device.id
+        """
+
+        self.logger.debug(u"called with device id:{}".format(forDeviceId))
+        if forDeviceId == 0:
+            return 'NOT_FOUND'
+
+        try:
+            device = indigo.devices[forDeviceId]
+            self.logger.debug(u"found device id:{}".format(forDeviceId))
+            if 'zoneState' in device.pluginProps['states'].keys():
+                zoneState = device.pluginProps['states']['zoneState']
+                self.logger.debug(u"found zoneState:{} in device:{}".format(zoneState, device.name))
+                return zoneState
+
+            # did not find state
+            self.logger.error(u"Unable to get Zone State for device:{} ({})".format(device.name, forDeviceId))
+            return 'NOT_FOUND'
+
+        except Exception as err:
+            self.logger.error("Error trying to get zone state for device id:{}, error:{}".format(forDeviceId, str(err)))
+            return 'ERROR'
+
+    def updateAllZoneGroups(self):
+        """
+        updates all the applicable Zone Groups when a Zone changes. call this method after an alarm zone state update
+        """
+
+        self.logger.debug(u"called")
+
+        try:
+            # check and update every zone group
+            for zoneGroupDeviceId in self.getAllZoneGroups():
+
+                # get the Zone Group state
+                zoneGroupDevice = indigo.devices[zoneGroupDeviceId]
+                currentZoneGroupZoneState = zoneGroupDevice.displayStateValRaw
+                self.logger.debug(u"updating zone group:{}, id:{}, current zone state:{}".format(
+                    zoneGroupDevice.name, zoneGroupDeviceId, currentZoneGroupZoneState))
+
+                # start as false - but if we find one zone as fault the group is fault
+                zoneGroupIsFaulted = False
+                for zoneNumber in self.getZoneNumbersForZoneGroup(zoneGroupDeviceId):
+                    deviceId = self.getDeviceIdForZoneNumber(zoneNumber)
+                    if deviceId != 0:
+                        # TO DO: replace this with standard methods to get device state
+                        zoneState = self.getZoneStateForDeviceId(deviceId)
+                        self.logger.debug(u"checking alarm zone number:{}, id:{}, with state:{}".format(
+                            zoneNumber, deviceId, zoneState))
+                        if zoneState == k_FAULT:
+                            zoneGroupIsFaulted = True
+                            self.logger.debug(u"zone group:{} will be faulted".format(zoneGroupDevice.name))
+                            break
+
+                # determine the new zone group state
+                newZoneGroupZoneState = k_CLEAR
+                if zoneGroupIsFaulted:
+                    newZoneGroupZoneState = k_FAULT
+
+                # update the device state if it changed
+                self.logger.debug(u"zone group state current:{}, new:{}".format(
+                    currentZoneGroupZoneState, newZoneGroupZoneState))
+                if newZoneGroupZoneState != currentZoneGroupZoneState:
+                    self.logger.debug(u"updating zone group:{} to state:{}".format(
+                        zoneGroupDevice.name, newZoneGroupZoneState))
+                    self.setDeviceState(zoneGroupDevice, newZoneGroupZoneState)
+                else:
+                    self.logger.debug(u"zone group:{} is not changed".format(zoneGroupDevice.name))
+
+        except Exception as err:
+            self.logger.error("Error trying to update all zone groups, current zone group id:{}, error:{}".format(
+                zoneGroupDeviceId, str(err)))
+
+    def setDeviceState(self, forDevice, newState='NONE'):
+        """
+        updates the indio.device for a given device object (indigo.device) and new state (string)
+        the state is the key - not the value in the Devices.xml
+
+        **parameters**:
+        forDevice -- a valid indigo.device object
+        newState -- a string for the new state value - use k-constant
+        """
+        self.logger.debug(u"called with name:{}, id:{}, new state:{}".format(forDevice.name, forDevice.id, newState))
+
+        try:
+            if newState == k_CLEAR:
+                forDevice.updateStateOnServer(key='zoneState', value=k_CLEAR)
+                forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+                # TO DO: consider removing on/off state
+                forDevice.updateStateOnServer(key='onOffState', value=True)
+            elif newState == k_FAULT:
+                forDevice.updateStateOnServer(key='zoneState', value=k_FAULT)
+                forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+                # TO DO: consider removing on/off state
+                forDevice.updateStateOnServer(key='onOffState', value=True)
+            else:
+                self.logger.error(u"Unable to set device name:{}, id:{}, to state:{}".format(
+                    forDevice.name, forDevice.id, newState))
+
+        except Exception as err:
+            self.logger.error(u"Unable to set device:{}, to state:{}, error:{}".format(forDevice, newState, str(err)))
 
     ########################################
     # Indigo Event Triggers: Start and Stop
