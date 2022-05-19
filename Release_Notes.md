@@ -1,3 +1,12 @@
+v 1.8.0 (Planned)
+- AlarmDecoder Communications. In preparation of Python 3 all plugin communication to/from the AlarmDecoder was rewritten. While these change should be transparent they were significant. All panel reads and writes and the plugin Config Dialog (including the "Read ad2usb Config" button) were revised.
+- Zone Group was refactored to always get a group's device state from Indigo versus a local cache.
+- Device states updated.
+  - Removed the device state 'displayState' since it was redundant and not fully configured.
+  - Alarm Zone and Zone Group states still consist of zoneState (Clear/Fault) and onOffState (On/Off). A few minor bug fixes were made in their behavior, display on various screens, and the ability to use either in a Trigger.
+  - Alarm Zone Bypass state is now a standard Indigo on/off state. Triggers can be set when Bypass is set on or off.
+  - Indigo Client UI display of Alarm Zones in Bypass state. When an Alarm Zone is set to Bypass = True **AND** is Clear it will display the generic sensor on icon (green circle) and the text "Bypassed" in the Indigo Client UI. When an Alarm Zone is set to Bypass = True **AND** is Faulted it will display the generic sensor tripped icon (red circle) and the text "Fault" in the Indigo Client UI.
+
 v 1.7.1 May 11, 2022
 - Requires Indigo 7.0 or later
 - Changes to logging. Logging is now done via [Indigo's logging API](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:plugin_guide#logging) which uses Python's standard logger facility. There are now two logging level options in the Configuration dialog. One is for the Indigo Event log and the other is for the separate plugin log. This allows you to have your Indigo Event log at a different log level than the dedicated plugin log file. For example, you can keep the plugin log at DEBUG to capture verbose details while setting the Indigo Event Log to INFO to not overwhelm the Indigo logs. Your previous plugin log settings will be migrated as follows: None (0) is converted to ERROR. Normal (1) and Verbose (2) are converted to INFO. Debug (3) and Intense Debug (4) are converted to DEBUG. Note that if you downgrade or rollback to version 1.6.1 after upgrading to this version your log settings will be reset to the 1.6.1 default of Normal (1). See the updated plugin's store "About" page or the [README on the GitHub page](https://github.com/bla260/ad2usb) for details about the logging levels.
