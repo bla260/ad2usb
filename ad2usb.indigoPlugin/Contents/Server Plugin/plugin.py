@@ -4,9 +4,6 @@
 # ad2usb Alarm Plugin
 # Developed and copyright by Richard Perlman -- indigo AT perlman DOT com
 
-# from berkinet import logger
-# from indigoPluginUpdateChecker import updateChecker
-# import inspect
 import logging  # needed for CONSTANTS
 import re
 import time
@@ -23,9 +20,9 @@ kLoggingLevelNames = {'CRITICAL': 50, 'ERROR': 40, 'WARNING': 30, 'INFO': 20, 'D
 kLoggingLevelNumbers = {50: 'CRITICAL', 40: 'ERROR', 30: 'WARNING', 20: 'INFO', 10: 'DEBUG'}
 
 # Custom Zone State - see Devices.xml
-kZoneStateDisplayValues = {'faulted': 'Fault', 'clear': 'Clear'}
-k_CLEAR = 'clear'
-k_FAULT = 'faulted'  # should convert to 'fault'
+kZoneStateDisplayValues = {'faulted': 'Fault', 'Clear': 'Clear'}
+k_CLEAR = 'Clear'  # key: Clear, value: Clear - should convert key to 'clear'
+k_FAULT = 'faulted'  # key: faulted, value: Fault - should convert to 'fault'
 
 ########################################################
 # Support functions for building basic and advanced data structures
@@ -259,8 +256,12 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"called with id:{}, name:{}, version:{}".format(pluginId, pluginDisplayName, pluginVersion))
         self.logger.debug(u"preferences:{}".format(pluginPrefs))
 
-        # init the ad2usb object first
-        self.ad2usb = ad2usb(self)
+        # set the python version first
+        try:
+            self.pythonVersion = sys.version_info.major
+        except Exception as err:
+            self.logger.warning(u"Unable to determine Python version 2 or 3; assuming 2. Error:{}".format(str(err)))
+            self.pythonVersion = 2
 
         # call method to upgrade (if needed) and set preferences
         # need to do this before any logging to set logging levels
@@ -268,6 +269,33 @@ class Plugin(indigo.PluginBase):
 
         # set logging levels
         self.__setLoggingLevels()
+
+        # set the URL
+        self.URL = ''
+        self.commType = ''
+        try:
+            self.setURLFromConfig()
+
+        except Exception as err:
+            self.logger.critical(
+                "URL is not set - Use the Config menu under the Plugins menu to configure your AlarmDecoder settings. Error:{}".format(str(err)))
+
+        # init the ad2usb object - this will attempt to read from the IP address set
+        self.ad2usb = ad2usb(self)
+
+        # if the ad2usb parameters were not read from the device (called by init)
+        # then read them from the Prefs. This is a the use case for USB AlarmDecoders
+        # to the device is not set we will set configSettings from Preferences
+        if not self.ad2usb.isAlarmDecoderConfigured:
+            # run the plugin's validation of config settings
+            (configStatus, tempValueDict, tempErrorDict) = self.setAlarmDecoderConfigFromPrefs(pluginPrefs)
+
+            # if that worked then we're all set with USB
+            if configStatus:
+                self.ad2usb.isAlarmDecoderConfigured = True
+            else:
+                self.logger.critical(
+                    u"Invalid AlarmDecoder configuration. Use the Config menu under the Plugins menu to configure your AlarmDecoder settings")
 
         # if the preferences are set to log panel messages initialize the log file
         if self.isPanelLoggingEnabled is True:
@@ -290,12 +318,6 @@ class Plugin(indigo.PluginBase):
 
         self.pluginDisplayName = pluginDisplayName
         self.pluginPrefs = pluginPrefs
-
-        try:
-            self.pythonVersion = sys.version_info.major
-        except Exception as err:
-            self.logger.warning(u"Unable to determine Python version 2 or 3; assuming 2. Error:{}".format(str(err)))
-            self.pythonVersion = 2
 
         # adding new logging object introduced in API 2.0
         self.logger.info(u"completed")
@@ -360,7 +382,7 @@ class Plugin(indigo.PluginBase):
             if dev.displayStateValRaw == "" or self.clearAllOnRestart:
                 self.setDeviceState(dev, k_CLEAR)
 
-        # For new devices (Those whose state or dsplayState = "") set them to Clear/off
+        # For new devices (Those whose state or displayState = "") set them to Clear/off
         if (dev.deviceTypeId == 'alarmZone'):
             if dev.states['zoneState'] == "" or dev.states['displayState'] == "" or self.clearAllOnRestart:
                 dev.updateStateOnServer(key='zoneState', value='Clear', uiValue='Clear')
@@ -392,6 +414,13 @@ class Plugin(indigo.PluginBase):
     def runConcurrentThread(self):
         self.logger.info(u"Called")
 
+        # TO DO: new logic:
+        # loop while not shutdown
+        #   if ad2usb comm not started
+        #       start it
+        #       read from ad2usb
+        #       update device based on message
+        #       sleep(??)
         try:
             self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType,
                                   self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
@@ -587,6 +616,7 @@ class Plugin(indigo.PluginBase):
         # TO DO: refactor to readPreferences and restart if needed
         # Need to look at where loop resides to be interrupted
 
+        # TO DO: need to address all paramets in this code - including AlarmDecoder
         if UserCancelled is False:
             if (self.ad2usbIsAdvanced != valuesDict['isAdvanced']) or (self.ad2usbCommType != valuesDict['ad2usbCommType']):
                 self.logger.info(u"The configuration changes require a plugin restart. Restarting now...")
@@ -710,119 +740,129 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"called with:{}".format(valuesDict))
 
         # Build the ad2usb board configuration string
-        # The keypad address is required. Without it we cannot continue
-        if valuesDict['msgControl'] == '2':
+        if valuesDict['msgControl'] == '1':
+
+            # validate the prefs
+            (isPrefsValid, valuesDict, errorMsgDict) = self.setAlarmDecoderConfigFromPrefs(valuesDict)
+
+            # if prefs are not valid return the error
+            if not isPrefsValid:
+                return (False, valuesDict, errorMsgDict)
+
+            # we need to write the AD2USB config if its an IP device
+            if valuesDict['ad2usbCommType'] == 'IP':
+                # if we can write the config
+                try:
+                    decoderConfigString = self.ad2usb.generateAlarmDecoderConfigString()
+                    if self.ad2usb.writeAlarmDecoderConfig(decoderConfigString):
+                        self.logger.info(u"ad2usb config updated to:{}".format(decoderConfigString))
+
+                except Exception as err:
+                    self.logger.error(u"error writing config to AlarmDecoder - error:{}".format(str(err)))
+                    errorMsgDict = indigo.Dict()
+                    errorMsgDict[u'ad2usbCommType'] = u"Unable to write configuration to AlarmDecoder"
+                    return (False, valuesDict, errorMsgDict)
+
+            # or just log info if its a USB device
+            # TO DO: see if settings changed
+            else:
+                self.logger.info(u"Make sure your AlarmDecoder and Plugin config settings match")
+
+            # if we made it this far all checks are complete and user choices look good
+            # so return True (client will then close the dialog window).
+            self.logger.debug(u"completed")
+            return (True, valuesDict)
+
+        elif valuesDict['msgControl'] == '2':
             errorMsgDict = indigo.Dict()
-            errorMsgDict[u'ad2usbCommType'] = u"IP Address or USB device Invalid. "
+            errorMsgDict[u'ad2usbCommType'] = u"IP Address or USB device Invalid"
             return (False, valuesDict, errorMsgDict)
 
-        elif valuesDict['msgControl'] == '1':
-            if len(valuesDict['ad2usbKeyPadAddress']) > 0:
-                cAddress = 'ADDRESS=' + valuesDict['ad2usbKeyPadAddress']
-            else:
-                errorMsgDict = indigo.Dict()
-                errorMsgDict[u'ad2usbKeyPadAddress'] = u"A valid keypad address is required"
-                return (False, valuesDict, errorMsgDict)
-
-            # virtual zone expanders
-            zxCount = 0
-            zx1 = 'n'
-            if valuesDict['ad2usbExpander_1']:
-                zx1 = 'Y'
-                zxCount += 1
-            zx2 = 'n'
-            if valuesDict['ad2usbExpander_2']:
-                zx2 = 'Y'
-                zxCount += 1
-            zx3 = 'n'
-            if valuesDict['ad2usbExpander_3']:
-                zx3 = 'Y'
-                zxCount += 1
-            zx4 = 'n'
-            if valuesDict['ad2usbExpander_4']:
-                zx4 = 'Y'
-                zxCount += 1
-            zx5 = 'n'
-            if valuesDict['ad2usbExpander_5']:
-                zx5 = 'Y'
-                zxCount += 1
-            cZoneExpander = '&EXP=' + zx1 + zx2 + zx3 + zx4 + zx5
-
-            if zxCount > 2:
-                errorMsgDict = indigo.Dict()
-                errorMsgDict[u'ad2usbExpander_1'] = u"A maximum of 2 virtual zone expanders are allowed"
-                return (False, valuesDict, errorMsgDict)
-
-            # virtual relays
-            vr1 = 'n'
-            if valuesDict['ad2usbVirtRelay_1']:
-                vr1 = 'Y'
-            vr2 = 'n'
-            if valuesDict['ad2usbVirtRelay_2']:
-                vr2 = 'Y'
-            vr3 = 'n'
-            if valuesDict['ad2usbVirtRelay_3']:
-                vr3 = 'Y'
-            vr4 = 'n'
-            if valuesDict['ad2usbVirtRelay_4']:
-                vr4 = 'Y'
-            cRelays = '&REL=' + vr1 + vr2 + vr3 + vr4
-
-            # LRR
-            cLrr = '&LRR=N'
-            if valuesDict['ad2usbLrr']:
-                cLrr = '&LRR=Y'
-            # Deduplicate
-            cDedup = '&DEDUPLICATE=N'
-            if valuesDict['ad2usbDeduplicate'] is True:
-                cDedup = '&DEDUPLICATE=Y'
-
-            # Now put it all together
-            cString = 'C' + cAddress + cZoneExpander + cRelays + cLrr + cDedup + '\r'
-            # cString2 = 'C' + cLrr + cDedup + '\r'   # Work-around for ad2usb bug
-
-            self.logger.info(u"validation: ad2usb config string is:{}".format(cString))
-
-            # figure out the url for communications with the ad2usb board
-            if valuesDict['ad2usbCommType'] == 'IP':
-                theURL = 'socket://' + valuesDict['ad2usbAddress'] + ':' + valuesDict['ad2usbPort']
-                self.logger.info(u"validation: the url is:{}".format(theURL))
-
-                # Communication validation test and board config
-                self.logger.info(u"Attempting to connect to AlarmDecoder at:{}".format(theURL))
-                alarmDecoderConnectionStatus = u"connecting"
-                try:
-                    testSocket = serial.serial_for_url(theURL, baudrate=115200)
-                    self.logger.info(u"connected to AlarmDecoder")
-
-                    alarmDecoderConnectionStatus = u"writing configuring"
-                    self.logger.info(u"starting AlarmDecoder configuration")
-                    self.logger.debug(u"configurations settings:{}".format(repr(cString)))
-                    testSocket.write(cString)
-
-                    # time.sleep(1)
-                    # testSocket.write(cString2)
-
-                    alarmDecoderConnectionStatus = u"closing connection"
-                    self.logger.info(u"finished AlarmDecoder configuration")
-                    testSocket.close()
-                    self.logger.info(u"closed connection to AlarmDecoder")
-                except Exception as err:
-                    errorMsgDict = indigo.Dict()
-                    errorMsgDict[u'ad2usbAddress'] = u"Could not open connection to the IP Address and Port entered. " + \
-                        str(err)
-                    self.logger.critical(u"AlarmDecoder connection failed when {} with error:{}".format(
-                        alarmDecoderConnectionStatus, str(err)))
-                    return (False, valuesDict, errorMsgDict)
         else:
-            self.logger.info(u"validation: no test for USB device:{}".format(valuesDict['ad2usbAddress']))
+            self.logger.error(u"unexpected msgControl in Config Dialog:{}".format(valuesDict['msgControl']))
+            errorMsgDict = indigo.Dict()
+            errorMsgDict[u'ad2usbCommType'] = u"msgControl error in dialog"
+            return (False, valuesDict, errorMsgDict)
 
-        # User choices look good, so return True (client will then close the dialog window).
+    def setAlarmDecoderConfigFromPrefs(self, valuesDict):
+        """
+        Reads the parameter (dictionary) valuesDict which is expected to match the items defined in Indigo's
+        PluginConfig.xml. Returns three values: Success/Fail (boolean), valueDict (dictionary), and
+        errorMsgDict (Indigo dict). Success means all the AlarmDecoder settings are valid
+
+        **parameters:**
+        valuesDict - the dictionary from Indigo's plugin preferences
+        """
+        self.logger.debug(u"called with:{}".format(valuesDict))
+
+        # init the error message in case we never use it it is defined
+        errorMsgDict = indigo.Dict()
+
+        # verify and set the URL - as it may be new
+        try:
+            self.setURL(valuesDict['ad2usbCommType'], valuesDict['ad2usbAddress'],
+                        valuesDict['ad2usbPort'], valuesDict['ad2usbSerialPort'])
+
+        except Exception as err:
+            errorMsgDict[u'ad2usbCommType'] = u"Invalid AD2USB communication settings"
+            self.logger.error(u'error in AlarmDecoder communication settings:{}'.format(str(err)))
+            return (False, valuesDict, errorMsgDict)
+
+        # The keypad address is required. Without it we cannot continue
+        # make sure keypad address is valid - 2 digits
+        # TO DO: make this match [0-9]{2}
+        if len(valuesDict['ad2usbKeyPadAddress']) > 0:
+            self.ad2usb.configSettings['ADDRESS'] = valuesDict['ad2usbKeyPadAddress']
+        else:
+            errorMsgDict[u'ad2usbKeyPadAddress'] = u"A valid keypad address is required"
+            return (False, valuesDict, errorMsgDict)
+
+        # virtual zone expanders - no more than 2
+        zxCount = 0
+        decoderConfigEXP = 'NNNNN'
+        expanderList = ['ad2usbExpander_1', 'ad2usbExpander_2', 'ad2usbExpander_3',
+                        'ad2usbExpander_4', 'ad2usbExpander_5']
+
+        for index, key in enumerate(expanderList):
+            if valuesDict[key]:
+                # make sure we limit it to two (2) max
+                zxCount += 1
+                # index starts with 0 but bit positon starts with 1
+                bitPosition = index + 1
+                # set the bit
+                decoderConfigEXP = self.setFlagInString(decoderConfigEXP, bitPosition, valuesDict[key])
+
+        self.ad2usb.configSettings['EXP'] = decoderConfigEXP
+
+        if zxCount > 2:
+            errorMsgDict[u'ad2usbExpander_1'] = u"A maximum of 2 virtual zone expanders are allowed"
+            return (False, valuesDict, errorMsgDict)
+
+        # virtual relays
+        decoderConfigREL = 'NNNN'
+        decoderConfigREL = self.setFlagInString(decoderConfigREL, 1, valuesDict['ad2usbVirtRelay_1'])
+        decoderConfigREL = self.setFlagInString(decoderConfigREL, 2, valuesDict['ad2usbVirtRelay_2'])
+        decoderConfigREL = self.setFlagInString(decoderConfigREL, 3, valuesDict['ad2usbVirtRelay_3'])
+        decoderConfigREL = self.setFlagInString(decoderConfigREL, 4, valuesDict['ad2usbVirtRelay_4'])
+        self.ad2usb.configSettings['REL'] = decoderConfigREL
+
+        # LRR
+        decoderConfigLRR = 'N'
+        decoderConfigLRR = self.setFlagInString(decoderConfigLRR, 1, valuesDict['ad2usbLrr'])
+        self.ad2usb.configSettings['LRR'] = decoderConfigLRR
+
+        # Deduplicate
+        decoderConfigDEDUP = 'N'
+        decoderConfigDEDUP = self.setFlagInString(decoderConfigDEDUP, 1, valuesDict['ad2usbDeduplicate'])
+        self.ad2usb.configSettings['DEDUPLICATE'] = decoderConfigDEDUP
+
+        # if we made it this far all checks are complete and user choices look good
+        # so return True and the dictionaries
         self.logger.debug(u"completed")
-
-        return (True, valuesDict)
+        return (True, valuesDict, errorMsgDict)
 
     ########################################################
+
     def validateEventConfigUi(self, valuesDict, typeId, devId):
         self.logger.debug(u"Called")
         self.logger.debug(u"received: typeId:{} devId:{} valuesDict:{}".format(typeId, devId, valuesDict))
@@ -850,96 +890,63 @@ class Plugin(indigo.PluginBase):
     # Confg callback methods
     ########################################################
     def ConfigButtonPressed(self, valuesDict):
-        self.logger.debug(u"Called")
-        self.logger.debug(u"Received: {}".format(valuesDict))
+        """
+        reads the AlarmDecoder (IP only) config and updates the plugin Config dialog settings from the AlarmDecoder
+        """
+        self.logger.debug(u"called with: {}".format(valuesDict))
 
-        # figure out the url for communications with the ad2usb board
-        if valuesDict['ad2usbCommType'] == 'IP':
-            theURL = 'socket://' + valuesDict['ad2usbAddress'] + ':' + valuesDict['ad2usbPort']
-        else:
-            theURL = valuesDict['ad2usbSerialPort']
-
-        self.logger.debug(u"the url is:{}".format(theURL))
-
-        # Communication validation test and board config
-        linesRead = 0
-        msg = ""
-        adConfig = ""
-        adRead = "nothing"
-
+        # if its a USB type we cannot read the configuration
+        # simply return
         if valuesDict['ad2usbCommType'] == 'USB':
+            self.logger.warning(u'The Read ad2usb Config button only works for IP based AlarmDecoders')
             valuesDict['msgControl'] = '3'
             return valuesDict
-        else:
-            try:
-                testSocket = serial.serial_for_url(theURL, baudrate=115200)
-                testSocket.timeout = 2
-                # TO DO: change logging to better track connection failures
-                self.logger.debug(u"created new connection")
 
-                linesRead = 0
-                testSocket.write('C\r')
-                while linesRead < 5:
-                    adRead = ""
-                    # adRead = testSocket.readline(eol='\n')
-                    adRead = testSocket.readline()
+        # if its an IP port...
+        # at this point this could be the first time we are running
+        # or the config items have been changed
+        # so we should tell ad2usb object about the new plugin configs URL
+        try:
+            # set the URL
+            self.setURL(valuesDict['ad2usbCommType'], valuesDict['ad2usbAddress'],
+                        valuesDict['ad2usbPort'], valuesDict['ad2usbSerialPort'])
 
-                    if len(adRead) > 8 and adRead[0:8] == '!CONFIG>':
-                        linesRead = 5
-                        msg = adRead[8:-2]
-                        valuesDict['msgControl'] = '1'
+            # then read the config - detailed logging is handled by the underlying methods
+            if self.ad2usb.readAlarmDecoderConfig():
+                valuesDict['msgControl'] = '1'  # success
+            else:
+                valuesDict['msgControl'] = '2'  # error
 
-                    self.logger.debug(u"readline:{}, {}".format(str(adRead), str(linesRead)))
-                    linesRead += 1
+            # update the config dialog with new settings from AlarmDecoder
+            self.logger.debug(u"current config dictionary are:{}".format(valuesDict))
 
-                if testSocket.isOpen():
-                    testSocket.close()
-            except Exception as err:
-                if testSocket.isOpen():
-                    testSocket.close()
-                valuesDict['msgControl'] = '2'
-                self.logger.error(u"config read connection failed: the url was:{} error:{}".format(theURL, str(err)))
-                return valuesDict
+            # lets see the results
+            self.logger.debug(u"AlarmDecoder Config Settings are:{}".format(self.ad2usb.configSettings))
 
-        self.logger.debug(u"the raw config is:{}".format(msg))
-        adConfig = re.split('&', msg)
-        self.logger.debug(u"the split config is:{}".format(adConfig))
+            valuesDict['ad2usbKeyPadAddress'] = self.ad2usb.configSettings['ADDRESS']
 
-        confItem = re.split('=', adConfig[0])
+            valuesDict['ad2usbLrr'] = self.getFlagInString(self.ad2usb.configSettings['LRR'])
 
-        # Check that we got a valid config back from the ad2usb.  Maybe the firmware is too old.
-        if len(confItem) < 2:
-            valuesDict['msgControl'] = '3'
-            self.logger.debug(u"Completed with invalid config")
-            return valuesDict
-        else:
-            valuesDict['ad2usbKeyPadAddress'] = confItem[1]
+            valuesDict['ad2usbExpander_1'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 1)
+            valuesDict['ad2usbExpander_2'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 2)
+            valuesDict['ad2usbExpander_3'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 3)
+            valuesDict['ad2usbExpander_4'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 4)
+            valuesDict['ad2usbExpander_5'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 5)
 
-            confItem = re.split('=', adConfig[2])
-            valuesDict['ad2usbLrr'] = confItem[1]
+            valuesDict['ad2usbVirtRelay_1'] = self.getFlagInString(self.ad2usb.configSettings['REL'], 1)
+            valuesDict['ad2usbVirtRelay_2'] = self.getFlagInString(self.ad2usb.configSettings['REL'], 2)
+            valuesDict['ad2usbVirtRelay_3'] = self.getFlagInString(self.ad2usb.configSettings['REL'], 3)
+            valuesDict['ad2usbVirtRelay_4'] = self.getFlagInString(self.ad2usb.configSettings['REL'], 4)
 
-            confItem = re.split('=', adConfig[3])
-            adExp = confItem[1]
+            valuesDict['ad2usbDeduplicate'] = self.getFlagInString(self.ad2usb.configSettings['DEDUPLICATE'])
 
-            valuesDict['ad2usbExpander_1'] = adExp[0:1]
-            valuesDict['ad2usbExpander_2'] = adExp[1:2]
-            valuesDict['ad2usbExpander_3'] = adExp[2:3]
-            valuesDict['ad2usbExpander_4'] = adExp[3:4]
-            valuesDict['ad2usbExpander_5'] = adExp[4:5]
-
-            confItem = re.split('=', adConfig[4])
-            adRel = confItem[1]
-            valuesDict['ad2usbVirtRelay_1'] = adRel[0:1]
-            valuesDict['ad2usbVirtRelay_2'] = adRel[1:2]
-            valuesDict['ad2usbVirtRelay_3'] = adRel[2:3]
-            valuesDict['ad2usbVirtRelay_4'] = adRel[3:4]
-
-            confItem = re.split('=', adConfig[6])
-            valuesDict['ad2usbDeduplicate'] = confItem[1]
-
-            self.logger.debug(u"Completed with valid config")
+            self.logger.debug(u"newly updated config dictionary is:{}".format(valuesDict))
+            self.logger.debug(u"completed with valid config")
 
             return valuesDict
+
+        except Exception as err:
+            self.logger.error(u"unable to read AlarmDecoder Config:{}".format(str(err)))
 
     ########################################################
     # ConfiguUI callbacks from Actions and Devices
@@ -1218,7 +1225,7 @@ class Plugin(indigo.PluginBase):
                 forDevice.updateStateOnServer(key='zoneState', value=k_CLEAR)
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
                 # TO DO: consider removing on/off state
-                forDevice.updateStateOnServer(key='onOffState', value=True)
+                forDevice.updateStateOnServer(key='onOffState', value=False)
             elif newState == k_FAULT:
                 forDevice.updateStateOnServer(key='zoneState', value=k_FAULT)
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
@@ -1280,6 +1287,41 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"trigger:{} deleted".format(trigger.name))
         self.logger.debug(u"Completed")
 
+    def setURLFromConfig(self):
+        """
+        sets the object property "URL" (string) based on the plugin configuration dialog settings
+        """
+        self.logger.debug(u"called")
+
+        self.setURL(self.ad2usbCommType, self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
+
+    def setURL(self, commType=None, ipAddress='127.0.0.1', ipPort='', serialPort=None):
+        """
+        sets the object property "URL" (string) based on the parameters typically provided from the configuration dialog
+
+        **parameters**:
+        commType -- either 'IP' or 'USB' (string)
+        ipAddress -- a valid hostname or IP Address (string)
+        ipPort -- a valid port number (string)
+        serialPort -- a valid USB port selection
+        """
+        self.logger.debug(u"called with commType:{} ip:{} port:{} serial:{}".format(
+            commType, ipAddress, ipPort, serialPort))
+
+        # determine and set communication type and URL properties
+        if commType == 'IP':
+            self.URL = 'socket://' + ipAddress + ':' + ipPort
+            self.commType = commType
+        elif commType == 'USB':
+            self.URL = serialPort
+            self.commType = commType
+        else:
+            self.logger.debug(u"invalid commType:{}".format(commType))
+            self.logger.debug(u"previous URL will remain:{}".format(self.URL))
+            raise Exception('unable to set URL - invalid parameter commType:{}'.format(commType))
+
+        self.logger.debug(u"ad2USB URL property set to:{}".format(self.URL))
+
     ########################################
     # def triggerUpdated(self, origDev, newDev):
     #   self.log.log(4, u"<<-- entering triggerUpdated: %s" % origDev.name)
@@ -1324,8 +1366,8 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("panel logger setup completed")
 
         except Exception as err:
-            self.error("unable to configure panel logging. disabling.")
-            self.error("error msg:{}".format(str(err)))
+            self.logger.error("unable to configure panel logging. disabling.")
+            self.logger.error("error msg:{}".format(str(err)))
             # turn off panel logging regardless of the preferences
             self.isPanelLoggingEnabled = False
 
@@ -1399,6 +1441,8 @@ class Plugin(indigo.PluginBase):
         self.pluginLoggingLevel = pluginPrefs.get("pluginLoggingLevel", "INFO")  # 20 = INFO
         self.isPanelLoggingEnabled = pluginPrefs.get("isPanelLoggingEnabled", False)
 
+        # new settings
+
     def __setLoggingLevels(self):
         # check for valid logging level first
         # we're using level names as strings in the PluginConfig.xml and logging uses integers
@@ -1418,3 +1462,72 @@ class Plugin(indigo.PluginBase):
             self.plugin_file_handler.setLevel(logging.INFO)
             self.logger.error(
                 u"Invalid pluging logging level:{} - setting level to INFO".format(self.pluginLoggingLevel))
+
+    def getFlagInString(self, string='', bit=1):
+        """
+        expects a CONFIG string in the format of '[YN]{d}' (e.g. 'YNYYYNY') and returns True or False
+        if the specific bit (1-N) is Y or N. An empty string, invalid bit length or invalid character will return False
+
+        **parameters:**
+        string -- a string of Y and N - of any length
+        bit -- integer of which bit (character) you are interested in. Valid parameters are 1 to the length of the string
+        """
+
+        self.logger.debug(u'getting bit:{} from string:{}'.format(bit, string))
+
+        # make sure bit is valid
+        if (bit > len(string)) or (bit < 1):
+            return False
+
+        # make sure string is > 0 characters
+        if len(string) == 0:
+            return False
+
+        # test the single character of the desired bit
+        position = bit - 1  # strings start with 0
+        flag = string[position:position + 1]
+        if (flag == 'Y') or (flag == 'y'):
+            self.logger.debug(u'bit:{} of string:{} is True'.format(bit, string))
+            return True
+        else:
+            self.logger.debug(u'bit:{} of string:{} is False'.format(bit, string))
+            return False
+
+    def setFlagInString(self, string='', bit=1, newValue=None):
+        """
+        expects a CONFIG string in the format of '[YN]{d}' (e.g. 'YNYYYNY'), a bit number, and the new value
+        to set (True or False). It returns the string with the bit specified updated. An empty string,
+        invalid bit length or invalid new value will return the string unchanged
+
+        **parameters:**
+        string -- a string of Y and N - of any length
+        bit -- integer of which bit (character) you are interested in. Valid parameters are 1 to the length of the string
+        """
+
+        self.logger.debug(u'setting bit:{} of string:{} to:{}'.format(bit, string, newValue))
+
+        # make sure bit is valid
+        if (bit > len(string)) or (bit < 1):
+            return string
+
+        # make sure string is > 0 characters
+        if len(string) == 0:
+            return string
+
+        position = bit - 1
+        newStringArray = list(string)
+
+        if newValue is True:
+            newStringArray[position] = 'Y'
+            newString = "".join(newStringArray)
+            self.logger.debug(u'new string is:{}'.format(newString))
+            return newString
+
+        if newValue is False:
+            newStringArray[position] = 'N'
+            newString = "".join(newStringArray)
+            self.logger.debug(u'new string is:{}'.format(newString))
+            return newString
+
+        # we should never get here but just in case
+        return string
