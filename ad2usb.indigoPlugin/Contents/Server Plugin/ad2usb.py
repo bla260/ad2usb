@@ -22,6 +22,12 @@ kEventStateDict = ['OPEN', 'ARM_AWAY', 'ARM_STAY', 'ACLOSS', 'AC_RESTORE', 'LOWB
                    'ALARM_SILENT', 'ALARM_ENTRY', 'ALARM_AUX', 'ALARM_PERIMETER', 'ALARM_TRIPPED']
 kADCommands = {'CONFIG': 'C\r', 'VERSION': 'V\r'}
 
+# Custom Zone State - see Devices.xml
+kZoneStateDisplayValues = {'faulted': 'Fault', 'Clear': 'Clear'}
+k_CLEAR = 'Clear'  # key: Clear, value: Clear - should convert key to 'clear'
+k_FAULT = 'faulted'  # key: faulted, value: Fault - should convert to 'fault'
+
+
 ################################################################################
 # Globals
 ################################################################################
@@ -49,7 +55,7 @@ class ad2usb(object):
 
         self.zoneListInit = False
         self.zoneStateDict = {}
-        self.zoneBypassDict = {}
+        self.zoneBypassDict = {}  # dict with key of zone number as int, values are True
         self.lastApZonesBypassed = 0
 
         self.shutdown = False
@@ -154,75 +160,6 @@ class ad2usb(object):
         self.logger.debug(u"completed")
 
     ########################################
-    # Update zone groups, if we have any
-    def updateZoneGroups(self, zoneIndex, zoneState):
-        # TO DO:
-        # New logic
-        # loop thru Zone Group devices
-        # if Zone Group contains the zone passed to this method
-        #   get all zones for this zone group and their state as a dict
-        #   set the dictionary value of this zone to the new zone state
-        #   if any zones in the dict are faulted the Zone Group is faulted
-        #   if none of the zones in the dict are faulted the Zone Group is clear
-
-        self.logger.debug(u"called with zoneIndex:{}, zoneState:{}".format(zoneIndex, zoneState))
-
-        if zoneIndex not in self.plugin.zone2zoneGroupDevDict:
-            self.logger.debug(
-                u"zoneIndex:{} not in a zoneGroup. No updates to any ZoneGroup is required.".format(zoneIndex))
-            return
-
-        # mark the Zone Group not faulted until we find any zone that is faulted
-        isFaulted = False
-
-        self.logger.debug(u"zoneIndex:{} is in these Zone Groups:{}".format(
-            zoneIndex, self.plugin.zone2zoneGroupDevDict[zoneIndex]))
-        # iterate thru all Zone Group devices
-        for zoneGroupDev in self.plugin.zone2zoneGroupDevDict[zoneIndex]:
-            # get the device object and its state: zoneState (faulted or Clear)
-            groupZoneDevice = indigo.devices[int(zoneGroupDev)]
-            groupState = groupZoneDevice.states['zoneState']
-            self.logger.debug(u"Zone Group:{}, current displayState:{}".format(zoneGroupDev, groupState))
-
-            self.logger.debug(u"Details of Zone Group - zoneGroupDev:{}".format(zoneGroupDev))
-            self.logger.debug(u"BEFORE... zoneGroupDev:{}".format(self.plugin.zoneGroup2zoneDict[zoneGroupDev]))
-            self.plugin.zoneGroup2zoneDict[zoneGroupDev][zoneIndex] = zoneState
-            self.logger.debug(u"AFTER... zoneGroupDev:{}".format(self.plugin.zoneGroup2zoneDict[zoneGroupDev]))
-
-            # iterate thru all the zones in the Zone Group
-            for zone in self.plugin.zoneGroup2zoneDict[zoneGroupDev]:
-                self.logger.debug(u"DETAIL... zone:{}, zoneGroupDev:{}".format(
-                    zone, self.plugin.zoneGroup2zoneDict[zoneGroupDev][zone]))
-                if self.plugin.zoneGroup2zoneDict[zoneGroupDev][zone] == 'Faulted':
-                    isFaulted = True
-                    break
-
-            # currentState = groupZoneDevice.states.['displayState.ui']
-
-            # if the Zone Group should be faulted and isn't...
-            newGroupState = groupState
-            if isFaulted and (groupState != 'faulted'):
-                groupZoneDevice.updateStateOnServer(key='zoneState', value='faulted')
-                groupZoneDevice.updateStateOnServer(key='displayState', value='faulted', uiValue=u'Fault')
-                groupZoneDevice.updateStateOnServer(key='onOffState', value=True)
-                newGroupState = 'faulted'
-            else:  # We don't check on the current state, since all grouped zones must be clear if we got to this point
-                groupZoneDevice.updateStateOnServer(key='zoneState', value='Clear')
-                groupZoneDevice.updateStateOnServer(key='displayState', value='enabled', uiValue=u'Clear')
-                groupZoneDevice.updateStateOnServer(key='onOffState', value=False)
-                newGroupState = 'Clear'
-
-            if groupState != newGroupState:
-                if groupZoneDevice.pluginProps[u'zoneLogChanges']:
-                    self.logger.info(u"Zone Group:{}, state changed from:{} to:{}".format(
-                        groupZoneDevice.name, groupState, newGroupState))
-                else:
-                    self.logger.debug(u"Zone Group:{}, state changed from:{} to:{}".format(
-                        groupZoneDevice.name, groupState, newGroupState))
-
-        self.logger.debug(u"completed")
-
-    ########################################
     # Read the zone messages in advanced mode
     def advancedReadZoneMessage(self, rawData):
         self.logger.debug(u"called with:{}:".format(rawData))
@@ -302,9 +239,7 @@ class ad2usb(object):
                     if zoneState == zoneOn:
                         self.logger.debug(u"zoneOn zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
-                        indigoDevice.updateStateOnServer(key='zoneState', value='faulted')
-                        indigoDevice.updateStateOnServer(key='onOffState', value=True)
-                        indigoDevice.updateStateOnServer(key='displayState', value='faulted', uiValue=u'Fault')
+                        self.plugin.setDeviceState(indigoDevice, k_FAULT)
 
                         # Maintain the zone fault state
                         self.zoneStateDict[panelKeypadAddress].append(int(zNumber))
@@ -316,9 +251,7 @@ class ad2usb(object):
                     elif zoneState == zoneOff:
                         self.logger.debug(u"zoneOff zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
-                        indigoDevice.updateStateOnServer(key='zoneState', value='Clear')
-                        indigoDevice.updateStateOnServer(key='onOffState', value=False)
-                        indigoDevice.updateStateOnServer(key='displayState', value='enabled', uiValue=u'Clear')
+                        self.plugin.setDeviceState(indigoDevice, k_CLEAR)
 
                         # Maintain the zone fault state
                         try:
@@ -352,9 +285,7 @@ class ad2usb(object):
                     if zoneStateDict[wirelessLoop]:
                         self.logger.debug(u"zoneOn zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
-                        indigoDevice.updateStateOnServer(key='zoneState', value='faulted')
-                        indigoDevice.updateStateOnServer(key='onOffState', value=True, uiValue=u'Fault')
-                        indigoDevice.updateStateOnServer(key='displayState', value='faulted', uiValue=u'Fault')
+                        self.plugin.setDeviceState(indigoDevice, k_FAULT)
 
                         # Maintain the zone fault state
                         try:
@@ -369,9 +300,7 @@ class ad2usb(object):
                     elif not zoneStateDict[wirelessLoop]:
                         self.logger.debug(u"zoneOff zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
-                        indigoDevice.updateStateOnServer(key='zoneState', value='Clear')
-                        indigoDevice.updateStateOnServer(key='onOffState', value=False, uiValue=u'Clear')
-                        indigoDevice.updateStateOnServer(key='displayState', value='enabled', uiValue=u'Clear')
+                        self.plugin.setDeviceState(indigoDevice, k_CLEAR)
 
                         # Maintain the zone fault state
                         try:
@@ -403,7 +332,7 @@ class ad2usb(object):
                     if not supervisionMessage:
                         # replacing update Zone Group method
                         # self.updateZoneGroups(zNumber, stateMsg)
-                        self.updateAllZoneGroups()
+                        self.plugin.updateAllZoneGroups()
                 except Exception as err:
                     self.logger.error(u"updateAllZoneGroups Error:{}".format(str(err)))
 
@@ -432,32 +361,21 @@ class ad2usb(object):
         panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
         self.logger.debug(u"got address:{}".format(panelKeypadAddress))
 
-        if zoneState == 'faulted':
-            uiValue = 'Fault'
-            displayStateValue = 'faulted'
-            onOffStateValue = True
+        if zoneState == k_FAULT:
             self.zoneStateDict[panelKeypadAddress].append(int(zoneIndex))
             self.zoneStateDict[panelKeypadAddress].sort()
             self.logger.debug(u"faulted... state list:{}".format(self.zoneStateDict))
         else:
-            uiValue = 'Clear'
-            displayStateValue = 'enabled'
-            onOffStateValue = False
             self.zoneStateDict[panelKeypadAddress].remove(int(zoneIndex))
             self.logger.debug(u"clear... State list:{}".format(self.zoneStateDict))
 
-        indigoDevice.updateStateOnServer(key='zoneState', value=zoneState, uiValue=uiValue)
-        indigoDevice.updateStateOnServer(key='displayState', value=displayStateValue, uiValue=uiValue)
-        indigoDevice.updateStateOnServer(key='onOffState', value=onOffStateValue)
+        # update the device state
+        self.plugin.setDeviceState(indigoDevice, zoneState)
+
+        # update the panel device state info
         panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[panelKeypadAddress]))
 
-        if zoneState == 'faulted':
-            zoneState = 'Faulted'
-
         try:
-            # old
-            # self.updateZoneGroups(str(zoneIndex), zoneState)
-            # new
             # now that zones have been updated we can refresh the zone groups
             self.plugin.updateAllZoneGroups()
         except Exception as err:
@@ -510,7 +428,7 @@ class ad2usb(object):
 
                 zoneIndex = msgZoneNum
 
-                self.updateIndigoBasicMode(zoneIndex, 'faulted', panelDevice)
+                self.updateIndigoBasicMode(zoneIndex, k_FAULT, panelDevice)
 
                 self.logger.debug(u"Created new in the list, zone:{} at pos:{}".format(msgZoneNum, newZonePos))
 
@@ -554,7 +472,7 @@ class ad2usb(object):
 
                 zoneIndex = self.plugin.faultList[remZonePos]
 
-                self.updateIndigoBasicMode(zoneIndex, 'Clear', panelDevice)
+                self.updateIndigoBasicMode(zoneIndex, k_CLEAR, panelDevice)
 
                 del self.plugin.faultList[remZonePos]
 
@@ -572,7 +490,7 @@ class ad2usb(object):
 
                 zoneIndex = self.plugin.faultList[remZonePos]
 
-                self.updateIndigoBasicMode(zoneIndex, 'Clear', panelDevice)
+                self.updateIndigoBasicMode(zoneIndex, k_CLEAR, panelDevice)
 
                 del self.plugin.faultList[remZonePos]
 
@@ -677,7 +595,8 @@ class ad2usb(object):
 
                         if readThisMessage:
                             # Now look to see if the message has changed since the last one we processed
-                            self.logger.debug(u"Panel Message: Before:{}, Current:{}".format(rawData, lastPanelMsg))
+                            self.logger.debug(u"Panel Message: Before:{}".format(lastPanelMsg))
+                            self.logger.debug(u"Panel Message: Current:{}".format(rawData))
                             # If it hasn't, start again
                             if rawData == lastPanelMsg:  # The alarm status has not changed
                                 self.logger.debug(u"no panel status change")
@@ -805,6 +724,7 @@ class ad2usb(object):
                                 # self.logError("%s: Panel reports: %s" % (funcName, msgText), self.logName)
 
                             msgKey = msgText[1:6]
+                            self.logger.debug(u"msgKey is:{}, msgTxt is:{}".format(msgKey, msgText))
                             if msgZoneNum in self.plugin.zonesDict:  # avoid issues with count down timers on arm
                                 zoneData = self.plugin.zonesDict[int(msgZoneNum)]
                                 zDevId = zoneData['devId']
@@ -824,16 +744,20 @@ class ad2usb(object):
                                     self.logger.debug(u"zones bypassed is now zero")
                                     self.lastApZonesBypassed = apZonesBypassed
                                     # Clear the bypass state of all zones
-                                    for zone in self.zoneBypassDict:
+                                    for zone in self.zoneBypassDict.keys():
                                         bZoneData = self.plugin.zonesDict[int(zone)]
                                         bZDevid = bZoneData['devId']
                                         bIndigoDevice = indigo.devices[bZDevid]
                                         bIndigoDevice.updateStateOnServer(key='bypassState', value=False)
-                                        bIndigoDevice.updateStateOnServer(
-                                            key='displayState', value="enabled", uiValue="Clear")
+
+                                        # after setting bypass set the device state to itself (no change)
+                                        # to for force display to account for bypass state change
+                                        self.plugin.setDeviceState(bIndigoDevice, bIndigoDevice.displayStateValRaw)
+
                                         self.logger.debug(
                                             u"clearing bypass state for zone:{}, devid:{}".format(zone, bZDevid))
                                         self.logger.debug(u"zone:{}, data:{}".format(zone, self.plugin.zonesDict[zone]))
+
                                     # and now clear the list of bypassed zones
                                     self.zoneBypassDict.clear()
 
@@ -843,14 +767,15 @@ class ad2usb(object):
                                     self.logger.debug(
                                         u"zone bypass state zone:{}, name:{} already recorded".format(bMsgZoneNum, zName))
                                 else:
-                                    self.zoneBypassDict[bMsgZoneNum] = {True}
+                                    self.zoneBypassDict[bMsgZoneNum] = True
                                     self.logger.info(
                                         u"Alarm zone number:{}, name:{} has been bypassed".format(bMsgZoneNum, zName))
                                     self.lastApZonesBypassed = apZonesBypassed
                                     indigoDevice.updateStateOnServer(key='bypassState', value=True)
-                                    indigoDevice.updateStateOnServer(
-                                        key='displayState', value="bypass", uiValue="bypass")
-                                    # indigoDevice.setErrorStateOnServer(u'bypass')
+
+                                    # after setting bypass set the device state to itself (no change)
+                                    # to for force display to account for bypass state change
+                                    self.plugin.setDeviceState(indigoDevice, indigoDevice.displayStateValRaw)
 
                             # OK, Now let's see if we have a zone event
                             if not ad2usbIsAdvanced and len(self.plugin.zonesDict) > 0:

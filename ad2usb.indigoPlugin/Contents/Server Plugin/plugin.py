@@ -23,6 +23,7 @@ kLoggingLevelNumbers = {50: 'CRITICAL', 40: 'ERROR', 30: 'WARNING', 20: 'INFO', 
 kZoneStateDisplayValues = {'faulted': 'Fault', 'Clear': 'Clear'}
 k_CLEAR = 'Clear'  # key: Clear, value: Clear - should convert key to 'clear'
 k_FAULT = 'faulted'  # key: faulted, value: Fault - should convert to 'fault'
+k_ERROR = 'error'  # key: error, value: Error - also referred to as Trouble
 
 ########################################################
 # Support functions for building basic and advanced data structures
@@ -368,7 +369,9 @@ class Plugin(indigo.PluginBase):
             advancedBuildDevDict(self, dev, 'add', self.ad2usbKeyPadAddress)
 
         # migrate state from old displayState to zoneState
-        if (dev.deviceTypeId == 'zoneGroup'):
+        if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'zoneGroup')
+                or (dev.deviceTypeId == 'alarmZoneVirtual')):
+
             if dev.displayStateId == 'displayState':
                 # refresh from updated Devices.xml
                 self.logger.info(u"Upgrading states on device:{}".format(dev.name))
@@ -377,16 +380,27 @@ class Plugin(indigo.PluginBase):
                 self.setDeviceState(dev, k_CLEAR)
                 self.logger.debug(u"revised device:{}".format(dev))
 
-        # new method to start the device
-        if (dev.deviceTypeId == 'zoneGroup'):
+        # new method to start the devices with zoneState state
+        if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'zoneGroup')
+                or (dev.deviceTypeId == 'alarmZoneVirtual')):
+
+            # if the no current state or we want to clear on restart
             if dev.displayStateValRaw == "" or self.clearAllOnRestart:
                 self.setDeviceState(dev, k_CLEAR)
 
-        # For new devices (Those whose state or displayState = "") set them to Clear/off
-        if (dev.deviceTypeId == 'alarmZone'):
-            if dev.states['zoneState'] == "" or dev.states['displayState'] == "" or self.clearAllOnRestart:
-                dev.updateStateOnServer(key='zoneState', value='Clear', uiValue='Clear')
-                dev.updateStateOnServer(key='displayState', value='enabled', uiValue='Clear')
+        # if its and alarmZone or virtualZone device check if the device
+        # is marked as bypass in Indigo and load or del the cache
+        if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'alarmZoneVirtual')):
+            try:
+                validZoneNumber = int(dev.pluginProps['zoneNumber'])
+                if self.isDeviceBypassed(dev):
+                    self.ad2usb.zoneBypassDict[validZoneNumber] = True
+                else:
+                    if validZoneNumber in self.ad2usb.zoneBypassDict:
+                        del self.ad2usb.zoneBypassDict[validZoneNumber]
+
+            except Exception as err:
+                self.logger.warning(u"unable to determine zone number for device:{}, err:{}".format(dev.name, str(err)))
 
         self.logger.info(u"device comm start completed for {}".format(dev.name))
 
@@ -479,6 +493,9 @@ class Plugin(indigo.PluginBase):
         virtDevice = indigo.devices[devId]
         virtZoneNumber = virtDevice.pluginProps['zoneNumber']
 
+        # The L command can be used to open or close zones.
+        # There are two parameters: the zone and the state.
+        # The zone is a zero-padded two-digit number and the state is either 0 or 1.
         action = pluginAction.props['virtualAction']
         panelMsg = 'L' + virtZoneNumber + action + '\r'
         self.logger.debug(u"Sending panel message: {}".format(panelMsg))
@@ -491,12 +508,14 @@ class Plugin(indigo.PluginBase):
             virtPartition = virtDevice.pluginProps['vZonePartitionNumber']
             panelDevice = indigo.devices[self.partition2address[virtPartition]['devId']]
             panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
+
             # Update device UI States
             # This shouldn't be necessary, but the AD2USB doesn't send EXP messages for virtual zones
+
+            # set default newState
+            newZoneState = k_CLEAR
             if action == '0':   # Clear
-                uiValue = 'Clear'
-                zoneState = 'Clear'
-                displayStateValue = 'enabled'
+                newZoneState = k_CLEAR
                 try:   # In case someone tries to set a clear zone to clear
                     self.ad2usb.zoneStateDict[panelKeypadAddress].remove(int(virtZoneNumber))
                 except:
@@ -504,15 +523,14 @@ class Plugin(indigo.PluginBase):
                 # TO DO: check we can pass a dictionary or indigo dictionary to the logger
                 self.logger.debug(u"Clear - state list: {}".format(self.ad2usb.zoneStateDict))
             elif action == '1':   # Fault
-                uiValue = 'Fault'
-                displayStateValue = 'faulted'
-                zoneState = 'faulted'
+                newZoneState = k_FAULT
                 self.ad2usb.zoneStateDict[panelKeypadAddress].append(int(virtZoneNumber))
                 self.ad2usb.zoneStateDict[panelKeypadAddress].sort()
                 self.logger.debug(u"Fault - state list: {}".format(self.ad2usb.zoneStateDict))
             elif action == '2':   # Trouble
-                uiValue = 'Trouble'
-                displayStateValue = 'trouble'
+                # TO DO: this used to be string of Trouble - it is not Error
+                # uiValue = 'Trouble' / displayStateValue = 'trouble'
+                newZoneState = k_ERROR
                 self.ad2usb.zoneStateDict[panelKeypadAddress].append(int(virtZoneNumber))
                 self.ad2usb.zoneStateDict[panelKeypadAddress].sort()
                 self.logger.debug(u"Trouble - state list: {}".format(self.ad2usb.zoneStateDict))
@@ -520,8 +538,8 @@ class Plugin(indigo.PluginBase):
                 # ERROR
                 pass
 
-            virtDevice.updateStateOnServer(key='zoneState', value=zoneState, uiValue=uiValue)
-            virtDevice.updateStateOnServer(key='displayState', value=displayStateValue, uiValue=uiValue)
+            self.setDeviceState(virtDevice, newZoneState)
+
             panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                 self.ad2usb.zoneStateDict[panelKeypadAddress]))
 
@@ -580,12 +598,13 @@ class Plugin(indigo.PluginBase):
 
         zoneDevice = indigo.devices[int(pluginAction.props['zoneDevice'])]
 
+        # TO DO: address inconsistencies:
+        # Actions.xml is 'clear' & 'faulted'
+        # zoneState is 'Clear' & 'faulted'
         if pluginAction.props['zoneState'] == 'clear':
-            zoneDevice.updateStateOnServer(key='displayState', value='enabled', uiValue=u'Clear')
-            zoneDevice.updateStateOnServer(key='zoneState', value='Clear')
+            self.setDeviceState(zoneDevice, k_CLEAR)
         else:
-            zoneDevice.updateStateOnServer(key='zoneState', value='faulted', uiValue=u'Fault')
-            zoneDevice.updateStateOnServer(key='displayState', value='faulted', uiValue=u'Fault')
+            self.setDeviceState(zoneDevice, k_FAULT)
 
         self.logger.debug(u"completed")
 
@@ -1035,6 +1054,7 @@ class Plugin(indigo.PluginBase):
                 if device.deviceTypeId == 'zoneGroup':
                     zoneGroups.append(device.id)
 
+            self.logger.debug(u"all zones groups are:{}".format(zoneGroups))
             return zoneGroups
 
         except Exception as err:
@@ -1051,20 +1071,29 @@ class Plugin(indigo.PluginBase):
         zoneGroupDeviceId -- an integer that is the device.id of the Zone Group
         """
 
-        self.logger.debug(u"called with device id:{}".format(zoneGroupDeviceId))
+        self.logger.debug(u"called with zone group device id:{}".format(zoneGroupDeviceId))
 
         try:
             # get the Zone Group device provided
             device = indigo.devices[zoneGroupDeviceId]
-            # check if we have the proptery
-            if 'zoneDeviceList' in device.pluginProps.keys():
+            self.logger.debug(u"zone group device name is:{}".format(device.name))
+
+            # check if we have the property by converting to a standard dict
+            pluginPropsLocalDict = device.pluginProps.to_dict()
+            self.logger.debug(u"zone group pluginProps are:{}".format(pluginPropsLocalDict))
+
+            if 'zoneDeviceList' in pluginPropsLocalDict.keys():
                 # return if it is a list
-                zoneList = device.pluginProps['zoneDeviceList']
+                zoneList = pluginPropsLocalDict['zoneDeviceList']
+                self.logger.debug(u"zone group zone list is:{}".format(zoneList))
                 if isinstance(zoneList, list):
+                    self.logger.debug(u"zones list found - zone list is:{}".format(zoneList))
                     return zoneList
                 else:
+                    self.logger.debug(u"return empty list - property zoneList not a list")
                     return []
             else:
+                self.logger.debug(u"return empty list - property zoneList not found in device")
                 return []
 
         except Exception as err:
@@ -1072,6 +1101,7 @@ class Plugin(indigo.PluginBase):
                 zoneGroupDeviceId, str(err)))
 
             # return an empty dictionary
+            self.logger.debug(u"return empty list due to error")
             return []
 
     def getAllZoneGroupsForZone(self, forZoneNumber=''):
@@ -1115,9 +1145,13 @@ class Plugin(indigo.PluginBase):
 
         try:
             for device in indigo.devices.iter("self"):
+                # TO DO: do I need this restriction?
                 if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
-                    zoneNumber = device.pluginProps.get('zoneNumber', "NONE")
+                    deviceProperties = device.pluginProps.to_dict()
+                    self.logger.debug(u"device properties are:{}".format(deviceProperties))
+                    zoneNumber = deviceProperties.get('zoneNumber', "NONE")
                     if zoneNumber == forZoneNumber:
+                        self.logger.debug(u"found device id:{} for zone number:{}".format(device.id, forZoneNumber))
                         return device.id
 
             # did not find device
@@ -1144,16 +1178,23 @@ class Plugin(indigo.PluginBase):
             return 'NOT_FOUND'
 
         try:
+            # get the device
             device = indigo.devices[forDeviceId]
             self.logger.debug(u"found device id:{}".format(forDeviceId))
-            if 'zoneState' in device.pluginProps['states'].keys():
-                zoneState = device.pluginProps['states']['zoneState']
+
+            # get the zoneState device as a standard dict
+            deviceStates = device.states.to_dict()
+            self.logger.debug(u"device states are:{}".format(deviceStates))
+
+            # get the zoneState
+            if 'zoneState' in deviceStates:
+                zoneState = deviceStates['zoneState']
                 self.logger.debug(u"found zoneState:{} in device:{}".format(zoneState, device.name))
                 return zoneState
 
-            # did not find state
-            self.logger.error(u"Unable to get Zone State for device:{} ({})".format(device.name, forDeviceId))
-            return 'NOT_FOUND'
+            else:
+                self.logger.warning(u"Unable to get zoneState for device:{} ({})".format(device.name, forDeviceId))
+                return 'NOT_FOUND'
 
         except Exception as err:
             self.logger.error("Error trying to get zone state for device id:{}, error:{}".format(forDeviceId, str(err)))
@@ -1216,27 +1257,79 @@ class Plugin(indigo.PluginBase):
 
         **parameters**:
         forDevice -- a valid indigo.device object
-        newState -- a string for the new state value - use k-constant
+        newState -- a string for the new state value - use a k_CONSTANT
         """
         self.logger.debug(u"called with name:{}, id:{}, new state:{}".format(forDevice.name, forDevice.id, newState))
 
         try:
+            # get the current bypass state of the device
+            isBypassed = self.isDeviceBypassed(forDevice)
+
             if newState == k_CLEAR:
-                forDevice.updateStateOnServer(key='zoneState', value=k_CLEAR)
-                forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+                if isBypassed:
+                    forDevice.updateStateOnServer(key='zoneState', value=k_CLEAR, uiValue='Bypass')
+                    forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
+                else:
+                    forDevice.updateStateOnServer(key='zoneState', value=k_CLEAR, uiValue='Clear')
+                    forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+
                 # TO DO: consider removing on/off state
                 forDevice.updateStateOnServer(key='onOffState', value=False)
+
             elif newState == k_FAULT:
-                forDevice.updateStateOnServer(key='zoneState', value=k_FAULT)
+                forDevice.updateStateOnServer(key='zoneState', value=k_FAULT, uiValue='Fault')
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
                 # TO DO: consider removing on/off state
                 forDevice.updateStateOnServer(key='onOffState', value=True)
+
+            elif newState == k_ERROR:
+                forDevice.setErrorStateOnServer('Error')
+                forDevice.updateStateImageOnServer(indigo.kStateImageSel.Error)
+
             else:
                 self.logger.error(u"Unable to set device name:{}, id:{}, to state:{}".format(
                     forDevice.name, forDevice.id, newState))
 
         except Exception as err:
             self.logger.error(u"Unable to set device:{}, to state:{}, error:{}".format(forDevice, newState, str(err)))
+
+    def isDeviceBypassed(self, forDevice):
+        """
+        checks the bypass status of a current Indigo device. it checks Indigo - not the alarm panel
+
+        **parameters:**
+        forDevice -- an Indigo Device object
+        """
+        self.logger.debug(u'called')
+
+        try:
+            currentStates = forDevice.states.to_dict()
+            currentBypassState = currentStates.get('bypassState', False)
+            self.logger.debug(u'able to read current bypass state:{}'.format(currentBypassState))
+
+            if currentBypassState is True:
+                self.logger.debug(u'current bypass state is boolean:{}'.format(currentBypassState))
+                return True
+
+            elif currentBypassState is False:
+                self.logger.debug(u'current bypass state is boolean:{}'.format(currentBypassState))
+                return False
+
+            # legacy case just in case
+            elif isinstance(currentBypassState, str) is True:
+                self.logger.debug(u'current bypass state is string:{}'.format(currentBypassState))
+                if currentBypassState.upper() == 'TRUE':
+                    return True
+                else:
+                    return False
+
+            else:
+                self.logger.warning(u'current bypasss tate neither boolean or string')
+                return False
+
+        except Exception as err:
+            self.logger.error(u'error attempting to determine current bypass state, msg:{}'.format(str(err)))
+            return False
 
     ########################################
     # Indigo Event Triggers: Start and Stop
@@ -1336,7 +1429,7 @@ class Plugin(indigo.PluginBase):
 
             # determine the filename from Indigo paths
             panelFileName = indigo.server.getLogsFolderPath(pluginId=self.pluginId) + "/" + "panelMessages.log"
-            self.logger.info('set panel message log filename to: %s', panelFileName)
+            self.logger.info('set panel message log filename to:{}'.format(panelFileName))
 
             # create a new handler
             panelLogHandler = logging.handlers.TimedRotatingFileHandler(

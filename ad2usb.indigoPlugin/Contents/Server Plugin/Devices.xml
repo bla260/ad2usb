@@ -138,8 +138,7 @@
 			</Field>
 
 		</ConfigUI>
-		<!-- <UiDisplayStateId>zoneState</UiDisplayStateId>	 -->
-		<UiDisplayStateId>displayState</UiDisplayStateId>
+		<UiDisplayStateId>zoneState</UiDisplayStateId>
 		<States>
 			<State id="zoneState">
 				<ValueType>
@@ -149,24 +148,19 @@
 					</List>
 				</ValueType>
 				<TriggerLabel>Any change in state</TriggerLabel>
-				<TriggerLabelPrefix>Zone State Changed to </TriggerLabelPrefix>
+				<TriggerLabelPrefix>Zone State Changed to</TriggerLabelPrefix>
 				<ControlPageLabel> -- Select a Zone State -- </ControlPageLabel>
-				<ControlPageLabelPrefix>Current State </ControlPageLabelPrefix>
+				<ControlPageLabelPrefix>Current State</ControlPageLabelPrefix>
 			</State>
 			<State id="onOffState">
 				<ValueType boolType="onOff">Boolean</ValueType>
 				<TriggerLabel>Zone onOff state</TriggerLabel>
 				<ControlPageLabel>Zone onOff state</ControlPageLabel>
 			</State>
-			<State id="displayState">
-				<ValueType>String</ValueType>
-				<TriggerLabel> </TriggerLabel>
-				<ControlPageLabel> </ControlPageLabel>
-			</State>
 			<State id="bypassState">
-				<ValueType>String</ValueType>
-				<TriggerLabel>bypass state</TriggerLabel>
-				<ControlPageLabel>bypass state</ControlPageLabel>
+				<ValueType boolType="onOff">Boolean</ValueType>
+				<TriggerLabel>Bypass state</TriggerLabel>
+				<ControlPageLabel>Bypass state</ControlPageLabel>
 			</State>
 		</States>
 	</Device>
@@ -209,14 +203,6 @@
 				<TriggerLabel>Zone Group On/Off state</TriggerLabel>
 				<ControlPageLabel>Zone Group On/Off state</ControlPageLabel>
 			</State>
-
-<!--
-			<State id="displayState">
-				<ValueType>String</ValueType>
-				<TriggerLabel> </TriggerLabel>
-				<ControlPageLabel> </ControlPageLabel>
-			</State>
--->
 		</States>
 	</Device>
 
@@ -312,7 +298,7 @@
 			</Field>
 
 		</ConfigUI>
-		<UiDisplayStateId>displayState</UiDisplayStateId>
+		<UiDisplayStateId>zoneState</UiDisplayStateId>
 		<States>
 			<State id="zoneState">
 				<ValueType>
@@ -331,15 +317,10 @@
 				<TriggerLabel>Zone onOff state</TriggerLabel>
 				<ControlPageLabel>Zone onOff state</ControlPageLabel>
 			</State>
-			<State id="displayState">
-				<ValueType>String</ValueType>
-				<TriggerLabel> </TriggerLabel>
-				<ControlPageLabel> </ControlPageLabel>
-			</State>
 			<State id="bypassState">
-				<ValueType>String</ValueType>
-				<TriggerLabel>bypass state</TriggerLabel>
-				<ControlPageLabel>bypass state</ControlPageLabel>
+				<ValueType boolType="onOff">Boolean</ValueType>
+				<TriggerLabel>Bypass state</TriggerLabel>
+				<ControlPageLabel>Bypass state</ControlPageLabel>
 			</State>
 		</States>
 	</Device>

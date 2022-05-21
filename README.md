@@ -42,8 +42,8 @@ The ad2usb plugin adds the following device options to Indigo.
 Device Type | Description
 ----------- | -----------
 ad2usb Keypad | The AlarmDecoder Keypad emulator. You should add one Indigo ad2usb Keypad Device which represents your NuTech AlarmDecoder device.
-Alarm Zone | Standard alarm zone such as window or door sensors. Add one Indigo Alarm Zone device for each sensor you have configured with your alarm panel that you want to integrate with Indigo. Each Alarm Zone device will have states of "On/Off" and "Fault/Clear". The different state names are redundant but exist so you can create triggers on any changes to the state name of your preference.
-Zone Group | Creates a group of Alarm Zones. This allows you to create a group of alarm zones devices that treated as single device within Indigo Triggers. Zone Groups change to Fault (or On) when **ANY** of their Zone's change from Clear to Fault (or Off to On). Zone Groups change to Clear (or Off) once **ALL** of their Zones are Clear (or Off).
+Alarm Zone | Standard alarm zone such as window or door sensors. Add one Indigo Alarm Zone device for each sensor you have configured with your alarm panel that you want to integrate with Indigo. Each Alarm Zone device has these three state variables with possible values shown in parenthesis: `zoneState` (Fault or Clear), `onOffState` (On or Off), and `bypassState` (On or Off). States `zoneState` and `onOffState` are somewhat redundant since when an alarm zone changes state both are change, they exist so you can create triggers on any changes of the state name of your preference.
+Zone Group | Creates a group of Alarm Zones. This allows you to create a group of alarm zones devices that treated as single device within Indigo Triggers. Zone groups have the same states as Alarm Zones with the exception they do not have the `bypassState`. Zone Groups change to Fault (or On) when **ANY** of their Zone's change from Clear to Fault (or Off to On). Zone Groups change to Clear (or Off) once **ALL** of their Zones are Clear (or Off).
 Indigo Managed Virtual Zone | *TBP*
 
 ### Actions
@@ -69,8 +69,6 @@ Alarm Zone Actions | Description
 Force a zone state change | *TBP*
 Change a virtual zone's state | *TBP*
 
-
-
 ### Trigger Events
 
 In addition to the ability to add Triggers for Device state changes, the ad2usb plugin has several other events you can create Indigo triggers for.
@@ -82,6 +80,15 @@ System Status Event | Detect when your alarm panel has any of these system statu
 Alarm Events | Detect when your panel has any of these Alarm events: Panic Alarm, Fire Alarm, Audible Alarm, Silent Alarm, Entry Alarm, Aux Alarm, Perimeter Alarm, Alarm Tripped: Countdown started
 User Actions | Detect when an alarm panel user ID you specify has initiated any these events: Disarmed, Armed Stay, Armed Away. **NOTE:** These events require either a real or emulated LRR. More information is *TBP*.
 
+### Indigo Client UI
+#### General
+After you configure the plugin and add your alarm devices to Indigo, the Indigo Client UI will show alarm panel device zone states than alarm panel device address (i.e. the alarm zone number).
+#### Device States
+##### Clear and Fault
+The Indigo Client UI will show the Clear or Fault state of the zone. The green circle icon represents Clear and the red circle icon represents Fault.
+##### Bypass
+When an Alarm Zone is set to Bypass = On it will display the generic Indigo "Sensor Off" icon (grey circle) and the text "Bypass" in the Indigo Client UI. Bypassed zones do not Fault on the panel and thus will not change state even if the sensor is tripped.
+
 ## Configuration and Setup
 
 ### General
@@ -90,7 +97,7 @@ User Actions | Detect when an alarm panel user ID you specify has initiated any 
 You need to be familiar with how to program your Alarm panel to add a new keypad address. Refer to your Alarm panel programming guide on how to add a keypad device.
 
 #### AlarmDecoder
-You should familiarize yourself with the setup and configuration your AlarmDecoder. See [NuTech's AlarmDecoder website](https://www.alarmdecoder.com/index.php) for details on how to install and configure your AlarmDecoder. **IMPORTANT:** This plugin **will set** certain configuration parameters of your AlarmDecoder **every time** it is started and when the plugins' **Config settings are updated.** Only those AlarmDecoder configuration settings controlled by this plugin will be changed. Other AlarmDecoder configuration settings not managed by this plugin will not be changed. If you will be changing any AlarmDecoder configuration outside of this plugin, it is recommended that you stop the plugin first and restart it after you have made your changes.The AlarmDecoder configuration settings controlled by this plugin are below:
+You should familiarize yourself with the setup and configuration your AlarmDecoder. See [NuTech's AlarmDecoder website](https://www.alarmdecoder.com/index.php) for details on how to install and configure your AlarmDecoder. **IMPORTANT - for IP based AlarmDecoders only:** If you are using an IP based AlarmDecoder, this plugin **will set** certain configuration parameters of your AlarmDecoder **every time** it is started and when the Plugins menu **Configure settings are saved.** Only those AlarmDecoder configuration settings controlled by this plugin will be changed. Other AlarmDecoder configuration settings not managed by this plugin will not be changed. If you will be changing any AlarmDecoder configuration outside of this plugin, it is recommended that you stop the plugin first and restart it after you have made your changes, and use the "Read ad2usb Config" button to read the changes into the Plugins settings. The AlarmDecoder configuration settings controlled by this plugin are below:
 - ADDRESS - the keypad address
 - CONFIGBITS - (select CONFIGBITS below can be set via this plugin)
   - Enable reporting of RFX messages
@@ -124,7 +131,7 @@ You should be familiar with installing and configuring Indigo plugins.See Indigo
 
 
 ### Plugin Configuration Details
-It is recommended that you Disable and then Enable the Plugin after making Config changes. A future release should resolve this issue.
+It is recommended that you Disable and then Enable the Plugin after making Configure changes. A future release should resolve this issue.
 
 #### AD2USB connection settings
 - Select Local USB Port (for the AD2USB) or IP Network (for the AD2PI Network Appliance).
@@ -141,7 +148,7 @@ It is recommended that you Disable and then Enable the Plugin after making Confi
 
 #### AD2USB Device Configuration
 These configuration parameters in this section will be written to the AlarmDecoder upon pressing the "Save" button if you have an IP based AlarmDecoder. This will overwrite whatever settings you have on your AlarmDecoder. You can also press the "Read ad2usb Config" (button) to read the current AlarmDecoder's configuration parameters into the Configuration dialog window.
-- **Read ad2usb Config (button):** Pressing this button will attempt to read the current configuration parameters from the AlarmDecoder (IP only). It will replace the current settings in the Config Dialog with the settings read from the AlarmDecoder.
+- **Read ad2usb Config (button):** Pressing this button will attempt to read the current configuration parameters from the AlarmDecoder (IP only). It will replace the current settings in the Plugins Configure Dialog with the settings read from the AlarmDecoder.
 - **Keypad Address:** Required. The keypad address assigned to the AlarmDecoder. Ensure to set this to the address you programmed on your alarm panel.
 - **Remove duplicate messages:** If enabled, removes duplicate alphanumeric keypad messages.
 - **Virtual Zone Expanders(s) (Max 2):** *TBP*
