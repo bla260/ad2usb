@@ -1,11 +1,15 @@
-v 1.8.0 (Planned)
-- AlarmDecoder Communications. In preparation of Python 3 all plugin communication to/from the AlarmDecoder was rewritten. While these change should be transparent they were significant. All panel reads and writes and the plugin Config Dialog (including the "Read ad2usb Config" button) were revised.
+v 1.8.0 May 21, 2022
+- Summary: In many ways this is the BETA release for planned version 3.0 to be compatible with Indigo 2022.1 and Python 3. This release is mostly internal changes. Visible changes include how Bypass states are displayed in the client UI and the Trigger selection options for Alarm Device state changes.
+- AlarmDecoder Communications. In preparation of Python 3 all plugin communication to/from the AlarmDecoder have been rewritten. While these change should be transparent they were significant. All panel reads and writes and the plugin Configure Dialog (including the "Read ad2usb Config" button) were revised.
 - Zone Group was refactored to always get a group's device state from Indigo versus a local cache.
-- Device states updated.
-  - Removed the device state 'displayState' since it was redundant and not fully configured.
-  - Alarm Zone and Zone Group states still consist of zoneState (Clear/Fault) and onOffState (On/Off). A few minor bug fixes were made in their behavior, display on various screens, and the ability to use either in a Trigger.
-  - Alarm Zone Bypass state is now a standard Indigo on/off state. Triggers can be set when Bypass is set on or off.
-  - Indigo Client UI display of Alarm Zones in Bypass state. When an Alarm Zone is set to Bypass = True **AND** is Clear it will display the generic sensor on icon (green circle) and the text "Bypassed" in the Indigo Client UI. When an Alarm Zone is set to Bypass = True **AND** is Faulted it will display the generic sensor tripped icon (red circle) and the text "Fault" in the Indigo Client UI.
+- Changes to Device States. Alarm Zone Device, Zone Group Device, and Indigo Managed Virtual Zone Device states have been updated. **If you have any Triggers on Device State changes please read carefully.**
+  - Alarm Zone and Indigo Managed Virtual Zone devices now have these three state variables with possible values shown in parenthesis: `zoneState` (Fault or Clear), `onOffState` (On or Off), and `bypassState` (On or Off).
+  - There is no functional change to `zoneState` and `onOffState`. Any triggers on changes to these states should not require updates after upgrading to this version.
+  - The device state `bypassState` has been changed from a `string` to an Indigo state property `boolean` type with values of On or Off. Any Triggers you have the were based on changes to `bypassState` will likely need to be updated to use the new state values. Zone Groups do not have `bypassState` so this only applies to Alarm Zone and Virtual Zone devices.
+  - The device state `displayState` has been removed. If you had any Triggers based on changes to `displayState` they will need be updated to use one of the other states.
+  - Indigo Client UI display of Alarm Zones in Bypass state. When an Alarm Zone is set to Bypass = On it will display the generic Indigo "Sensor Off" icon (grey circle) and the text "Bypass" in the Indigo Client UI. Bypassed zones do not Fault on the panel and thus will not change state even if the sensor is tripped.
+- Corrected minor errors in several log messages
+- Updated README documentation
 
 v 1.7.1 May 11, 2022
 - Requires Indigo 7.0 or later
