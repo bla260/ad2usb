@@ -410,13 +410,13 @@ class Plugin(indigo.PluginBase):
 
         # We always load the basic Dict because we need a zone number to device lookup in advanced mode too.
         try:
-            basicBuildDevDict(self, dev, 'del')
+            basicBuildDevDict(self, dev, 'del', self.ad2usbKeyPadAddress)
         except Exception as err:
             self.logger.error(u"basicBuildDevDict error: {}".format(err))
 
         if self.ad2usbIsAdvanced:
             try:
-                advancedBuildDevDict(self, dev, 'del')
+                advancedBuildDevDict(self, dev, 'del', self.ad2usbKeyPadAddress)
             except Exception as err:
                 self.logger.error(u"advancedBuildDevDict error: {}".format(err))
 
@@ -1539,6 +1539,8 @@ class Plugin(indigo.PluginBase):
     def __setLoggingLevels(self):
         # check for valid logging level first
         # we're using level names as strings in the PluginConfig.xml and logging uses integers
+
+        # Indigo Log
         if self.indigoLoggingLevel in kLoggingLevelNames.keys():
             self.indigo_log_handler.setLevel(kLoggingLevelNames[self.indigoLoggingLevel])
             self.logger.info(u"Indigo logging level set to:{} ({})".format(
@@ -1546,6 +1548,13 @@ class Plugin(indigo.PluginBase):
         else:
             self.indigo_log_handler.setLevel(logging.INFO)
             self.logger.error(u"Invalid Indigo logging level:{} - setting level to INFO".format(self.indigoLoggingLevel))
+
+        # plugin log
+
+        # change the formatter to add thread ID
+        pluginLogFormatter = logging.Formatter(
+            '%(asctime)s.%(msecs)03d\t%(levelname)s\t%(thread)d %(name)s.%(funcName)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        self.plugin_file_handler.setFormatter(pluginLogFormatter)
 
         if self.pluginLoggingLevel in kLoggingLevelNames.keys():
             self.plugin_file_handler.setLevel(kLoggingLevelNames[self.pluginLoggingLevel])
