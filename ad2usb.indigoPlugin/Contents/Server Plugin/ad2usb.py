@@ -12,6 +12,7 @@ import serial
 import sys
 import string
 from string import atoi
+import AlarmDecoder
 
 kRespDecode = ['loop1', 'loop4', 'loop2', 'loop3', 'bit3', 'sup', 'bat', 'bit0']
 kBin = ['0000', '0001', '0010', '0011', '0100', '0101', '0110', '0111', '1000',
@@ -20,13 +21,12 @@ kEventStateDict = ['OPEN', 'ARM_AWAY', 'ARM_STAY', 'ACLOSS', 'AC_RESTORE', 'LOWB
                    'LOWBAT_RESTORE', 'RFLOWBAT', 'RFLOWBAT_RESTORE', 'TROUBLE',
                    'TROUBLE_RESTORE', 'ALARM_PANIC', 'ALARM_FIRE', 'ALARM_AUDIBLE',
                    'ALARM_SILENT', 'ALARM_ENTRY', 'ALARM_AUX', 'ALARM_PERIMETER', 'ALARM_TRIPPED']
-kADCommands = {'CONFIG': 'C\r', 'VERSION': 'V\r'}
+kADCommands = {'CONFIG': 'C\r', 'VER': 'V\r'}
 
 # Custom Zone State - see Devices.xml
 kZoneStateDisplayValues = {'faulted': 'Fault', 'Clear': 'Clear'}
 k_CLEAR = 'Clear'  # key: Clear, value: Clear - should convert key to 'clear'
 k_FAULT = 'faulted'  # key: faulted, value: Fault - should convert to 'fault'
-
 
 ################################################################################
 # Globals
@@ -61,6 +61,9 @@ class ad2usb(object):
         self.shutdown = False
         self.shutdownComplete = False
 
+        # set the firmware to unknown
+        self.firmwareVersion = ''
+
         # read CONFIG from AlarmDecoder on init
         self.configSettings = {}
 
@@ -85,7 +88,7 @@ class ad2usb(object):
 
     ########################################
     # Event queue management and trigger initiation
-    def eventQueueManager(self, partition, user, event):
+    def executeTrigger(self, partition, user, event):
         self.logger.debug(u"called with partition:{}, user:{}, event:{}".format(partition, user, event))
 
         if event in self.plugin.triggerDict:
@@ -147,6 +150,7 @@ class ad2usb(object):
         for i in range(len(zState)):
             zoneState += kBin[atoi(zState[i], base=16)]
 
+        # from 7 to 0
         for i in range(7, -1, -1):
             decodeVal = False
             if zoneState[i] == '1':
@@ -513,6 +517,13 @@ class ad2usb(object):
                 while len(rawData) == 0 and self.shutdown is False:
                     # rawData = self.plugin.conn.readline()
                     rawData = self.panelReadWrapper(self.plugin.conn)
+
+                    # added this code to begin to test the message Object
+                    tempMessageObject = AlarmDecoder.Message(rawData, self.firmwareVersion, self.logger)
+                    if not tempMessageObject.isValidMessage:
+                        self.logger.warning("not able to read and parse message:{}".format(
+                            tempMessageObject.invalidReason))
+
                     if rawData == '':
                         if self.shutdown is False:
                             self.logger.error(u"AD2USB Connection Error")
@@ -707,7 +718,7 @@ class ad2usb(object):
                                             self.logger.info(
                                                 u"Alarm partition {} set to {} caused/entered by {}".format(partition, function, user))
 
-                                        self.eventQueueManager(partition, user, function)
+                                        self.executeTrigger(partition, user, function)
                                 except Exception as err:
                                     self.logger.error(u'ALARM TRIPPED:{}'.format(str(err)))
 
@@ -824,7 +835,7 @@ class ad2usb(object):
                                 self.logger.info(
                                     u"Alarm partition {} set to {} caused/entered by {}".format(partition, function, user))
 
-                            self.eventQueueManager(partition, user, function)
+                            self.executeTrigger(partition, user, function)
                     except Exception as err:
                         self.logger.error(u"LRR Error:{}".format(str(err)))
 
@@ -983,6 +994,57 @@ class ad2usb(object):
                 u"reading AlarmDecoder configuration failed: the url was:{} error:{}".format(self.getURL(), str(err)))
             return False
 
+    def setAlarmDecoderVersionInfo(self, verMsgObject=None):
+        """
+        If verMsgObject is provided then that message is read. If not, it opens communication to the AlarmDecoder and
+        sends the "V" command to get the current AlarmDecoder VER message which contains firmware version and capabilties
+
+        Output: sets the propery "firwareVersion" and returns True or False if connection/message was valid
+
+        **parameters:**
+        messageObject (AlarmDecode.Message) - Optional. If the messageObject is passed that is used and there no communication to the AlarmDecoder
+        """
+
+        self.logger.debug(u'called')
+
+        try:
+            if verMsgObject is None:
+                # open a new connection as the URL could have changed
+                self.logger.debug(u'attempting to open serial connection')
+                verConnection = serial.serial_for_url(self.getURL(), baudrate=115200)
+                verConnection.timeout = 2
+                self.logger.debug(u"created new connection to read VER")
+
+                verCommand = kADCommands['VER']
+                self.logger.debug(u'attempting to send VER command:{} to AlarmDecoder'.format(verCommand))
+                self.panelWriteWrapper(verConnection, verCommand)
+
+                self.logger.debug(u'attempting to read VER command output line')
+                verMessageString = ''
+                verMessageString = self.panelReadWrapper(verConnection)
+                self.logger.debug(u'readline (string):{}'.format(verMessageString))
+                verMsgObject = AlarmDecoder.Message(verMessageString, '', self.logger)
+
+                # don't test if its open - just close it
+                # hoping to avoid testing for isOpen or is_open
+                self.logger.debug(u'closing connection to AlarmDecoder')
+                verConnection.close()
+
+            # check valid VER message
+            if verMsgObject.isValidMessage and verMsgObject.messageType == 'VER':
+                self.firmwareVersion = verMsgObject.firmwareVersion
+                self.logger.info(u'AlarmDecoder firmware identified as:{}'.format(self.firmwareVersion))
+                return True
+            else:
+                self.logger.error(u'Cannot determine AlarmDecoder firmware version')
+                return False
+
+        except Exception as err:
+            verConnection.close()
+            self.logger.error(
+                u"sending and reading AlarmDecoder VER message failed: the url was:{}, msg:{}, error:{}".format(self.getURL(), verMessageString, str(err)))
+            return False
+
     def writeAlarmDecoderConfig(self, configString):
         """
         opens communication to the AlarmDecoder and runs the "CONFIG" command
@@ -1068,6 +1130,44 @@ class ad2usb(object):
         read the AlarmDecoder configuration settings from the Indigo Plugin preferences
         this is used when you cannot read the settings from the AlarmDecoder
         """
+
+    def panelReadFromFile(self, fileName):
+        """
+        This method is used to read alarm panel messages from a text file instead of the AlarmDecoder.
+        It is used for testing and debugging. It will read the *entire* panel message log file and
+        when complete it will log aggregate details about the messages and any errors in the DEBUG
+        logger. It expects files in the **EXACT** format as the panel message log:
+        *datetime | panel_message_string*
+        """
+        # TO DO: this method is typically called for external testing code so logger doesn't exist
+        self.logger.debug(u'called')
+
+        # initialize a dicitional of the count of all valid message types found
+        messageTypesFound = {'UNK': 0}
+        for m in AlarmDecoder.kVALIDMESSAGETYPES:
+            messageTypesFound[m] = 0
+
+        try:
+            lineNumber = 1
+            with open(fileName, 'rt') as f:
+                for line in f:
+                    # get a new message object
+                    messageObject = AlarmDecoder.Message(line)
+                    if messageObject.messageType in AlarmDecoder.kVALIDMESSAGETYPES:
+                        messageTypesFound[messageObject.messageType] = messageTypesFound[messageObject.messageType] + 1
+
+                    # self.logger.debug('message Object:{}'.format(messageObject))
+                    # do something with line from file
+                    lineNumber = lineNumber + 1
+
+            f.close()
+
+            self.logger.debug('read {} message with breakdown of:{}'.format(lineNumber, messageTypesFound))
+
+        except Exception as err:
+            self.logger.error(
+                u"Error reading from AlarmPanel filename:{}, line ({}):{} - error:{}".format(fileName, lineNumber, line, str(err)))
+            return ''
 
     def panelReadWrapper(self, serialObject):
         """

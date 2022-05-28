@@ -281,6 +281,7 @@ class Plugin(indigo.PluginBase):
             self.logger.critical(
                 "URL is not set - Use the Config menu under the Plugins menu to configure your AlarmDecoder settings. Error:{}".format(str(err)))
 
+        # TO DO: consider moving ad2usb init to startup
         # init the ad2usb object - this will attempt to read from the IP address set
         self.ad2usb = ad2usb(self)
 
@@ -302,6 +303,12 @@ class Plugin(indigo.PluginBase):
         if self.isPanelLoggingEnabled is True:
             self.logger.info("Panel logging is enabled")
             self.__initPanelLogging()
+
+        # get the firmware version of the AlarmDecoder
+        if self.ad2usb.setAlarmDecoderVersionInfo():
+            self.logger.info("Successfully determined AlarmDecoder version")
+        else:
+            self.logger.critical("Unable to determined AlarmDecoder version")
 
         # init other properties
         self.ad2usbRestart = False
@@ -429,12 +436,29 @@ class Plugin(indigo.PluginBase):
         self.logger.info(u"Called")
 
         # TO DO: new logic:
+        implementNewLogic = False
+        if implementNewLogic:
+            try:
+                while True:
+                    # TO DO: ad2usb needs to self recover from errors
+                    newMessage = self.ad2usb.newReadMessage()
+
+                    if newMessage.needsProcessing:
+                        self.newProcessMessage(newMessage)
+
+                    self.sleep(0.1)
+
+            except self.StopThread:
+                pass    # Optionally catch the StopThread exception and do any needed cleanup.
+
         # loop while not shutdown
         #   if ad2usb comm not started
         #       start it
         #       read from ad2usb
         #       update device based on message
         #       sleep(??)
+
+        # OLD LOGIC:
         try:
             self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType,
                                   self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
