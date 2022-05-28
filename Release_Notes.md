@@ -1,3 +1,9 @@
+v 1.8.1 May 26, 2022
+- Summary: this is a maintenance release to add some improvements to logging and one bug fix.
+- Fixed bug `basicBuildDevDict error: basicBuildDevDict() takes exactly 4 arguments (3 given)` and `advancedBuildDevDict error: advancedBuildDevDict() takes exactly 4 arguments (3 given)` which would appear in ERROR log during plugin shutdown or restart.
+- Updated plugin log file (`plugin.log`) format to include thread ID for better debugging.
+- Updated README documentation
+
 v 1.8.0 May 21, 2022
 - Summary: In many ways this is the BETA release for planned version 3.0 to be compatible with Indigo 2022.1 and Python 3. This release is mostly internal changes. Visible changes include how Bypass states are displayed in the client UI and the Trigger selection options for Alarm Device state changes.
 - AlarmDecoder Communications. In preparation of Python 3 all plugin communication to/from the AlarmDecoder have been rewritten. While these change should be transparent they were significant. All panel reads and writes and the plugin Configure Dialog (including the "Read ad2usb Config" button) were revised.

@@ -175,3 +175,25 @@ ERROR | Critical errors (see above) and non-fatal errors will be logged. Non-fat
 WARNING | In addition to critical and non-fatal errors, warnings will be logged. Warnings are neither fatal or critical but represent an unexpected condition that is logged.|
 INFO | In addition to critical and non-fatal errors and warnings, this setting will log verbose information about the Indigo objects, the plugin, and the alarm panel. Startup, shutdown, and changes to Indigo devices, actions, and triggers will be logged. This log setting **is required** to log arm/disarm events. It is recommended this is the minimum log level for the plugin log and may be desired setting for the Indigo log for many users. |
 DEBUG | In addition to all messages above, detailed debug messages will be logged. These messages are primarily used to understand the changes of internal variables, logic flow, and other details that can aid in the debugging process.|
+
+## Helpful Troubleshooting Techniques
+
+### AlarmDecoder Version and Settings
+*TBP*
+
+### Enabling the log files
+To be able to be supported you'll need to have some level of logging enabled. The recommended settings are:
+1. Indigo Event Log - set Errors, Warning, or Informational - any of those 3 settings will show any plugin errors in the Indigo Log
+2. Plugin Log Level - set to "Verbose Debugging", this produces about +/-50MB log daily on a typical system but is essential. The filename is plugin.log.
+3. Enable Log Panel Messages: Turn on. This log is +/-5MB daily. It is the raw panel messages from the decoder. The filename is panelMessages.log
+
+The path for logs is `/Library/Application Support/Perceptive Automation/<Indigo Version Number>/Logs/com.berkinet.ad2usb`. Note that part of the file path is dependent on your version of Indigo.
+
+### Reporting Bugs
+Start by asking on the support forum. If more info is needed, I'll typically ask for this via a private message or email:
+
+- Specify if it is a a USB or IP based AlarmDecoder
+- AlarmDecoder VER and CONFIG settings.
+  - Run the MacOS/Unix commands `grep VER plugin.log` and `grep CONFIG plugin.log` to get these settings. The most recent entries are what is needed.
+- A copy of the `plugin.log` +/-500 lines before and after the ERROR entry or message that is causing the strange behavior.
+- A copy of the panel message log (`panelMessages.log`) +/-100 lines before and after the time of the ERROR
