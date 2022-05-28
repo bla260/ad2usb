@@ -1,6 +1,6 @@
 # ad2usb Indigo Plugin
 
-## NOTE: INDIGO Python 3 COMPATIBILTY - EXPECTED IN JUNE 2022
+## NOTE: INDIGO Python 3 / 2022.2 COMPATIBILTY - EXPECTED IN JUNE 2022
 
 ## About
 **ad2usb** is a plugin interface to the NuTech AD2* alarm system interface for Honeywell's Ademco Vista line of alarm panels. It allows you to create Indigo devices for each of your alarm panel's sensors (e.g. door sensor, motion sensor, window sensor, ...) which can then take advantage of many of Indigo's features available for devices. It also allows you to read and send alarm messages by emulating an alarm panel keypad. There are addition features described in this document.
