@@ -11,9 +11,10 @@ import re
 import serial
 import sys
 import string
-from string import atoi
+# from string import atoi
 
-kRespDecode = ['loop1', 'loop4', 'loop2', 'loop3', 'bit3', 'sup', 'bat', 'bit0']
+# kRespDecode = ['loop1', 'loop4', 'loop2', 'loop3', 'bit3', 'sup', 'bat', 'bit0']
+kRFXBits = ['bit0', 'bat', 'sup', 'bit3', 'loop3', 'loop2', 'loop4', 'loop1']
 kBin = ['0000', '0001', '0010', '0011', '0100', '0101', '0110', '0111', '1000',
                 '1001', '1010', '1011', '1100', '1101', '1110', '1111']
 kEventStateDict = ['OPEN', 'ARM_AWAY', 'ARM_STAY', 'ACLOSS', 'AC_RESTORE', 'LOWBAT',
@@ -139,20 +140,37 @@ class ad2usb(object):
     ########################################
     # Wireless zone state decode function for advanced mode
     def decodeState(self, zState):
+        """
+        Takes zState which is a 2 char hex (string) and sets dictionary values for RFX devices
+        Returns a dictionary
+        """
         self.logger.debug(u"called with:{}".format(zState))
 
-        zoneState = ''
+        # OLD zoneState = ''
         returnDict = {}
 
-        for i in range(len(zState)):
-            zoneState += kBin[atoi(zState[i], base=16)]
+        # OLD Python 2
+        # for i in range(len(zState)):
+        #    zoneState += kBin[string.atoi(zState[i], base=16)]
 
-        for i in range(7, -1, -1):
-            decodeVal = False
-            if zoneState[i] == '1':
-                decodeVal = True
+        # NEW Python 3 convert the string to an int
+        rfxDataAsInt = int(zState, 16)
+        self.logger.debug(u"int value is:{}, binary:{}".format(rfxDataAsInt, bin(rfxDataAsInt)))
 
-            returnDict[kRespDecode[i]] = decodeVal
+        # for i in range(7, -1, -1):
+        #     decodeVal = False
+        #     if zoneState[i] == '1':
+        #         decodeVal = True
+        #
+        #     returnDict[kRespDecode[i]] = decodeVal
+
+        # NEW Python 3 test the 8 bits of the data and set dictionary
+        # shift i bits right and bit AND with 1
+        for i in range(0, 8):
+            if ((rfxDataAsInt >> i) & 1) == 1:
+                returnDict[kRFXBits[i]] = True
+            else:
+                returnDict[kRFXBits[i]] = False
 
         self.logger.debug(u"returned:{}".format(returnDict))
         return returnDict
@@ -542,7 +560,9 @@ class ad2usb(object):
                     # First split the message into parts and see if we need to send a * to get the faults
                     splitMsg = re.split('[\[\],]', rawData)
                     msgText = splitMsg[7]
-                    if string.find(msgText, ' * ') >= 0:
+                    # Python 3 fix:
+                    # was string.find(msgText, ' * ')
+                    if msgText.find(' * ') >= 0:
                         self.logger.debug(u"Received a Press * message:{}".format(rawData))
                         # self.plugin.conn.write('*')
                         self.panelWriteWrapper(self.plugin.conn, '*')
