@@ -26,8 +26,8 @@ This plugin requires both a [NuTech AlarmDecoder](https://www.alarmdecoder.com) 
 
 A more complete list is available from NuTech on their website. While the NuTech AlarmDecoder AD2* interface also supports alarm panels sold by DSC, this plugin is not tested with those panels. Users with DSC panels should look at the DSC Alarm plugin.
 
-**Notes** :
-1. An older version of the AlarmDecoders' firmware, version 2.2a.6, is required. Support for the latest version of the firmware is planned in a future release.
+**Important Notes** :
+1. An older version of the AlarmDecoders' firmware, version 2.2a.6, is required. The Plugin may not start or run with any other version. Support for the latest version of the firmware is planned in a future release in July 2022.
 2. While the panels listed should work, the developer testing for each release is limited to only on a VISTA-20P. Leverage the [Indigo ad2usb User Forum](https://forums.indigodomo.com/viewtopic.php?f=22&t=7584) to ask other users about their experience with your specific alarm panel model.
 3. Works only in the plugin's basic mode
 

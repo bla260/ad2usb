@@ -1,3 +1,10 @@
+v 3.0.0 Jun 23, 2022 (planned)
+- Python 3 version. Requires Indigo 2022.1 or later.
+- Minor internal changes required for Python 3 compatibility.
+- Added new AlarmDecoder message parsing methods. These methods are **NOT** yet used in production but are now applied to every AlarmDecoder message. As a result, the Plugin will log WARNING messages to the log files if it encounters any messages from your AlarmDecoder it is unable to read. This change and these WARNING messages is in preparation for future compatibility with multiple AlarmDecoder firmware versions. Warnings messages will be in the format  `error processing XXX message` where `XXX` will be one of the AlarmDecoder message types. Please report any of these warning messages in the [User Forum](https://forums.indigodomo.com/viewtopic.php?f=22&t=7584).
+- Added reading of the AlarmDecoder firmware version on startup. The firmware version will be reported in the log as an INFO message. If the Plugin is unable to identify the firmware version it will not start. Currently, only the firmware version V2.2a.6 is compatible with the Plugin.
+- Updated README documentation
+
 v 1.8.1 May 26, 2022
 - Summary: this is a maintenance release to add some improvements to logging and one bug fix.
 - Fixed bug `basicBuildDevDict error: basicBuildDevDict() takes exactly 4 arguments (3 given)` and `advancedBuildDevDict error: advancedBuildDevDict() takes exactly 4 arguments (3 given)` which would appear in ERROR log during plugin shutdown or restart.
