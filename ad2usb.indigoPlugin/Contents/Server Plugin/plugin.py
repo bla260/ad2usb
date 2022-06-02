@@ -163,7 +163,14 @@ def advancedBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
             zoneNumber = dev.pluginProps['zoneNumber']
             zoneState = ""   # dev.states['zoneState']
             zoneLogChanges = dev.pluginProps['zoneLogChanges']
-            zoneLogSupervision = dev.pluginProps['logSupervision']
+
+            # BUG: logSupervision only exists on alarmZone devices in Devices.xml
+            # it doesn't appear this property is ever used anyway
+            if dev.deviceTypeId == 'alarmZone':
+                zoneLogSupervision = dev.pluginProps['logSupervision']
+            else:
+                zoneLogSupervision = "1"  # TO DO: remove this
+
             zonePartition = dev.pluginProps['zonePartitionNumber']
 
             if zoneType == 'REL':
@@ -529,7 +536,19 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"Sent panel message: {}".format(panelMsg))
 
         if self.ad2usbIsAdvanced:
-            virtPartition = virtDevice.pluginProps['vZonePartitionNumber']
+            # BUG: the property vZonePartitionNumber must have been old
+            # it no longer exists in Devices.xml as of 1.6.0 and onward
+            # use zonePartitionNumber instead
+            # we check for both to be safe using a dictionary and keys
+            # and default to 1 if neither are found
+            virtualZonePropertiesDict = virtDevice.pluginProps.to_dict()
+            if 'vZonePartitionNumber' in virtualZonePropertiesDict.keys():
+                virtPartition = virtDevice.pluginProps['vZonePartitionNumber']
+            elif 'zonePartitionNumber' in virtualZonePropertiesDict.keys():
+                virtPartition = virtDevice.pluginProps['zonePartitionNumber']
+            else:
+                virtPartition = '1'
+
             panelDevice = indigo.devices[self.partition2address[virtPartition]['devId']]
             panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
 
