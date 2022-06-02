@@ -1,3 +1,8 @@
+v 1.8.2 June 2, 2022
+- Summary: this is a maintenance release to fix two bugs with Indigo Managed Virtual Zones.
+- Fixed bug `KeyError: key vZonePartitionNumber not found in dict` which would appear as an ERROR in the logs when a Virtual Zone's state changed.
+- Fixed bug `exception in deviceStartComm(...): 'key logSupervision not found in dict'` that would appear as an ERROR in the log on startup.
+
 v 1.8.1 May 26, 2022
 - Summary: this is a maintenance release to add some improvements to logging and one bug fix.
 - Fixed bug `basicBuildDevDict error: basicBuildDevDict() takes exactly 4 arguments (3 given)` and `advancedBuildDevDict error: advancedBuildDevDict() takes exactly 4 arguments (3 given)` which would appear in ERROR log during plugin shutdown or restart.
