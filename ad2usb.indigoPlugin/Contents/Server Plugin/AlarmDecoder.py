@@ -375,6 +375,7 @@ class Message(object):
         Example: !CONFIG>ADDRESS=18&CONFIGBITS=ff00&LRR=N&EXP=NNNNN&REL=NNNN&MASK=ffffffff&DEDUPLICATE=N
 
         **properties created:**
+        configMessageString - the part of the message after '!CONFIG>'
         flags (dictionary) - with key values of: MODE, ADDRESS, CONFIGBITS, MASK, EXP, REL, LRR, DEDUPLICATE
         """
         # return if not a VER message
@@ -388,6 +389,7 @@ class Message(object):
 
             # strip first 8 chars from the message - !CONFIG>
             configMessage = self.messageString[8:]
+            self.messageDetails['CONFIG']['configMessageString'] = configMessage
 
             configItems = re.split('&', configMessage)
 
@@ -621,20 +623,24 @@ class Message(object):
         **properties created:**
         data (string) - large binary blob that's destined for a graphical panel
         """
-        if self.messageType == 'AUI':
-            try:
-                self.messageDetails['AUI'] = {}
-                self.messageDetails['AUI']['data'] = ''
+        try:
+            if self.messageType != 'AUI':
+                self.setMessageToInvalid('not an AUI message')
+                return
 
-                # strip first 5 chars from the message - !AUI:
-                self.messageDetails['AUI']['data'] = self.messageString[5:]
+            # else its and AUI message
+            self.messageDetails['AUI'] = {}
+            self.messageDetails['AUI']['data'] = ''
 
-                self.needsProcessing = True
-                self.logger.debug('AUI message parsed:{}'.format(self.messageDetails['AUI']))
+            # strip first 5 chars from the message - !AUI:
+            self.messageDetails['AUI']['data'] = self.messageString[5:]
 
-            except Exception as err:
-                self.setMessageToInvalid('error parsing AUI message')
-                self.logger.warning('error processing AUI message:{} - error:{}'.format(self.messageString, str(err)))
+            self.needsProcessing = True
+            self.logger.debug('AUI message parsed:{}'.format(self.messageDetails['AUI']))
+
+        except Exception as err:
+            self.setMessageToInvalid('error parsing AUI message')
+            self.logger.warning('error processing AUI message:{} - error:{}'.format(self.messageString, str(err)))
 
     def parseMessage_EXP(self):
         """

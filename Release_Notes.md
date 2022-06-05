@@ -1,15 +1,16 @@
 v 3.0.0 (planned for June 2022)
 - Python 3 version. Requires Indigo 2022.1 or later.
-- Minor internal changes required for Python 3 compatibility.
-- Added new AlarmDecoder message parsing methods. These methods are **NOT** yet used in production but are now applied to every AlarmDecoder message. As a result, the Plugin will log WARNING messages to the log files if it encounters any messages from your AlarmDecoder it is unable to read. This change and these WARNING messages is in preparation for future compatibility with multiple AlarmDecoder firmware versions. Warnings messages will be in the format  `error processing XXX message` where `XXX` will be one of the AlarmDecoder message types. Please report any of these warning messages in the [User Forum](https://forums.indigodomo.com/viewtopic.php?f=22&t=7584).
-- Added reading of the AlarmDecoder firmware version on startup. The firmware version will be reported in the log as an INFO message. If the Plugin is unable to identify the firmware version it will not start. Currently, only the firmware version V2.2a.6 is compatible with the Plugin.
+- **IMPORTANT:** Numerous internal changes were required for Python 3 compatibility. Not all code paths could be tested. Please see [this section of the README](https://github.com/bla260/ad2usb#helpful-troubleshooting-techniques) for guidance on how to get assistance and the log file setting and entries that may be needed.
+- Added reading of the AlarmDecoder firmware version and settings on startup. The firmware version will be reported in the log as an INFO message. If the Plugin is unable to identify the firmware version it will not start. Currently, only the firmware version V2.2a.6 is compatible with the Plugin.
+- Internal change were made to enable more automated testing of the plugin.
+- Added new AlarmDecoder message parsing methods. These methods are **NOT** yet used in production but are now applied to every AlarmDecoder message. As a result, the Plugin will log WARNING messages to the log files if it encounters any messages from your AlarmDecoder the new parsing method is unable to read. This change and these WARNING messages are in preparation for future plugin compatibility with the latest AlarmDecoder firmware version. Warnings messages will be in the format  `error processing XXX message` where `XXX` will be one of the AlarmDecoder message types. Please report any of these warning messages in the [User Forum](https://forums.indigodomo.com/viewtopic.php?f=22&t=7584).
 - Updated README documentation
 
 v 1.8.2 June 2, 2022
 - Summary: this is a maintenance release to fix two bugs with Indigo Managed Virtual Zones.
 - Fixed bug `KeyError: key vZonePartitionNumber not found in dict` which would appear as an ERROR in the logs when a Virtual Zone's state changed.
 - Fixed bug `exception in deviceStartComm(...): 'key logSupervision not found in dict'` that would appear as an ERROR in the log on startup.
-- **IMPORTANT:** if this release causes new errors in Virtual Zones that have worked for some time you should edit and re-save all of your Virtual Zone devices or delete and recreated them. This is likely due to property changes for Virtual Zones made after they were created.
+- **IMPORTANT:** if this release causes new errors in Virtual Zones that have worked for some time you should edit and re-save all of your Virtual Zone devices or delete and recreate them. This is likely due to property changes for Virtual Zones made after they were created.
 
 v 1.8.1 May 26, 2022
 - Summary: this is a maintenance release to add some improvements to logging and one bug fix.

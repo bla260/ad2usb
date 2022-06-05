@@ -7,10 +7,12 @@
 import indigo  # Not really needed, but a specific import removes lint errors
 from datetime import datetime
 # import inspect
+import os
 import re
 import serial
 import sys
 import string
+import time
 import AlarmDecoder
 # from string import atoi
 
@@ -39,7 +41,7 @@ class ad2usb(object):
     ########################################
     def __init__(self, plugin):
         """
-        creates and AlarmDecoder object
+        creates an AlarmDecoder object and starts AlarmDecoder communication
 
         **parameters:**
         plugin -- the Indigo plugin object
@@ -59,17 +61,25 @@ class ad2usb(object):
         self.zoneBypassDict = {}  # dict with key of zone number as int, values are True
         self.lastApZonesBypassed = 0
 
-        self.shutdown = False
+        self.stopReadingMessages = False
         self.shutdownComplete = False
 
-        # set the firmware to unknown
+        # set the debug panel playback file
+        self.playbackLastLineNumberRead = 0  # tracks the current line
+        self.playbackSleepTime = 3  # 5 seconds sleep between each message
+        self.hasPlaybackFileBeenRead = False  # flag to set after reading file
+
+        # set the firmware to unknown and the serial connection to None
         self.firmwareVersion = ''
+        self.serialConnection = None
+        self.isCommStarted = False  # this property is set in newStartComm
 
-        # read CONFIG from AlarmDecoder on init
-        self.configSettings = {}
-
-        # you can read the config settings for IP but not USB
-        self.isAlarmDecoderConfigured = self.readAlarmDecoderConfig()
+        # this code executes before runConcurrentThread so no open reading is happening
+        # send a VER and CONFIG message and read the output
+        if self.newStartComm():
+            self.logger.info('AlarmDecoder initialized and communication started...')
+        else:
+            self.logger.critical('AlarmDecoder initilization communiation error...')
 
     ########################################
     def __del__(self):
@@ -125,14 +135,12 @@ class ad2usb(object):
         try:
             # if no keypad address specified no need to prefix the message with K##
             if len(address) == 0:
-                # self.plugin.conn.write(panelMsg)
-                self.panelWriteWrapper(self.plugin.conn, panelMsg)
+                self.panelWriteWrapper(self.serialConnection, panelMsg)
             else:
                 if len(address) == 1:
                     address = "0" + address
                 panelMsg = 'K' + address + str(panelMsg)
-                # self.plugin.conn.write(panelMsg)
-                self.panelWriteWrapper(self.plugin.conn, panelMsg)
+                self.panelWriteWrapper(self.serialConnection, panelMsg)
                 self.logger.info(u"sent panel message:{}".format(panelMsg))
         except Exception as err:
             self.logger.error(u"unable to write panel message:{}".format(panelMsg))
@@ -528,40 +536,77 @@ class ad2usb(object):
         self.logger.debug(u"isAdvanced:{}".format(ad2usbIsAdvanced))
 
         lastPanelMsg = ""
-        while self.shutdown is False:
+        while self.stopReadingMessages is False:
+            doNotProcessThisMessage = False  # default to process every message
             rawData = ""
             try:
-                while len(rawData) == 0 and self.shutdown is False:
-                    # rawData = self.plugin.conn.readline()
-                    rawData = self.panelReadWrapper(self.plugin.conn)
+                while (len(rawData) == 0) and (self.stopReadingMessages is False):
+                    # this should read one line and block while waiting for another line
+                    rawData = self.panelReadWrapper(self.serialConnection)
 
+                    # ############## New Message Parser ########################
+                    #
                     # added this code to begin to test the message Object
-                    tempMessageObject = AlarmDecoder.Message(rawData, self.firmwareVersion, self.logger)
-                    if not tempMessageObject.isValidMessage:
-                        self.logger.warning("not able to read and parse message:{}".format(
-                            tempMessageObject.invalidReason))
+                    newMessageObject = AlarmDecoder.Message(rawData, self.firmwareVersion, self.logger)
 
+                    # process select messages
+                    if newMessageObject.isValidMessage:
+                        if (newMessageObject.messageType == 'CONFIG') and newMessageObject.needsProcessing:
+                            self.plugin.hasAlarmDecoderConfigBeenRead = True
+                            self.processAlarmDecoderConfigString(
+                                newMessageObject.getMessageAttribute('configMessageString'))
+
+                        elif (newMessageObject.messageType == 'VER') and newMessageObject.needsProcessing:
+                            self.setFirmware(newMessageObject.firmwareVersion)
+
+                        elif (newMessageObject.messageType == 'AUI') and newMessageObject.needsProcessing:
+                            pass
+
+                        else:
+                            pass
+
+                    else:
+                        self.logger.warning("Unable able to parse message:{}".format(
+                            newMessageObject.invalidReason))
+
+                    #
+                    #
+                    # ############## End New Message Parser ########################
+
+                    # TO DO: this shouldn't happen
                     if rawData == '':
-                        if self.shutdown is False:
-                            self.logger.error(u"AD2USB Connection Error")
-                        return  # exit()
+                        doNotProcessThisMessage = True
+                        if self.stopReadingMessages is False:
+                            self.logger.error(u"AD2USB Connection/Read Error")
+
             except Exception as err:
-                if self.shutdown is True:
-                    self.logger.info(u"Connection Closed:")
+                # don't process any message we had an error reading
+                doNotProcessThisMessage = True
+                self.logger.error(u"Error reading AlarmDecoder message - error:{}".format(str(err)))
+                self.logger.error(u"Error reading AlarmDecoder message - raw data is:{}".format(rawData))
+
+                if self.stopReadingMessages is True:
+                    self.logger.info(u"Stop reading messages has been set")
                     self.shutdownComplete = True
                 else:
-                    self.logger.critical(u"Connection Error:{}".format(str(err)))
-                exit()
-            except:
-                self.logger.critical(u"Connection Problem, plugin quitting")
-                exit()
+                    self.logger.error(u"Will try next message")
 
+            # message Read was successful - log it
             self.logger.debug(u"Read ad2usb message:{}".format(repr(rawData)))
 
             # write the message to the panel log too if panel logging is enabled
             if self.plugin.isPanelLoggingEnabled:
                 self.plugin.panelLogger.info(u"{}".format(rawData.rstrip()))
 
+            #
+            # Process Message Section
+            #
+
+            # if we don't want to process this message go back to top of while loop
+            if doNotProcessThisMessage:
+                continue
+
+            # Start processing the message
             # Start by checking if this message is "Press * for faults"
             try:
                 if len(rawData) > 0 and rawData[0] == "[":  # A valid panel message
@@ -574,8 +619,7 @@ class ad2usb(object):
                     # was string.find(msgText, ' * ')
                     if msgText.find(' * ') >= 0:
                         self.logger.debug(u"Received a Press * message:{}".format(rawData))
-                        # self.plugin.conn.write('*')
-                        self.panelWriteWrapper(self.plugin.conn, '*')
+                        self.panelWriteWrapper(self.serialConnection, '*')
                         # That's all we need to do for this messsage
 
                     elif rawData[30:38] == '00000000':
@@ -873,7 +917,7 @@ class ad2usb(object):
                 self.logger.error(u'Error on line:{}'.format(sys.exc_info()[-1].tb_lineno))
                 self.logger.error(u"Error:{}".format(str(err)))
 
-        self.client_socket.close()
+        self.logger.info(u"AlarmDecoder message reading stopped")
         self.logger.debug(u"completed")
 
     ########################################
@@ -889,182 +933,261 @@ class ad2usb(object):
         for zone in sorted(self.plugin.zonesDict):
             self.logger.debug(u"...Index:{}, Data:{}".format(zone, self.plugin.zonesDict[zone]))
 
-        self.shutdown is False
-        lostConnCount = 0
+        self.stopReadingMessages is False
+        retryCount = 0
         # firstTry = True
 
         # TO DO: convert to use setURL and integrate with stop/start/restart
-        while self.shutdown is False:
-            if ad2usbCommType == 'IP':
-                HOST = ad2usbAddress
-                PORT = ad2usbPort
-                theURL = 'socket://' + HOST + ':' + PORT
-                self.logger.debug(u"the url is:{}".format(theURL))
+        while self.stopReadingMessages is False:
+
+            # set the serial connection property - will open if needed
+            if self.setSerialConnection():
+                try:
+                    if self.plugin.isPlaybackCommunicationModeSet:
+                        # read a test/debug file of panel messages
+                        # it doesn't matter what the connection object is so long as it exists
+                        self.logger.info('In Playback debug mode - no connection created...')
+                    else:
+                        self.logger.info(u"connected to AlarmDecoder")
+
+                    self.panelMsgRead(ad2usbIsAdvanced)
+                    self.logger.info(u"returned from panelMessageRead")
+
+                except Exception as err:
+                    self.logger.error(u"Error in startComm shutdown loop - message:{}".format(str(err)))
+
             else:
-                theURL = ad2usbSerialPort
-                self.logger.debug(u"the serial port is:{}".format(theURL))
-
-            try:
-                self.logger.info(u"attempting to connect to:{}".format(theURL))
-                self.plugin.conn = serial.serial_for_url(theURL, baudrate=115200)
-                self.plugin.conn.timeout = None
-                lostConnCount = 0
-                self.plugin.serialOpen = True
-
-                self.logger.info(u"connected to AlarmDecoder")
-                self.panelMsgRead(ad2usbIsAdvanced)
-
-                self.logger.info(u"returned from panelMessageRead")
-
-            except Exception as err:
-                self.logger.error(u"could not connect to AlarmDecoder at:{}".format(theURL))
-                self.logger.error(u"error message:{}".format(str(err)))
-
-            if not self.shutdown:
-                lostConnCount += 1
-                if lostConnCount < 3:
-                    retryTime = 10
-                    retryText = '10 seconds'
-                elif lostConnCount < 13:
-                    retryTime = 30
-                    retryText = '30 seconds'
-                elif lostConnCount < 23:
-                    retryTime = 300
-                    retryText = '5 minutes'
-                else:
-                    retryTime = 1800
-                    retryText = '30 minutes'
-
-                self.logger.error(u"failed connection to:{}".format(theURL))
-                self.logger.error(u"will retry in:{}".format(retryText))
-
-                retryTime = retryTime * 2  # check every 0.5 seconds
-                while retryTime > 0 and not self.shutdown:
-                    self.plugin.sleep(0.5)
-                    retryTime -= 1
+                self.logger.error(u"Error setting serial connection...")
+                # retry 3 times for 10 seconds (30 sec)
+                # then 3 times for 30 seconds (total of 2 mins)
+                # then 3 times for 5 minutes (total of 17 mins)
+                # then 3 times for 30 minutes (total of 1 hour and 47 mins)
+                retryCount += 1
+                if retryCount <= 3:
+                    sleepTime = 10
+                    self.logger.warning(u"trying serial connection again in {} seconds...".format(sleepTime))
+                    time.sleep(sleepTime)
+                elif (retryCount > 3) and (retryCount <= 6):
+                    sleepTime = 30
+                    self.logger.warning(u"trying serial connection again in {} seconds...".format(sleepTime))
+                    time.sleep(sleepTime)
+                elif (retryCount > 6) and (retryCount <= 9):
+                    sleepTime = 5
+                    self.logger.error(u"trying serial connection again in {} minutes...".format(sleepTime))
+                    time.sleep(sleepTime * 60)
+                elif (retryCount > 9) and (retryCount <= 12):
+                    sleepTime = 30
+                    self.logger.error(u"trying serial connection again in {} minutes...".format(sleepTime))
+                    time.sleep(sleepTime * 60)
+                elif retryCount > 12:
+                    self.logger.critical(
+                        'Failed to connect to AlarmDecoder after several attempts. Check connection to AlarmDecoder')
+                    self.stopReadingMessages = True
 
         self.logger.debug(u"completed")
 
-   ########################################
-    def stopComm(self):
-        self.logger.debug(u"Called")
-        self.shutdown = True
-
-        if self.shutdownComplete is False:
-            try:
-                self.logger.info(u"attempting to close connection...")
-                self.plugin.conn.close()
-                self.logger.info(u"connection closed")
-            except Exception as err:
-                self.logger.error(u"Error while closing connection on line {}".format(sys.exc_info()[-1].tb_lineno))
-                self.logger.error(u"Error:{}".format(str(err)))
-
-    def readAlarmDecoderConfig(self):
+    def newStartComm(self):
         """
-        opens communication to the AlarmDecoder and runs the "C" command
-        to get the current AlarmDecoder configuration string
-        and then calls the process method to parse the config message string
+        Initiates serial port open call and send C and V commands and read CONFIG and VER
 
-        returns True or False based on success or failure
+        Return True for success; False for failure
         """
-
-        self.logger.debug(u'called')
-        if self.plugin.commType == 'USB':
-            self.logger.debug(u'commType is USB - returning False')
-            return False
+        self.logger.debug(u"called")
 
         try:
-            # open a new connection as the URL could have changed
-            self.logger.debug(u'attempting to open serial connection')
-            configConnection = serial.serial_for_url(self.getURL(), baudrate=115200)
-            configConnection.timeout = 2
-            self.logger.debug(u"created new connection to read CONFIG")
+            # if comm is set to panel playback we just return
+            if self.plugin.isPlaybackCommunicationModeSet:
+                self.logger.debug(u"Panel Message Playback Set - communication started")
+                if self.__doesPlaybackFileExist():
+                    return True
+                else:
+                    self.logger.error(u"Panel Message Playback file does not exist:{}".format(
+                        self.plugin.panelMessagePlaybackFilename))
+                    return False
 
-            configCommand = kADCommands['CONFIG']
-            self.logger.debug(u'attempting to send CONFIG command:{} to AlarmDecoder'.format(configCommand))
-            self.panelWriteWrapper(configConnection, configCommand)
+                if self.hasPlaybackFileBeenRead:
+                    self.logger.info("Panel Message Playback file has been read")
+                    return False
 
-            # read up to 5 lines looking for '!CONFIG>'
-            linesRead = 0
-            msg = ""
-            while linesRead < 5:
-                adString = ""
+            # otherwise lets track if we successfully read the VER and CONFIG messages
+            verReadSuccess = False
+            configReadSuccess = False
 
-                self.logger.debug(u'attempting to read CONFIG command output line:{}'.format(linesRead))
-                adString = self.panelReadWrapper(configConnection)
-                self.logger.debug(u'readline (string):{}'.format(adString))
+            # try to open the serial connection
+            # TO DO: put send and read of V and CONFIG into 2 methods
+            if self.setSerialConnection():
+                self.logger.info(u"AlarmDecoder communication started...")
 
-                if len(adString) > 8 and adString[0:8] == '!CONFIG>':
-                    linesRead = 5
-                    msg = adString[8:-2]
-                    self.processAlarmDecoderConfigString(msg)
+                if self.sendAlarmDecoderVersionCommand():
+                    # run a loop loking for VER message, max 10 times
+                    maxReadLines = 10
+                    ignoredMessageCount = 0
+                    while (maxReadLines > 0):
+                        messageString = self.panelReadWrapper(self.serialConnection)
+                        # count down from 10 to 1
+                        maxReadLines = maxReadLines - 1
+                        # create an object
+                        messageObject = AlarmDecoder.Message(messageString)
+                        if messageObject.messageType == 'VER':
+                            self.setFirmware(messageObject.firmwareVersion)
+                            self.logger.info(u"AlarmDecoder firmware version is:{}".format(self.firmwareVersion))
+                            verReadSuccess = True
+                        else:
+                            ignoredMessageCount += 1
 
-                linesRead += 1
+                    self.logger.info("Ignored {} messages reading VER".format(ignoredMessageCount))
 
-            # don't test if its open - just close it
-            # hoping to avoid testing for isOpen or is_open
-            self.logger.debug(u'closing connection to AlarmDecoder')
-            configConnection.close()
-            return True
+                if self.sendAlarmDecoderConfigCommand():
+                    # run a loop loking for CONFIG message, max 10 times
+                    maxReadLines = 10
+                    ignoredMessageCount = 0
+                    while (maxReadLines > 0):
+                        messageString = self.panelReadWrapper(self.serialConnection)
+                        # count down from 10 to 1
+                        maxReadLines = maxReadLines - 1
+                        # create an object
+                        messageObject = AlarmDecoder.Message(messageString, self.firmwareVersion)
+                        if messageObject.messageType == 'CONFIG':
+                            configString = messageObject.getMessageAttribute('configMessageString')
+                            self.processAlarmDecoderConfigString(configString)
+                            self.logger.info(u"AlarmDecoder config string is:{}".format(configString))
+                            self.logger.info(u"AlarmDecoder config settings are:{}".format(
+                                self.plugin.configSettings))
+                            configReadSuccess = True
+                        else:
+                            ignoredMessageCount += 1
 
-        except Exception as err:
-            configConnection.close()
-            self.logger.error(
-                u"reading AlarmDecoder configuration failed: the url was:{} error:{}".format(self.getURL(), str(err)))
-            return False
+                    self.logger.info("Ignored {} messages reading CONFIG".format(ignoredMessageCount))
 
-    def setAlarmDecoderVersionInfo(self, verMsgObject=None):
-        """
-        If verMsgObject is provided then that message is read. If not, it opens communication to the AlarmDecoder and
-        sends the "V" command to get the current AlarmDecoder VER message which contains firmware version and capabilties
+            if verReadSuccess and configReadSuccess:
+                self.logger.info(u"AlarmDecoder communication startup completed successfully")
 
-        Output: sets the propery "firwareVersion" and returns True or False if connection/message was valid
+                # TO DO: remove this? ported this log from old startComm
+                for zone in sorted(self.plugin.zonesDict):
+                    self.logger.debug(u"...Index:{}, Data:{}".format(zone, self.plugin.zonesDict[zone]))
 
-        **parameters:**
-        messageObject (AlarmDecode.Message) - Optional. If the messageObject is passed that is used and there no communication to the AlarmDecoder
-        """
-
-        self.logger.debug(u'called')
-
-        try:
-            if verMsgObject is None:
-                # open a new connection as the URL could have changed
-                self.logger.debug(u'attempting to open serial connection')
-                verConnection = serial.serial_for_url(self.getURL(), baudrate=115200)
-                verConnection.timeout = 2
-                self.logger.debug(u"created new connection to read VER")
-
-                verCommand = kADCommands['VER']
-                self.logger.debug(u'attempting to send VER command:{} to AlarmDecoder'.format(verCommand))
-                self.panelWriteWrapper(verConnection, verCommand)
-
-                self.logger.debug(u'attempting to read VER command output line')
-                verMessageString = ''
-                verMessageString = self.panelReadWrapper(verConnection)
-                self.logger.debug(u'readline (string):{}'.format(verMessageString))
-                verMsgObject = AlarmDecoder.Message(verMessageString, '', self.logger)
-
-                # don't test if its open - just close it
-                # hoping to avoid testing for isOpen or is_open
-                self.logger.debug(u'closing connection to AlarmDecoder')
-                verConnection.close()
-
-            # check valid VER message
-            if verMsgObject.isValidMessage and verMsgObject.messageType == 'VER':
-                self.firmwareVersion = verMsgObject.firmwareVersion
-                self.logger.info(u'AlarmDecoder firmware identified as:{}'.format(self.firmwareVersion))
+                self.isCommStarted = True
                 return True
             else:
-                self.logger.error(u'Cannot determine AlarmDecoder firmware version')
+                if not configReadSuccess:
+                    self.logger.error(u"Unable to read AlarmDecoder CONFIG")
+                if not verReadSuccess:
+                    self.logger.error(u"Unable to read AlarmDecoder VERSION")
+
+                self.isCommStarted = False
                 return False
 
         except Exception as err:
-            verConnection.close()
-            self.logger.error(
-                u"sending and reading AlarmDecoder VER message failed: the url was:{}, msg:{}, error:{}".format(self.getURL(), verMessageString, str(err)))
+            self.logger.error(u"Unable to open serial connection and read CONFIG and VER - error:{}".format(str(err)))
+            self.isCommStarted = False
             return False
 
-    def writeAlarmDecoderConfig(self, configString):
+    ########################################
+    def stopComm(self):
+        """
+        This method is called by the plugin shutdown. It will close serial connection and
+        set the 'isCommStarted' property to False
+        """
+        self.logger.debug(u"called")
+        self.stopReadingMessages = True
+
+        try:
+            # set the flag first
+            self.isCommStarted = False
+
+            if self.serialConnection is not None:
+                self.logger.debug(u'serial connection is some object:{}'.format(self.serialConnection))
+
+                # if it is open we we close it
+                if self.serialConnection.is_open:
+                    self.logger.info(u'serial connection is open... attempting to close...')
+                    self.serialConnection.close()
+                    self.logger.info(u'serial connection is closed...')
+
+        except Exception as err:
+            self.logger.error(u"Error while closing connection on line {}".format(sys.exc_info()[-1].tb_lineno))
+            self.logger.error(u"Error:{}".format(str(err)))
+
+    def sendAlarmDecoderConfigCommand(self):
+        """
+        opens communication to the AlarmDecoder and runs the "C" command to get the current
+        AlarmDecoder configuration string. This string will be read on another thread and
+        then calls the process method to parse the config message string
+
+        returns True or False based on success or failure
+        """
+        try:
+            self.logger.debug(u'called')
+
+            # set a flag that we reset when CONFIG message is read
+            self.plugin.hasAlarmDecoderConfigBeenRead = False
+
+            # don't run if in playback mode
+            if self.plugin.isPlaybackCommunicationModeSet:
+                self.logger.debug(u'Panel Message Playback Set - cannot send AlarmDecoder CONFIG command')
+                return False
+
+            if (self.plugin.ad2usbCommType == 'IP') or (self.plugin.ad2usbCommType == 'USB'):
+
+                self.logger.debug(u'attempting to get serial connection')
+                if (self.setSerialConnection()) and (self.serialConnection is not None):
+                    self.logger.debug(u"established connection to send CONFIG command")
+                    # change the timeout for this command
+                    self.serialConnection.timeout = 2
+
+                    # send message to AlarmDecoder
+                    configCommand = kADCommands['CONFIG']
+                    self.logger.debug(u'attempting to send CONFIG command:{} to AlarmDecoder'.format(configCommand))
+                    self.panelWriteWrapper(self.serialConnection, configCommand)
+                    self.logger.debug(u'sent CONFIG command to AlarmDecoder')
+
+                    # reset the timeout to None
+                    self.serialConnection.timeout = None
+                    self.logger.debug(u'reset timeout back to None')
+                    return True
+
+            else:
+                self.logger.debug(u'commType is not IP or USB:{}'.format(self.plugin.ad2usbCommType))
+                return False
+
+        except Exception as err:
+            self.logger.error(
+                u"sending AlarmDecoder configuration command failed - error:{}".format(str(err)))
+            return False
+
+    def sendAlarmDecoderVersionCommand(self):
+        """
+        Opens communication to the AlarmDecoder and sends the "V" command to get the current
+        AlarmDecoder VER message which contains firmware version and capabilties.
+
+        Returns True for success; False if send message fails
+        """
+
+        try:
+            self.logger.debug(u'called')
+
+            # open a new connection as the URL could have changed
+            self.logger.debug(u'attempting to get serial connection...')
+            if self.setSerialConnection():
+
+                self.logger.debug(u'attempting to set new timeout...')
+                self.serialConnection.timeout = 2
+                self.logger.debug(u"new timeout set...")
+
+                verCommand = kADCommands['VER']
+                self.logger.debug(u'attempting to send VER command:{} to AlarmDecoder'.format(verCommand))
+                self.panelWriteWrapper(self.serialConnection, verCommand)
+                self.logger.debug(u"VER command sent...")
+
+                self.serialConnection.timeout = None
+                self.logger.debug(u"timeout reset to None...")
+
+        except Exception as err:
+            self.logger.error(
+                u"sending AlarmDecoder VER message failed, error:{}".format(str(err)))
+            return False
+
+    def writeAlarmDecoderConfig(self, configString=''):
         """
         opens communication to the AlarmDecoder and runs the "CONFIG" command
         to set the current AlarmDecoder configuration
@@ -1072,38 +1195,53 @@ class ad2usb(object):
         returns True or False based on success or failure
         """
         self.logger.debug(u'called')
-        if self.plugin.commType == 'USB':
-            self.logger.debug(u'commType is USB - cannot write to AlarmDecoder - returning False')
-            return False
-
         try:
-            # open a new connection as the URL could have changed
-            self.logger.debug(u'attempting to connect to AlarmDecoder at:{}'.format(self.getURL()))
-            configConnection = serial.serial_for_url(self.getURL(), baudrate=115200)
-            configConnection.timeout = 2
-            self.logger.debug(u"created new connection to write CONFIG")
 
-            # TO DO: replace this?
-            configCommand = configString
-            self.logger.debug(u'attempting to update CONFIG settings:{} to AlarmDecoder'.format(configCommand))
-            self.panelWriteWrapper(configConnection, configCommand)
+            if (self.plugin.ad2usbCommType == 'IP') or (self.plugin.ad2usbCommType == 'USB'):
 
-            # don't test if its open - just close it
-            # hoping to avoid testing for isOpen or is_open
-            self.logger.debug(u'closing connection to AlarmDecoder')
-            configConnection.close()
-            self.logger.debug(u'closed connection to AlarmDecoder')
-            return True
+                # open a new connection as the URL could have changed
+                self.logger.debug(u'attempting to connect to AlarmDecoder at:{}'.format(self.getURL()))
+
+                if self.setSerialConnection():
+                    self.logger.debug(u"established serial connection to write CONFIG")
+
+                    if len(configString) > 0:
+                        self.logger.debug(
+                            u'attempting to update CONFIG settings:{} to AlarmDecoder'.format(configString))
+                        self.logger.debug('setting timeout...')
+                        self.serialConnection.timeout = 2
+                        if self.panelWriteWrapper(self.serialConnection, configString):
+                            self.logger.debug(u'AlarmDecoder CONFIG written successfully')
+                            self.logger.debug('resetting timeout...')
+                            self.serialConnection.timeout = None
+                            return True
+                        else:
+                            self.logger.error(u'AlarmDecoder CONFIG write failed')
+                            self.logger.debug('resetting timeout...')
+                            self.serialConnection.timeout = None
+                            return False
+                    else:
+                        self.logger.warning(u'AlarmDecoder CONFIG settings to write was empty')
+                        return True
+
+                else:
+                    self.logger.error(u'Unable to get serial connection to write AlarmDecoder CONFIG')
+                    return False
+
+            else:
+                self.logger.debug(
+                    u'commType is not IP or USB:{} - cannot write to AlarmDecoder - returning False'.format(self.plugin.ad2usbCommType))
+                return False
 
         except Exception as err:
-            configConnection.close()
             self.logger.error(
-                u"reading AlarmDecoder configuration failed: the url was:{} error:{}".format(self.getURL(), str(err)))
+                u"reading AlarmDecoder configuration failed: URL:{}, CONFIG string:{}, error:{}".format(self.getURL(), configString, str(err)))
             return False
 
     def processAlarmDecoderConfigString(self, configString):
         """
-        parses a valid AlarmDecoder CONFIG string (from the device) and sets properties of this object
+        parses a valid AlarmDecoder CONFIG string (from the device) and sets the keys and values
+        of the plugin property 'configSettings' to the CONFIG string keys and values
 
         **parameter:**
         configString -- the CONFIG string from the AlarmDecoder
@@ -1111,38 +1249,32 @@ class ad2usb(object):
 
         self.logger.debug(u"called with:{}".format(configString))
 
-        # clear the prior config property
-        self.logger.debug(u"prior configSettings were:{}".format(self.configSettings))
-        self.configSettings = {}
+        try:
+            # log the old settings
+            self.logger.debug(u"prior configSettings were:{}".format(self.plugin.configSettings))
 
-        configItems = re.split('&', configString)
+            # we only set new settings at end in case there is an error
+            newConfigSettings = {}
 
-        for oneConfig in configItems:
-            configParam = re.split('=', oneConfig)
+            configItems = re.split('&', configString)
 
-            # skip parameters we don't manage
-            if (configParam[0] == 'CONFIGBITS') or (configParam[0] == 'MASK') or (configParam[0] == 'MASK'):
-                pass
-            else:
-                self.configSettings[configParam[0]] = configParam[1]
+            for oneConfig in configItems:
+                configParam = re.split('=', oneConfig)
 
-        # process the CONFIGBITS: AUI, Keypress, Prompt Disable, !KPM prefix, Disable DSC locking, Enable CRC delivery, Enable RFX
-        self.logger.debug(u"new configSettings are:{}".format(self.configSettings))
+                # skip parameters we don't manage
+                if (configParam[0] == 'CONFIGBITS') or (configParam[0] == 'MASK') or (configParam[0] == 'MASK'):
+                    pass
+                else:
+                    newConfigSettings[configParam[0]] = configParam[1]
 
-    def generateAlarmDecoderConfigString(self):
-        """
-        reads the internal property 'configSettings' and returns a valid AlarmDecoder config string
-        ex: 'CADDRESS=20&DEDUPLICATE=Y\r'
-        """
-        self.logger.debug(u'called')
+            self.plugin.configSettings = {}
+            self.plugin.configSettings = newConfigSettings.copy()
+            self.logger.debug(u"updated configSettings are:{}".format(self.plugin.configSettings))
 
-        configString = 'C'  # setting CONFIG always starts with C
-        for parameter, setting in self.configSettings.items():
-            configString = configString + parameter + '=' + setting + '&'
-
-        # strip the last '&' since it is not needed
-        self.logger.debug(u'CONFIG string is:{}'.format(configString[:-1]))
-        return configString[:-1]
+        except Exception as err:
+            # no changes are made to configSettings dictionary
+            self.logger.error('Error processing CONFIG string:{} - error:{}'.format(configString, str(err)))
+            self.logger.debug(u"configSettings are:{}".format(self.plugin.configSettings))
 
     def readConfigSettingsFromPrefs(self):
         """
@@ -1150,38 +1282,85 @@ class ad2usb(object):
         this is used when you cannot read the settings from the AlarmDecoder
         """
 
-    def panelReadFromFile(self, fileName):
+    def panelReadMessageFromFile(self, fileName):
         """
         This method is used to read alarm panel messages from a text file instead of the AlarmDecoder.
-        It is used for testing and debugging. It will read the *entire* panel message log file and
-        when complete it will log aggregate details about the messages and any errors in the DEBUG
-        logger. It expects files in the **EXACT** format as the panel message log:
-        *datetime | panel_message_string*
+        It is used for testing and debugging. It will read the panel message playback file and
+        return a single message (line). It uses internal variable to keep track of the current line.
+        It expects the playback file to be in the **EXACT** format as the panel message log:
+        *datetime | panel_message_string* *BUT* will also allow a line to being with '#' that
+        will be skipped.
+
+        Return a string that is a panel message as if it was from the AlarmDecoder
         """
-        # TO DO: this method is typically called for external testing code so logger doesn't exist
         self.logger.debug(u'called')
 
-        # initialize a dicitional of the count of all valid message types found
-        messageTypesFound = {'UNK': 0}
-        for m in AlarmDecoder.kVALIDMESSAGETYPES:
-            messageTypesFound[m] = 0
-
         try:
-            lineNumber = 1
+            # define all vars used in exception now
+            # TO DO: this is inefficient but simple - may need to improve
+            lineNumber = 0
+            playbackCurrentMessage = ''
+            line = ''
+
+            # set the flag to catch we have read the entire file to true
+            didReadEntireFile = True
+
+            if not self.__doesPlaybackFileExist():
+                self.logger.error("Unable to read playback file:{}".format(fileName))
+                self.logger.error("Stopping reading messages")
+                self.stopReadingMessages = True
+                return ''
+
             with open(fileName, 'rt') as f:
-                for line in f:
-                    # get a new message object
-                    messageObject = AlarmDecoder.Message(line)
-                    if messageObject.messageType in AlarmDecoder.kVALIDMESSAGETYPES:
-                        messageTypesFound[messageObject.messageType] = messageTypesFound[messageObject.messageType] + 1
+                self.logger.debug(u'reading file:{}...'.format(fileName))
 
-                    # self.logger.debug('message Object:{}'.format(messageObject))
-                    # do something with line from file
-                    lineNumber = lineNumber + 1
+                for lineNumber, line in enumerate(f):
+                    # increment the line number - first line is 1
+                    lineNumber += 1
 
+                    # check if current line number is > last read number (the next line after last read)
+                    if lineNumber > self.playbackLastLineNumberRead:
+
+                        self.logger.debug(u'reading line number:{}...'.format(lineNumber))
+                        self.logger.debug(u'line:{}'.format(line))
+
+                        # increment the last line number read
+                        self.playbackLastLineNumberRead += 1
+
+                        # we've read up to the last line so set the flag to False
+                        didReadEntireFile = False
+
+                        # skip the line if its a comment
+                        if line.startswith('#'):
+                            pass
+                            # we don't break here so we just read the next comment
+
+                        # else process it
+                        else:
+                            # split on the "|" and strip the whitespace from the message part of the file
+                            lineItems = re.split(r'\|', line)
+                            playbackCurrentMessage = lineItems[1].strip()
+                            # end the for loop we have the one line we're interested
+                            break
+
+                    else:
+                        # do nothing since we've already processed this line
+                        pass
+
+                # end for loop
+
+            # close the file
             f.close()
 
-            self.logger.debug('read {} message with breakdown of:{}'.format(lineNumber, messageTypesFound))
+            # see if we've read the entire file; if so we tell the plugin to shutdown
+            if didReadEntireFile:
+                self.logger.debug(u'file has been read - will initiate shutdown')
+                self.stopReadingMessages = True
+                self.hasPlaybackFileBeenRead = True
+
+            # return the message string
+            self.logger.debug(u'returning message:{}'.format(playbackCurrentMessage))
+            return playbackCurrentMessage
 
         except Exception as err:
             self.logger.error(
@@ -1198,25 +1377,42 @@ class ad2usb(object):
         panelMessageAsString = ''
         myErrorMessage = ''
         try:
-            myErrorMessage = 'checking Python verion'
-            if self.plugin.pythonVersion == 3:
-                self.logger.debug(u'attempting to read from the AlarmDecoder')
+            # test if we're reading from a file first
+            if self.plugin.isPlaybackCommunicationModeSet:
+                self.logger.debug(u'attempting to read from the Message Playback file')
 
-                # convert str to bytes for writing in Python 3
-                myErrorMessage = 'reading bytes from serial object'
-                panelMessageInBytes = serialObject.readline()
+                if not self.__doesPlaybackFileExist():
+                    self.logger.error("Playback file does not exist:{}".format(
+                        self.plugin.panelMessagePlaybackFilename))
+                    self.logger.error("Stopping reading messages")
+                    self.stopReadingMessages = True
+                    return ''
+                else:
+                    panelMessageAsString = self.panelReadMessageFromFile(self.plugin.panelMessagePlaybackFilename)
+                    return panelMessageAsString
 
-                myErrorMessage = 'decoding bytes to string'
-                panelMessageAsString = panelMessageInBytes.decode("utf8")
-
-                self.logger.debug(u"read from AlarmDecoder (Python 3) bytes:{}".format(panelMessageInBytes))
-                self.logger.debug(u"read from AlarmDecoder (Python 3):{}".format(panelMessageAsString))
+            # else we are reading from Serial port - either Python 2 or 3
+            # TO DO: we can remove the Python 2 block post version 3.0.0
             else:
-                myErrorMessage = 'reading string from serial object'
-                panelMessageAsString = serialObject.readline()
-                self.logger.debug(u"read from AlarmDecoder (Python 2):{}".format(panelMessageAsString))
+                myErrorMessage = 'checking Python verion'
+                if self.plugin.pythonVersion == 3:
+                    self.logger.debug(u'attempting to read from the AlarmDecoder')
 
-            return panelMessageAsString
+                    # convert str to bytes for writing in Python 3
+                    myErrorMessage = 'reading bytes from serial object'
+                    panelMessageInBytes = serialObject.readline()
+
+                    myErrorMessage = 'decoding bytes to string'
+                    panelMessageAsString = panelMessageInBytes.decode("utf8")
+
+                    self.logger.debug(u"read from AlarmDecoder (Python 3) bytes:{}".format(panelMessageInBytes))
+                    self.logger.debug(u"read from AlarmDecoder (Python 3):{}".format(panelMessageAsString))
+                else:
+                    myErrorMessage = 'reading string from serial object'
+                    panelMessageAsString = serialObject.readline()
+                    self.logger.debug(u"read from AlarmDecoder (Python 2):{}".format(panelMessageAsString))
+
+                return panelMessageAsString
 
         except Exception as err:
             self.logger.error(
@@ -1232,23 +1428,29 @@ class ad2usb(object):
 
         myErrorMessage = ''
         try:
-            myErrorMessage = 'checking Python verion'
-            if self.plugin.pythonVersion == 3:
-                myErrorMessage = 'encoding string to bytes'
-                panelMessageInBytes = message.encode("utf8")
+            # if we're using debug playback mode we will write the panel message as INFO to the logs
+            if self.plugin.isPlaybackCommunicationModeSet:
+                self.logger.info('Simulate writing panel message:{}'.format(message))
+                return True
 
-                self.logger.debug(u'attempting to write from the AlarmDecoder')
-                myErrorMessage = 'writing bytes to serial object'
-                serialObject.write(panelMessageInBytes)
-
-                self.logger.debug(u"wrote to AlarmDecoder (Python 3):{}".format(message))
-                self.logger.debug(u"wrote to AlarmDecoder (Python 3) bytes:{}".format(panelMessageInBytes))
             else:
-                myErrorMessage = 'writing string to serial object'
-                serialObject.write(message)
-                self.logger.debug(u"wrote to AlarmDecoder (Python 2):{}".format(message))
+                myErrorMessage = 'checking Python verion'
+                if self.plugin.pythonVersion == 3:
+                    myErrorMessage = 'encoding string to bytes'
+                    panelMessageInBytes = message.encode("utf8")
 
-            return True
+                    self.logger.debug(u'attempting to write from the AlarmDecoder')
+                    myErrorMessage = 'writing bytes to serial object'
+                    serialObject.write(panelMessageInBytes)
+
+                    self.logger.debug(u"wrote to AlarmDecoder (Python 3):{}".format(message))
+                    self.logger.debug(u"wrote to AlarmDecoder (Python 3) bytes:{}".format(panelMessageInBytes))
+                else:
+                    myErrorMessage = 'writing string to serial object'
+                    serialObject.write(message)
+                    self.logger.debug(u"wrote to AlarmDecoder (Python 2):{}".format(message))
+
+                return True
 
         except Exception as err:
             self.logger.error(
@@ -1261,3 +1463,110 @@ class ad2usb(object):
         """
         self.logger.debug(u'called')
         return self.plugin.URL
+
+    def setSerialConnection(self, forceReset=False):
+        """
+        Sets the property "serialConnection" to a serial connection object to the AlarmDecoder
+        or None if there is an error or if running in Playback debug mode.
+
+        If parameter forceReset is provided and set to True it closes the serial connection if it exists
+        and resets the property "serialConnection" to a new serial connection object to the AlarmDecoder
+        or None if there is an error or if running in Playback debug mode. This method should be called
+        with forceReset if the AlarmDecoder communication settings are changed.
+
+        Returns True for success; or False for failure
+        """
+        self.logger.debug(u'called')
+
+        try:
+            # return True and set serialConnection to None if in Playback mode
+            # unless the file has been read and then send a False
+            if self.plugin.isPlaybackCommunicationModeSet:
+                self.logger.debug(u'Panel message playback mode set - setting to serial connection to None')
+                self.serialConnection = None
+
+                # set the comm started flag to false unless the file exists
+                # and we have not already read the entire file
+                self.isCommStarted = False
+                if self.__doesPlaybackFileExist():
+                    if self.hasPlaybackFileBeenRead:
+                        return True
+                    else:
+                        self.isCommStarted = True
+                        return True
+                else:
+                    return False
+
+            # if we're not forcing a reset (default is false)
+            if not forceReset:
+
+                # test the object first
+                # if its not None assume its a serial object
+                # TO DO: test for serial object vs. not None
+                if self.serialConnection is not None:
+                    self.logger.debug(u'serial connection is some object:{}'.format(self.serialConnection))
+
+                    # if it is open we do nothing - we're all set
+                    if self.serialConnection.is_open:
+                        self.logger.debug(u'serial connection is open...')
+                        # nothing more to do
+                        self.isCommStarted = True
+                        return True
+
+            # else we are being asked to do a force reset
+            else:
+                # TO DO: test for serial object vs. not None
+                if self.serialConnection is not None:
+                    if self.serialConnection.is_open:
+                        self.serialConnection.close()
+
+            # if we get here we either have a None object or a closed serial
+            # of we're forcing a reset which means a new serial object
+
+            # start by changing the internal flag that comm is no longer set
+            self.isCommStarted = False
+
+            # get the URL for IP or Serial
+            theURL = self.getURL()
+            self.logger.info(u"attempting to connect to:{}".format(theURL))
+
+            # attempt to create a new serial object and connect
+            self.serialConnection = serial.serial_for_url(theURL, baudrate=115200)
+
+            # set a timeout to wait indefinitley on readline
+            self.serialConnection.timeout = None
+
+            # log and return success
+            self.isCommStarted = True
+            self.logger.info(u"connected to AlarmDecoder:{}".format(theURL))
+            return True
+
+        except Exception as err:
+            self.logger.critical(u"Error establishing serial connection - error:{}".format(str(err)))
+            self.serialConnection = None
+            self.isCommStarted = False
+            return False
+
+    def setFirmware(self, firmwareVersion):
+        """
+        Set the property of the firmware version supplied and logs to INFO if it changed.
+
+        Returns True if changed; False otherwise
+        """
+        if firmwareVersion != self.firmwareVersion:
+            self.firmwareVersion = firmwareVersion
+            self.logger.info("AlarmDecoder Firmware Version is:{}".format(firmwareVersion))
+            return True  # changed
+        else:
+            return False  # no change
+
+    def __doesPlaybackFileExist(self):
+        """
+        Checks if Playback file exists.
+
+        Returns True if exists; False otherwise.
+        """
+        if os.path.isfile(self.plugin.panelMessagePlaybackFilename):
+            return True
+        else:
+            return False

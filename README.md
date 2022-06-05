@@ -97,10 +97,10 @@ When an Alarm Zone is set to Bypass = On it will display the generic Indigo "Sen
 You need to be familiar with how to program your Alarm panel to add a new keypad address. Refer to your Alarm panel programming guide on how to add a keypad device.
 
 #### AlarmDecoder
-You should familiarize yourself with the setup and configuration your AlarmDecoder. See [NuTech's AlarmDecoder website](https://www.alarmdecoder.com/index.php) for details on how to install and configure your AlarmDecoder. **IMPORTANT - for IP based AlarmDecoders only:** If you are using an IP based AlarmDecoder, this plugin **will set** certain configuration parameters of your AlarmDecoder **every time** it is started and when the Plugins menu **Configure settings are saved.** Only those AlarmDecoder configuration settings controlled by this plugin will be changed. Other AlarmDecoder configuration settings not managed by this plugin will not be changed. If you will be changing any AlarmDecoder configuration outside of this plugin, it is recommended that you stop the plugin first and restart it after you have made your changes, and use the "Read ad2usb Config" button to read the changes into the Plugins settings. The AlarmDecoder configuration settings controlled by this plugin are below:
+You should familiarize yourself with the setup and configuration of your AlarmDecoder. See [NuTech's AlarmDecoder website](https://www.alarmdecoder.com/index.php) for details on how to install and configure your AlarmDecoder. **IMPORTANT:** This plugin **will set** certain configuration parameters of your AlarmDecoder **every time** it is started **and** when the Plugin's menu Configure **settings are saved.** Only those AlarmDecoder configuration settings controlled by this plugin will be changed. Other AlarmDecoder configuration settings not managed by this plugin will not be changed. If you will be changing any AlarmDecoder configuration options not managed by this plugin, it is recommended that you stop the plugin first and restart it after you have made your changes. You can use the "Read ad2usb Config" button to read the AlarmDecoder's current settings. This button will log the current setting to the Indigo event log and update the Plugin's settings dialog to match the current AlarmDecoder settings. Configuration settings managed by this plugin should be changed through the Plugin Configure menu. The AlarmDecoder configuration settings managed by this plugin are below:
 - ADDRESS - the keypad address
 - CONFIGBITS - (select CONFIGBITS below can be set via this plugin)
-  - Enable reporting of RFX messages
+  - Enable reporting of RFX messages (Mask 0x0100)
 - EXP - Emulation of zone expanders 1-5
 - REL - Emulation of relay expanders 1-4
 - LRR - Emulation of Long Range Radio expander
@@ -111,7 +111,7 @@ You should be familiar with installing and configuring Indigo plugins.See Indigo
 
 ### Quick Start - First Install
 1. Program your alarm panel to support the NuTech AlarmDecoder as a new keypad device (default from NuTech is "18").
-2. Install and configure your NuTech AlarmDecoder. For network devices make sure you know the IP address and port (default is 10000) to communicate with the AlarmDecoder. Make any additional configration changes to your AlarmDecoder via a terminal program or other supported method. In most cases the default settings of the AlarmDecoder are fine and no additional configuration is needed.
+2. Install and configure your NuTech AlarmDecoder. For network devices make sure you know the IP address and port (default is 10000) to communicate with the AlarmDecoder. Make any additional configration changes not managed by the Plugin to your AlarmDecoder via a terminal program or other supported method. In most cases the default settings of the AlarmDecoder are fine and no additional configuration is needed.
 3. Download this plugin from the Indigo Plugin Store.
 4. Double-click the plugin icon to install the plugin within Indigo. Choose "Install and Enable the Plugin"
 5. Choose "AD2SUB Alarm Interface" from the Plugins menu and choose Configure. In many cases you will only need the minimum information the plugin needs to operate: **AD2USB connection settings**, **Number of Partitions** and **Keypad Address**:
@@ -178,8 +178,8 @@ DEBUG | In addition to all messages above, detailed debug messages will be logge
 
 ## Helpful Troubleshooting Techniques
 
-### AlarmDecoder Version and Settings
-*TBP*
+### Plugin and AlarmDecoder Version and Settings
+Version 3.0.0 will log the Plugin and AlarmDecoder version and settings to the Indigo log window on startup. Please provide these details with any post on the User Forum.
 
 ### Enabling the log files
 To be able to be supported you'll need to have some level of logging enabled. The recommended settings are:
@@ -193,7 +193,7 @@ The path for logs is `/Library/Application Support/Perceptive Automation/<Indigo
 Start by asking on the support forum. If more info is needed, I'll typically ask for this via a private message or email:
 
 - Specify if it is a a USB or IP based AlarmDecoder
-- AlarmDecoder VER and CONFIG settings.
+- AlarmDecoder VER and CONFIG settings. These are logged on startup in the Indigo Event log or can be found in the plugin log file.
   - Run the MacOS/Unix commands `grep VER plugin.log` and `grep CONFIG plugin.log` to get these settings. The most recent entries are what is needed.
-- A copy of the `plugin.log` +/-500 lines before and after the ERROR entry or message that is causing the strange behavior.
-- A copy of the panel message log (`panelMessages.log`) +/-100 lines before and after the time of the ERROR
+- A copy of the `plugin.log` - typically ~500 lines before and after the ERROR entry or message that is causing the strange behavior is more than enough to understand the problem.
+- A copy of the panel message log (`panelMessages.log`) - typically ~100 lines before and after the time of the ERROR will help isolate the messages and devices from your panel that caused the error.

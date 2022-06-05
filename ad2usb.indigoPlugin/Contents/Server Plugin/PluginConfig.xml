@@ -16,6 +16,8 @@
 		<List>
 			<Option value="IP">IP Network</Option>
 			<Option value="USB">Local USB Port</Option>
+			<!-- comment this option out -->
+			<Option value="messageFile">Panel Message File</Option>
 		</List>
 	</Field>
 
@@ -117,6 +119,10 @@
 		Does not support automatic configuration, or your ad2usb
 		is connected by USB. You will need to use the MonoGUI or a
 		Terminal session to configuration the board.</Label>
+	</Field>
+
+	<Field id="msgTestFail4" type="label" visibleBindingId="msgControl" visibleBindingValue="4">
+		<Label>Reading AlarmDecoder CONFIG considered success in Panel Playback Debug mode.</Label>
 	</Field>
 
 	<Field id="ad2usbKeyPadAddress" type="textfield"  visibleBindingId="msgControl" visibleBindingValue="1">

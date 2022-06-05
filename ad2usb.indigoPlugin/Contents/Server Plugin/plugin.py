@@ -255,70 +255,50 @@ class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 
-        # replaced with standard logger - remove these lines in 1.6.2
-        # self.log = logger(self)
-        # self.logName = pluginDisplayName
-        # self.pluginDisplayName = pluginDisplayName
-
         # assume some logger exists
         self.logger.debug(u"called with id:{}, name:{}, version:{}".format(pluginId, pluginDisplayName, pluginVersion))
         self.logger.debug(u"preferences:{}".format(pluginPrefs))
 
-        # set the python version first
+        # check and set the python version first
+        # TO DO: remove in 3.1
         try:
             self.pythonVersion = sys.version_info.major
         except Exception as err:
             self.logger.warning(u"Unable to determine Python version 2 or 3; assuming 2. Error:{}".format(str(err)))
             self.pythonVersion = 2
 
-        # call method to upgrade (if needed) and set preferences
+        # set the default debug playback file name and status
+        self.panelMessagePlaybackFilename = indigo.server.getLogsFolderPath(
+            pluginId=self.pluginId) + "/" + "panelMessagePlayback.txt"
+        self.isPlaybackCommunicationModeSet = False  # flag for settings in Configure
+
+        # call method to upgrade (if needed) and get preferences
+        # this method will set several properties of plugin based on prefs
         # need to do this before any logging to set logging levels
-        self.__setPreferences(pluginPrefs)
+        self.__upgradeAndGetPreferences(pluginPrefs)
 
         # set logging levels
         self.__setLoggingLevels()
 
-        # set the URL
+        # set the URL and AlarmDecoder Config: configSettings
+        # these are computed after we've fetched preferences and set plugin properties
         self.URL = ''
-        self.commType = ''
+        self.configSettings = {}
+
         try:
-            self.setURLFromConfig()
+            self.__setURLFromConfig()
 
         except Exception as err:
             self.logger.critical(
-                "URL is not set - Use the Config menu under the Plugins menu to configure your AlarmDecoder settings. Error:{}".format(str(err)))
-
-        # TO DO: consider moving ad2usb init to startup
-        # init the ad2usb object - this will attempt to read from the IP address set
-        self.ad2usb = ad2usb(self)
-
-        # if the ad2usb parameters were not read from the device (called by init)
-        # then read them from the Prefs. This is a the use case for USB AlarmDecoders
-        # to the device is not set we will set configSettings from Preferences
-        if not self.ad2usb.isAlarmDecoderConfigured:
-            # run the plugin's validation of config settings
-            (configStatus, tempValueDict, tempErrorDict) = self.setAlarmDecoderConfigFromPrefs(pluginPrefs)
-
-            # if that worked then we're all set with USB
-            if configStatus:
-                self.ad2usb.isAlarmDecoderConfigured = True
-            else:
-                self.logger.critical(
-                    u"Invalid AlarmDecoder configuration. Use the Config menu under the Plugins menu to configure your AlarmDecoder settings")
+                "URL is not set - Use the Plugins Config menu to configure your AlarmDecoder settings. Error:{}".format(str(err)))
+            self.logger.critical("Error:{}".format(str(err)))
 
         # if the preferences are set to log panel messages initialize the log file
         if self.isPanelLoggingEnabled is True:
             self.logger.info("Panel logging is enabled")
             self.__initPanelLogging()
 
-        # get the firmware version of the AlarmDecoder
-        if self.ad2usb.setAlarmDecoderVersionInfo():
-            self.logger.info("Successfully determined AlarmDecoder version")
-        else:
-            self.logger.critical("Unable to determined AlarmDecoder version")
-
         # init other properties
-        self.ad2usbRestart = False
         self.faultList = []
         self.lastZoneFaulted = 0
         self.zonesDict = {}
@@ -329,7 +309,6 @@ class Plugin(indigo.PluginBase):
         self.zone2zoneGroupDevDict = {}
         self.partition2address = {}
         self.triggerDict = {}
-        self.conn = ''
 
         self.pluginDisplayName = pluginDisplayName
         self.pluginPrefs = pluginPrefs
@@ -355,9 +334,12 @@ class Plugin(indigo.PluginBase):
         if self.ad2usbIsAdvanced:
             mode = 'Advanced'
 
-        # TO DO:
-        # get the firmware version and log it
-        # get the current configuration of the board and log it and change the preferences
+        # initilizae the ad2usb object with the plugin as a parameters
+        # ad2usb init will:
+        # opens communication
+        # gets the firmware version and log it
+        # get the current configuration of the board and log it and change the preferences in memory
+        self.ad2usb = ad2usb(self)
 
         self.logger.info(u"Plugin startup completed. Ready to open link to the ad2usb in {} mode.".format(mode))
 
@@ -440,52 +422,58 @@ class Plugin(indigo.PluginBase):
     # start/stop/restart Calls from Indigo
     ########################################################
     def runConcurrentThread(self):
-        self.logger.info(u"Called")
-
-        # TO DO: new logic:
-        implementNewLogic = False
-        if implementNewLogic:
-            try:
-                while True:
-                    # TO DO: ad2usb needs to self recover from errors
-                    newMessage = self.ad2usb.newReadMessage()
-
-                    if newMessage.needsProcessing:
-                        self.newProcessMessage(newMessage)
-
-                    self.sleep(0.1)
-
-            except self.StopThread:
-                pass    # Optionally catch the StopThread exception and do any needed cleanup.
-
-        # loop while not shutdown
-        #   if ad2usb comm not started
-        #       start it
-        #       read from ad2usb
-        #       update device based on message
-        #       sleep(??)
-
-        # OLD LOGIC:
         try:
-            self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType,
-                                  self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
-            self.logger.info(u"ad2usb communication closed")
+            self.logger.info(u"Called")
+
+            # when runConcurrentThread starts set the flag to start reading messages
+            self.ad2usb.stopReadingMessages = False
+            failedCounter = 1
+
+            while True and (failedCounter < 50):
+                # is communicaiton to AlarmDecoder OK?
+                if self.ad2usb.isCommStarted:
+                    self.logger.debug('AlarmDecoder comm is started, will attempt to read message...')
+
+                    # reset failed counter
+                    failedCounter = 0
+
+                    # call the old message Read functon which tests messages in new parser
+                    if self.ad2usb.stopReadingMessages:
+                        self.logger.warning('Reading of panel messages has been stopped...')
+                    else:
+                        # add code to ensure we have 1 keypad device before reading
+                        # errors are generated in the method if no keypad exists
+                        if self.getKeypadDevice() is not None:
+                            self.ad2usb.panelMsgRead(self.ad2usbIsAdvanced)
+
+                    # TO DO: FUTURE
+                    # newMessage = self.ad2usb.newReadMessage()
+                    # if newMessage.needsProcessing:
+                    #   self.newProcessMessage(newMessage)
+                else:
+                    # try to open the communication again with force reset
+                    self.logger.error(
+                        'Unable to communicate with AlarmDecoder ({} times) - attempting to reconnect...'.format(failedCounter))
+                    failedCounter += 1
+                    if not self.ad2usb.setSerialConnection(True):
+                        # next try to start comms again with VER and CONFIG
+                        self.logger.error('Unable to re-establish communications - resetting communications...')
+                        if not self.ad2usb.newStartComm():
+                            self.logger.error(
+                                'Unable to re-establish communications - check AlarmDecoder and Plugin Configure settings')
+
+                # built in sleep
+                self.sleep(2.2)
+
+            # failed counter > 50
+            self.logger.error('AlarmDecoder communication fail count exceeded 50 consecutvie times')
+
+        except self.StopThread:
+            self.ad2usb.stopReadingMessages = True
+            pass    # Optionally catch the StopThread exception and do any needed cleanup.
+
         except Exception as err:
-            self.logger.error(u"startComm error: {}".format(err))
-
-            # TO DO: not sure ad2usbRestart is used - remove?
-            if self.ad2usbRestart:
-                self.logger.info(u"Process completed, Restarting")
-            else:
-                self.logger.info(u"Process completed, Restarting")
-            return
-
-        # In case we are restarting after a config change, we should just start again
-        if self.ad2usbRestart:
-            self.ad2usbRestart = False
-            # self.log = logger(self)
-            self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType,
-                                  self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
+            self.logger.critical("Error reading and processing AlarmDecoder messages - error:{}".format(str(err)))
 
         self.logger.info(u"completed")
 
@@ -493,25 +481,28 @@ class Plugin(indigo.PluginBase):
     def stopConcurrentThread(self):
         self.logger.debug(u"Called")
 
-        self.ad2usb.stopComm()
+        # TO DO: rename this property to stopReadingMessages
+        self.ad2usb.shutdown = True
+        self.stopThread = True
 
         self.logger.info(u"completed")
 
     ########################################################
+    # TO DO: This method is never called
     def restart(self):
         self.logger.debug(u"Called")
+        self.logger.debug('do nothing')
 
         # TO DO: remove some of these log entry once startComm and stopComm has logging
-        self.logger.info(u"Stopping")
+        # self.logger.info(u"Stopping")
 
-        self.ad2usb.stopComm()
-        self.sleep(5)
+        # self.ad2usb.stopComm()
+        # self.sleep(5)
 
-        self.logger.info(u"Starting")
-        self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType,
-                              self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
+        # self.logger.info(u"Starting")
+        # self.ad2usb.startComm(self.ad2usbIsAdvanced, self.ad2usbCommType, self.ad2usbAddress, self.ad2usbPort, self.ad2usbSerialPort)
 
-        self.logger.info(u"completed")
+        # self.logger.info(u"completed")
 
     ########################################################
     # Action callbacks
@@ -678,46 +669,77 @@ class Plugin(indigo.PluginBase):
         # TO DO: refactor to readPreferences and restart if needed
         # Need to look at where loop resides to be interrupted
 
-        # TO DO: need to address all paramets in this code - including AlarmDecoder
+        # capture previous AlarmDecoder communication settings since we need to reset if these change
+        previousCommType = self.ad2usbCommType
+        previousAddress = self.ad2usbAddress
+        previousPort = self.ad2usbPort
+        previousSerialPort = self.ad2usbSerialPort
+
+        # TO DO: need to address all parameters in this code - including AlarmDecoder
         if UserCancelled is False:
-            if (self.ad2usbIsAdvanced != valuesDict['isAdvanced']) or (self.ad2usbCommType != valuesDict['ad2usbCommType']):
-                self.logger.info(u"The configuration changes require a plugin restart. Restarting now...")
 
-                # TO DO: replace this with self.restart()
-                thisPlugin = indigo.server.getPlugin("com.berkinet.ad2usb")
-                try:
-                    thisPlugin.restart(waitUntilDone=False)
-                except Exception:
-                    pass   # Hide any shutdown errors
+            self.logger.info(u"Updated configuration values:{}".format(valuesDict))
 
+            self.ad2usbCommType = valuesDict['ad2usbCommType']
+            if self.ad2usbCommType == 'IP':
+                self.ad2usbAddress = valuesDict["ad2usbAddress"]
+                self.ad2usbPort = valuesDict["ad2usbPort"]
+                self.isPlaybackCommunicationModeSet = False
+            elif self.ad2usbCommType == 'USB':
+                self.ad2usbSerialPort = valuesDict["ad2usbSerialPort"]
+                self.isPlaybackCommunicationModeSet = False
+            elif self.ad2usbCommType == 'messageFile':
+                self.isPlaybackCommunicationModeSet = True
             else:
-                self.logger.info(u"Updated configuration values: {}".format(valuesDict))
+                # TO DO: add some error logic here
+                pass
 
-                self.ad2usbCommType = valuesDict['ad2usbCommType']
+            self.ad2usbIsAdvanced = valuesDict["isAdvanced"]
+            self.logUnknownDevices = valuesDict["logUnknownDevices"]
+
+            # need to look at AlarmDecoder parameters
+
+            self.logArmingEvents = valuesDict["logArmingEvents"]
+            self.clearAllOnRestart = valuesDict["restartClear"]
+            self.numPartitions = int(valuesDict.get("panelPartitionCount", '1'))
+
+            self.ad2usbKeyPadAddress = valuesDict.get("ad2usbKeyPadAddress")
+
+            self.indigoLoggingLevel = valuesDict.get("indigoLoggingLevel", logging.INFO)
+            self.pluginLoggingLevel = valuesDict.get("pluginLoggingLevel", logging.INFO)
+            self.isPanelLoggingEnabled = valuesDict.get("isPanelLoggingEnabled", False)
+
+            # reset the logging levels
+            self.__setLoggingLevels()
+
+            # if the comms have changed then reset the serial connection
+            if (previousCommType != self.ad2usbCommType):
+                self.logger.info(u"AlarmDecoder comm type changed - opening new serial connection")
+                self.ad2usb.setSerialConnection(True)  # force a reset
+            else:
+                # if the type is IP but IP or port changed then force a reset
                 if self.ad2usbCommType == 'IP':
-                    self.ad2usbAddress = valuesDict["ad2usbAddress"]
-                    self.ad2usbPort = valuesDict["ad2usbPort"]
-                else:
-                    self.ad2usbSerialPort = valuesDict["ad2usbSerialPort"]
+                    if (previousAddress != self.ad2usbAddress) or (previousPort != self.ad2usbPort):
+                        self.ad2usb.setSerialConnection(True)  # force a reset
 
-                self.logUnknownDevices = valuesDict["logUnknownDevices"]
+                # if the type is USB but IP or port changed then force a reset
+                elif self.ad2usbCommType == 'USB':
+                    if previousSerialPort != self.ad2usbSerialPort:
+                        self.ad2usb.setSerialConnection(True)  # force a reset
 
-                self.ad2usbIsAdvanced = valuesDict["isAdvanced"]
-                self.logArmingEvents = valuesDict["logArmingEvents"]
-                self.clearAllOnRestart = valuesDict["restartClear"]
-                self.numPartitions = int(valuesDict.get("panelPartitionCount", '1'))
-
-                self.ad2usbKeyPadAddress = valuesDict.get("ad2usbKeyPadAddress")
-
-                self.indigoLoggingLevel = valuesDict.get("indigoLoggingLevel", logging.INFO)
-                self.pluginLoggingLevel = valuesDict.get("pluginLoggingLevel", logging.INFO)
-                self.isPanelLoggingEnabled = valuesDict.get("isPanelLoggingEnabled", False)
-
-                # reset the logging levels
-                self.__setLoggingLevels()
+            # now write the new config to the AlarmDecoder
+            configString = self.generateAlarmDecoderConfigString()
+            if self.ad2usb.writeAlarmDecoderConfig(configString):
+                self.logger.info(u"AlarmDecoder CONFIG has been updated to:{}".format(configString))
+            else:
+                self.logger.warning(u"AlarmDecoder CONFIG was not updated to:{}".format(configString))
 
             self.logger.info(u"Plugin preferences have been updated")
-            self.logger.debug(u"completed")
+
+        else:
+            self.logger.debug(u"user cancelled Config dialog")
+
+        self.logger.debug(u"completed")
 
     ########################################################
     # Validation methods
@@ -805,40 +827,26 @@ class Plugin(indigo.PluginBase):
         if valuesDict['msgControl'] == '1':
 
             # validate the prefs
-            (isPrefsValid, valuesDict, errorMsgDict) = self.setAlarmDecoderConfigFromPrefs(valuesDict)
+            (isPrefsValid, valuesDict, errorMsgDict) = self.setAlarmDecoderConfigDictFromPrefs(valuesDict)
 
             # if prefs are not valid return the error
             if not isPrefsValid:
+                self.logger.debug(u"prefs did not validate")
                 return (False, valuesDict, errorMsgDict)
-
-            # we need to write the AD2USB config if its an IP device
-            if valuesDict['ad2usbCommType'] == 'IP':
-                # if we can write the config
-                try:
-                    decoderConfigString = self.ad2usb.generateAlarmDecoderConfigString()
-                    if self.ad2usb.writeAlarmDecoderConfig(decoderConfigString):
-                        self.logger.info(u"ad2usb config updated to:{}".format(decoderConfigString))
-
-                except Exception as err:
-                    self.logger.error(u"error writing config to AlarmDecoder - error:{}".format(str(err)))
-                    errorMsgDict = indigo.Dict()
-                    errorMsgDict[u'ad2usbCommType'] = u"Unable to write configuration to AlarmDecoder"
-                    return (False, valuesDict, errorMsgDict)
-
-            # or just log info if its a USB device
-            # TO DO: see if settings changed
             else:
-                self.logger.info(u"Make sure your AlarmDecoder and Plugin config settings match")
-
-            # if we made it this far all checks are complete and user choices look good
-            # so return True (client will then close the dialog window).
-            self.logger.debug(u"completed")
-            return (True, valuesDict)
+                # if we made it this far all checks are complete and user choices look good
+                # so return True (client will then close the dialog window).
+                self.logger.debug(u"completed")
+                return (True, valuesDict)
 
         elif valuesDict['msgControl'] == '2':
             errorMsgDict = indigo.Dict()
             errorMsgDict[u'ad2usbCommType'] = u"IP Address or USB device Invalid"
             return (False, valuesDict, errorMsgDict)
+
+        elif valuesDict['msgControl'] == '4':
+            self.logger.debug(u"prefs validated for Playback mode")
+            return (True, valuesDict)
 
         else:
             self.logger.error(u"unexpected msgControl in Config Dialog:{}".format(valuesDict['msgControl']))
@@ -846,11 +854,14 @@ class Plugin(indigo.PluginBase):
             errorMsgDict[u'ad2usbCommType'] = u"msgControl error in dialog"
             return (False, valuesDict, errorMsgDict)
 
-    def setAlarmDecoderConfigFromPrefs(self, valuesDict):
+    def setAlarmDecoderConfigDictFromPrefs(self, valuesDict):
         """
-        Reads the parameter (dictionary) valuesDict which is expected to match the items defined in Indigo's
-        PluginConfig.xml. Returns three values: Success/Fail (boolean), valueDict (dictionary), and
-        errorMsgDict (Indigo dict). Success means all the AlarmDecoder settings are valid
+        Reads the parameter 'valuesDict' (dictionary) which is expected to match the items defined in
+        Indigo's PluginConfig.xml. It then sets the property 'configSettings' which is used to write
+        the config to the AlarmDecoder.
+
+        Returns three values: Success/Fail (boolean), valueDict (dictionary), and
+        errorMsgDict (Indigo dict). Success means all the AlarmDecoder settings are valid.
 
         **parameters:**
         valuesDict - the dictionary from Indigo's plugin preferences
@@ -874,7 +885,7 @@ class Plugin(indigo.PluginBase):
         # make sure keypad address is valid - 2 digits
         # TO DO: make this match [0-9]{2}
         if len(valuesDict['ad2usbKeyPadAddress']) > 0:
-            self.ad2usb.configSettings['ADDRESS'] = valuesDict['ad2usbKeyPadAddress']
+            self.configSettings['ADDRESS'] = valuesDict['ad2usbKeyPadAddress']
         else:
             errorMsgDict[u'ad2usbKeyPadAddress'] = u"A valid keypad address is required"
             return (False, valuesDict, errorMsgDict)
@@ -894,7 +905,7 @@ class Plugin(indigo.PluginBase):
                 # set the bit
                 decoderConfigEXP = self.setFlagInString(decoderConfigEXP, bitPosition, valuesDict[key])
 
-        self.ad2usb.configSettings['EXP'] = decoderConfigEXP
+        self.configSettings['EXP'] = decoderConfigEXP
 
         if zxCount > 2:
             errorMsgDict[u'ad2usbExpander_1'] = u"A maximum of 2 virtual zone expanders are allowed"
@@ -906,17 +917,17 @@ class Plugin(indigo.PluginBase):
         decoderConfigREL = self.setFlagInString(decoderConfigREL, 2, valuesDict['ad2usbVirtRelay_2'])
         decoderConfigREL = self.setFlagInString(decoderConfigREL, 3, valuesDict['ad2usbVirtRelay_3'])
         decoderConfigREL = self.setFlagInString(decoderConfigREL, 4, valuesDict['ad2usbVirtRelay_4'])
-        self.ad2usb.configSettings['REL'] = decoderConfigREL
+        self.configSettings['REL'] = decoderConfigREL
 
         # LRR
         decoderConfigLRR = 'N'
         decoderConfigLRR = self.setFlagInString(decoderConfigLRR, 1, valuesDict['ad2usbLrr'])
-        self.ad2usb.configSettings['LRR'] = decoderConfigLRR
+        self.configSettings['LRR'] = decoderConfigLRR
 
         # Deduplicate
         decoderConfigDEDUP = 'N'
         decoderConfigDEDUP = self.setFlagInString(decoderConfigDEDUP, 1, valuesDict['ad2usbDeduplicate'])
-        self.ad2usb.configSettings['DEDUPLICATE'] = decoderConfigDEDUP
+        self.configSettings['DEDUPLICATE'] = decoderConfigDEDUP
 
         # if we made it this far all checks are complete and user choices look good
         # so return True and the dictionaries
@@ -953,13 +964,19 @@ class Plugin(indigo.PluginBase):
     ########################################################
     def ConfigButtonPressed(self, valuesDict):
         """
-        reads the AlarmDecoder (IP only) config and updates the plugin Config dialog settings from the AlarmDecoder
+        reads the AlarmDecoder config from the AlarmDecoder and updates the plugin Config dialog settings from the AlarmDecoder
         """
         self.logger.debug(u"called with: {}".format(valuesDict))
 
-        # if its a USB type we cannot read the configuration
+        # if its a USB or playback file type we cannot read the configuration
         # simply return
+        if valuesDict['ad2usbCommType'] == 'messageFile':
+            self.logger.info(u'The Read ad2usb Config button is simulated in Playback Debug Mode')
+            valuesDict['msgControl'] = '4'
+            return valuesDict
+
         if valuesDict['ad2usbCommType'] == 'USB':
+            # TO DO: is this the case? or does it work in USB
             self.logger.warning(u'The Read ad2usb Config button only works for IP based AlarmDecoders')
             valuesDict['msgControl'] = '3'
             return valuesDict
@@ -973,39 +990,47 @@ class Plugin(indigo.PluginBase):
             self.setURL(valuesDict['ad2usbCommType'], valuesDict['ad2usbAddress'],
                         valuesDict['ad2usbPort'], valuesDict['ad2usbSerialPort'])
 
-            # then read the config - detailed logging is handled by the underlying methods
-            if self.ad2usb.readAlarmDecoderConfig():
+            # set a flag
+            self.hasAlarmDecoderVersionBeenRead = False
+
+            # send config - detailed logging is handled by the underlying methods
+            # TO DO: change this close other thread connection(?) and read here
+            self.ad2usb.sendAlarmDecoderConfigCommand()
+            time.sleep(1)  # TO DO: this is suboptimal
+
+            if self.hasAlarmDecoderVersionBeenRead:
                 valuesDict['msgControl'] = '1'  # success
+
+                # update the config dialog with new settings from AlarmDecoder
+                self.logger.debug(u"current config dictionary are:{}".format(valuesDict))
+
+                self.logger.debug(u"AlarmDecoder Config Settings are:{}".format(self.configSettings))
+
+                valuesDict['ad2usbKeyPadAddress'] = self.configSettings['ADDRESS']
+
+                valuesDict['ad2usbLrr'] = self.getFlagInString(self.configSettings['LRR'])
+
+                valuesDict['ad2usbExpander_1'] = self.getFlagInString(self.configSettings['EXP'], 1)
+                valuesDict['ad2usbExpander_2'] = self.getFlagInString(self.configSettings['EXP'], 2)
+                valuesDict['ad2usbExpander_3'] = self.getFlagInString(self.configSettings['EXP'], 3)
+                valuesDict['ad2usbExpander_4'] = self.getFlagInString(self.configSettings['EXP'], 4)
+                valuesDict['ad2usbExpander_5'] = self.getFlagInString(self.configSettings['EXP'], 5)
+
+                valuesDict['ad2usbVirtRelay_1'] = self.getFlagInString(self.configSettings['REL'], 1)
+                valuesDict['ad2usbVirtRelay_2'] = self.getFlagInString(self.configSettings['REL'], 2)
+                valuesDict['ad2usbVirtRelay_3'] = self.getFlagInString(self.configSettings['REL'], 3)
+                valuesDict['ad2usbVirtRelay_4'] = self.getFlagInString(self.configSettings['REL'], 4)
+
+                valuesDict['ad2usbDeduplicate'] = self.getFlagInString(self.configSettings['DEDUPLICATE'])
+
+                self.logger.debug(u"newly updated config dictionary is:{}".format(valuesDict))
+                self.logger.debug(u"completed with valid config")
+
+                return valuesDict
+
             else:
                 valuesDict['msgControl'] = '2'  # error
-
-            # update the config dialog with new settings from AlarmDecoder
-            self.logger.debug(u"current config dictionary are:{}".format(valuesDict))
-
-            # lets see the results
-            self.logger.debug(u"AlarmDecoder Config Settings are:{}".format(self.ad2usb.configSettings))
-
-            valuesDict['ad2usbKeyPadAddress'] = self.ad2usb.configSettings['ADDRESS']
-
-            valuesDict['ad2usbLrr'] = self.getFlagInString(self.ad2usb.configSettings['LRR'])
-
-            valuesDict['ad2usbExpander_1'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 1)
-            valuesDict['ad2usbExpander_2'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 2)
-            valuesDict['ad2usbExpander_3'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 3)
-            valuesDict['ad2usbExpander_4'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 4)
-            valuesDict['ad2usbExpander_5'] = self.getFlagInString(self.ad2usb.configSettings['EXP'], 5)
-
-            valuesDict['ad2usbVirtRelay_1'] = self.getFlagInString(self.ad2usb.configSettings['REL'], 1)
-            valuesDict['ad2usbVirtRelay_2'] = self.getFlagInString(self.ad2usb.configSettings['REL'], 2)
-            valuesDict['ad2usbVirtRelay_3'] = self.getFlagInString(self.ad2usb.configSettings['REL'], 3)
-            valuesDict['ad2usbVirtRelay_4'] = self.getFlagInString(self.ad2usb.configSettings['REL'], 4)
-
-            valuesDict['ad2usbDeduplicate'] = self.getFlagInString(self.ad2usb.configSettings['DEDUPLICATE'])
-
-            self.logger.debug(u"newly updated config dictionary is:{}".format(valuesDict))
-            self.logger.debug(u"completed with valid config")
-
-            return valuesDict
+                self.logger.warning(u"did not read config from AlarmDecoder configuraiton")
 
         except Exception as err:
             self.logger.error(u"unable to read AlarmDecoder Config:{}".format(str(err)))
@@ -1423,7 +1448,7 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"trigger:{} deleted".format(trigger.name))
         self.logger.debug(u"Completed")
 
-    def setURLFromConfig(self):
+    def __setURLFromConfig(self):
         """
         sets the object property "URL" (string) based on the plugin configuration dialog settings
         """
@@ -1436,7 +1461,7 @@ class Plugin(indigo.PluginBase):
         sets the object property "URL" (string) based on the parameters typically provided from the configuration dialog
 
         **parameters**:
-        commType -- either 'IP' or 'USB' (string)
+        commType -- either 'IP', 'USB', or 'messageFile' (string)
         ipAddress -- a valid hostname or IP Address (string)
         ipPort -- a valid port number (string)
         serialPort -- a valid USB port selection
@@ -1447,22 +1472,36 @@ class Plugin(indigo.PluginBase):
         # determine and set communication type and URL properties
         if commType == 'IP':
             self.URL = 'socket://' + ipAddress + ':' + ipPort
-            self.commType = commType
+            self.isPlaybackCommunicationModeSet = False
         elif commType == 'USB':
             self.URL = serialPort
-            self.commType = commType
+            self.isPlaybackCommunicationModeSet = False
+        elif commType == 'messageFile':
+            # seth the URL to the filename and set the flag to True
+            self.URL = self.panelMessagePlaybackFilename
+            self.isPlaybackCommunicationModeSet = True
         else:
             self.logger.debug(u"invalid commType:{}".format(commType))
             self.logger.debug(u"previous URL will remain:{}".format(self.URL))
-            raise Exception('unable to set URL - invalid parameter commType:{}'.format(commType))
+            raise Exception(
+                'Unable to establish communication to AlarmDecoder. Invalid connection type of:{}'.format(commType))
 
         self.logger.debug(u"ad2USB URL property set to:{}".format(self.URL))
 
-    ########################################
-    # def triggerUpdated(self, origDev, newDev):
-    #   self.log.log(4, u"<<-- entering triggerUpdated: %s" % origDev.name)
-    #   self.triggerStopProcessing(origDev)
-    #   self.triggerStartProcessing(newDev)
+    def generateAlarmDecoderConfigString(self):
+        """
+        reads the internal property 'configSettings' and returns a valid AlarmDecoder config string
+        ex: 'CADDRESS=20&DEDUPLICATE=Y\\r'
+        """
+        self.logger.debug(u'called')
+
+        configString = 'C'  # setting CONFIG always starts with C
+        for parameter, setting in self.configSettings.items():
+            configString = configString + parameter + '=' + setting + '&'
+
+        # strip the last '&' since it is not needed
+        self.logger.debug(u'CONFIG string is:{}'.format(configString[:-1]))
+        return configString[:-1]  # strip the trailing '&'
 
     def __initPanelLogging(self):
         try:
@@ -1507,7 +1546,7 @@ class Plugin(indigo.PluginBase):
             # turn off panel logging regardless of the preferences
             self.isPanelLoggingEnabled = False
 
-    def __setPreferences(self, pluginPrefs):
+    def __upgradeAndGetPreferences(self, pluginPrefs):
         # Preferences Use Cases handled by private method
         # 1. First time run - no setting - use defaults
         # 2. Upgrade - need to inspect older preferences if they exist and migrate
@@ -1557,25 +1596,33 @@ class Plugin(indigo.PluginBase):
         # END OF PREFERENCE MIGRATION logic
 
         # now set all the properties based on the preferences
-        # since log settings are migrated or set to a default don't need
+        # we need to have defaults in case this is a new setup and prefs don't exist
+        # since log settings are migrated or set to a default above don't need
         # to deal with those
-        self.ad2usbAddress = pluginPrefs.get("ad2usbAddress", '127.0.0.1')
-        self.ad2usbPort = pluginPrefs.get("ad2usbPort")
-        self.ad2usbSerialPort = pluginPrefs.get("ad2usbSerialPort")
-        self.ad2usbCommType = pluginPrefs.get('ad2usbCommType')
 
+        self.ad2usbCommType = pluginPrefs.get('ad2usbCommType', 'IP')
+
+        self.ad2usbAddress = pluginPrefs.get("ad2usbAddress", '127.0.0.1')
+        self.ad2usbPort = pluginPrefs.get("ad2usbPort", '10000')
+        self.ad2usbSerialPort = pluginPrefs.get("ad2usbSerialPort", '')
+
+        self.ad2usbIsAdvanced = pluginPrefs.get("isAdvanced", False)
         self.logUnknownDevices = pluginPrefs.get("logUnknownDevices", False)
 
-        self.ad2usbIsAdvanced = pluginPrefs.get("isAdvanced")
-        self.logArmingEvents = pluginPrefs.get("logArmingEvents")
-        self.clearAllOnRestart = pluginPrefs.get("restartClear", False)
+        self.logArmingEvents = pluginPrefs.get("logArmingEvents", True)
+        self.clearAllOnRestart = pluginPrefs.get("restartClear", True)
         self.numPartitions = int(pluginPrefs.get("panelPartitionCount", '1'))
 
-        self.ad2usbKeyPadAddress = pluginPrefs.get("ad2usbKeyPadAddress")
+        # TO DO: this is part of AlarmDecoder CONFIG - do we need it here ?
+        self.ad2usbKeyPadAddress = pluginPrefs.get("ad2usbKeyPadAddress", '18')
 
         self.indigoLoggingLevel = pluginPrefs.get("indigoLoggingLevel", "INFO")  # 20 = INFO
         self.pluginLoggingLevel = pluginPrefs.get("pluginLoggingLevel", "INFO")  # 20 = INFO
         self.isPanelLoggingEnabled = pluginPrefs.get("isPanelLoggingEnabled", False)
+
+        # computed settings
+        if self.ad2usbCommType == 'messageFile':
+            self.isPlaybackCommunicationModeSet = True
 
         # new settings
 
@@ -1676,3 +1723,37 @@ class Plugin(indigo.PluginBase):
 
         # we should never get here but just in case
         return string
+
+    def getKeypadDevice(self):
+        """
+        Checks if at least one AlarmDecoder 'ad2usb Keypad' Indigo device exists and returns
+        the Indigo device object. If no keypad devices exists; None is returned.
+        """
+        try:
+            allKeypadDevices = []
+
+            # all devices
+            for device in indigo.devices.iter("self"):
+                # just the Keypad Devices - should only be 1
+                # but log an error if there are more than 1
+                if device.deviceTypeId == 'ad2usbInterface':
+                    allKeypadDevices.append(device)
+
+            if len(allKeypadDevices) == 0:
+                self.logger.error("No Indigo ad2usb Keypad device found; exactly one (1) should be defined")
+                return None
+
+            elif len(allKeypadDevices) == 1:
+                self.logger.debug("exactly one Indigo ad2usb Keypad device found")
+                return allKeypadDevices[0]
+
+            else:
+                self.logger.warning("Multiple Indigo ad2usb Keypad devices found; exactly only (1) should be defined")
+                self.logger.info("Using ad2usb Keypad:{}".allKeypadDevices[0].name)
+                return allKeypadDevices[0]
+
+        except Exception as err:
+            self.logger.error(u"error retrieving ad2usb Keypad device from Indigo, msg:{}".format(str(err)))
+
+            # return None
+            return None
