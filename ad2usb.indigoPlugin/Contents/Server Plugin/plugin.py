@@ -25,231 +25,11 @@ k_CLEAR = 'Clear'  # key: Clear, value: Clear - should convert key to 'clear'
 k_FAULT = 'faulted'  # key: faulted, value: Fault - should convert to 'fault'
 k_ERROR = 'error'  # key: error, value: Error - also referred to as Trouble
 
-########################################################
-# Support functions for building basic and advanced data structures
-########################################################
-# panel keypad devices
-
-
-def addPanelDev(self, dev, mode, ad2usbKeyPadAddress):
-    self.logger.debug(u"Called")
-    self.logger.debug(u"received device:{}".format(dev))
-
-    try:
-        alarmPartition = dev.pluginProps['panelPartitionNumber']
-    except:
-        alarmPartition = "1"
-        self.logger.error(u"partition number not found for keypad device:{} - assigning partition 1".format(dev.name))
-        self.logger.error(u"please reconfigure the keypad device to resolve this problem")
-
-    try:
-        alarmPartitionAddress = dev.pluginProps['panelKeypadAddress']
-    except:
-        alarmPartitionAddress = ad2usbKeyPadAddress
-        # TO DO: review this log
-        self.logger.error(
-            u"alarm panel keypad address not found for keypad device:{} - assigning address:{}.".format(alarmPartition, dev.name))
-        self.logger.error(u"reconfigure the keypad device to resolve this problem")
-
-    self.panelsDict[alarmPartitionAddress] = {'devId': dev.id, 'name': dev.name, 'partition': alarmPartition}
-    self.logger.debug(u"added address to partition record:{}".format(self.panelsDict[alarmPartitionAddress]))
-
-    # If advanced mode, add a reverse lookup: partition to keypad address
-    if mode == 'advanced':
-        self.partition2address[alarmPartition] = {'devId': dev.id, 'name': dev.name, 'address': alarmPartitionAddress}
-        self.logger.debug(u"added partition to address record:{}".format(self.partition2address[alarmPartition]))
-
-    self.logger.debug(u"completed")
-
-
-########################################################
-# Zone Group devices
-def addGroupDev(self, dev):
-    self.logger.debug(u"Called")
-    self.logger.debug(u"received device:{}".format(dev))
-
-    zoneDeviceList = dev.pluginProps[u'zoneDeviceList']
-    zoneLogChanges = dev.pluginProps[u'zoneLogChanges']
-    self.logger.debug(u"Received: zoneDevceList:{}, zoneLogChanges:{}".format(zoneDeviceList, zoneLogChanges))
-
-    # TO DO:
-    # restructure?
-    # zoneGroupDevices = { name: { 'zone': state, ... }, name: {..} }
-    # zoneGroupForZone = { 'zone': groups: [group1, group2, ... ], 'zone' }
-
-    try:
-        for zone in zoneDeviceList:
-            self.logger.debug(u"...found:{}".format(zone))
-            # Create a zone number to zoneGroup device table
-            if zone in self.zone2zoneGroupDevDict:
-                self.logger.debug(u"IF        got here for:{}, {}".format(zone, self.zone2zoneGroupDevDict[zone]))
-                self.zone2zoneGroupDevDict[zone].append(int(dev.id))
-            else:
-                self.logger.debug(u"%IF NOT       got here for:{}".format(zone))
-                self.zone2zoneGroupDevDict[zone] = []
-                self.zone2zoneGroupDevDict[zone].append(int(dev.id))
-
-            # Create a zoneGroup device to zone state table
-            if dev.id in self.zoneGroup2zoneDict:
-                self.zoneGroup2zoneDict[dev.id][zone] = 'Clear'
-            else:
-                self.zoneGroup2zoneDict[dev.id] = {}
-                self.zoneGroup2zoneDict[dev.id][zone] = 'Clear'
-
-        self.logger.debug(u"...returned zone2zoneGroupDevDict:{}".format(self.zone2zoneGroupDevDict))
-        self.logger.debug(u"...returned zoneGroup2zoneDict:{}".format(self.zoneGroup2zoneDict))
-    except Exception as err:
-        self.logger.error(u"error adding group zone device:{}".format(str(err)))
-
-
-########################################################
-# Build/Modify device property dictionaries
-########################################################
-# for basic mode
-def basicBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
-    self.logger.debug(u"Called for function:{}".format(funct))
-    self.logger.debug(u"received device:{}".format(dev))
-
-    # This block is for adding new zones or keypads
-    if funct == 'add':
-        if dev.deviceTypeId == 'alarmZone' or dev.deviceTypeId == 'alarmZoneVirtual':
-            zoneDevId = dev.id
-            zoneName = dev.name
-            # Make an excepton for pseudo zones, etc. that aren't supported in basic mode
-            # If the panel can't report it, neither can we.
-            try:
-                zoneNumber = int(dev.pluginProps['zoneNumber'])
-            except:
-                zoneNumber = 0
-
-            zoneState = ""   # dev.states['zoneState']
-            zoneLogChanges = dev.pluginProps['zoneLogChanges']
-            zoneIndex = zoneNumber
-            self.zonesDict[zoneIndex] = {'devId': zoneDevId, 'number': zoneNumber,
-                                         'logChanges': zoneLogChanges, 'name': zoneName, 'state': zoneState}
-            self.logger.debug(u"added record for device:{}, zone:{}".format(zoneName, zoneNumber))
-            self.logger.debug(u"wrote record:{}".format(self.zonesDict[zoneIndex]))
-
-        elif dev.deviceTypeId == 'ad2usbInterface':
-            addPanelDev(self, dev, 'basic', ad2usbKeyPadAddress)
-
-        elif dev.deviceTypeId == 'zoneGroup':
-            addGroupDev(self, dev)
-
-    # This block is for deleting zones
-    elif funct == 'del':
-        if dev.deviceTypeId == 'alarmZone':
-            zoneNumber = int(dev.pluginProps['zoneNumber'])
-            zoneName = dev.name
-
-            del self.zonesDict[zoneNumber]
-            self.logger.debug(u"deleted entry for zone number:{}, zone name:{}".format(zoneNumber, zoneName))
-
-    self.logger.debug(u"completed")
-
-
-# For advanced mode
-def advancedBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
-    self.logger.debug(u"Called for device:{}, type:{}, function:{}".format(dev.name, dev.deviceTypeId, funct))
-    self.logger.debug(u"received device:{}".format(dev))
-
-    # This block is for adding new zones or keypads
-    if funct == 'add':
-        if dev.deviceTypeId == 'alarmZone' or dev.deviceTypeId == 'alarmZoneVirtual':
-            zoneType = dev.pluginProps['ad2usbZoneType']
-            zoneType = zoneType[-3:]
-            zoneDevId = dev.id
-            zoneName = dev.name
-            zoneNumber = dev.pluginProps['zoneNumber']
-            zoneState = ""   # dev.states['zoneState']
-            zoneLogChanges = dev.pluginProps['zoneLogChanges']
-
-            # BUG: logSupervision only exists on alarmZone devices in Devices.xml
-            # it doesn't appear this property is ever used anyway
-            if dev.deviceTypeId == 'alarmZone':
-                zoneLogSupervision = dev.pluginProps['logSupervision']
-            else:
-                zoneLogSupervision = "1"  # TO DO: remove this
-
-            zonePartition = dev.pluginProps['zonePartitionNumber']
-
-            if zoneType == 'REL':
-                zoneBoard = dev.pluginProps['ad2usbZoneTypeREL_Board']
-                zoneDevice = dev.pluginProps['ad2usbZoneTypeREL_Device']
-                if len(zoneBoard) == 1:
-                    zoneBoard = '0' + zoneBoard
-                if len(zoneDevice) == 1:
-                    zoneDevice = '0' + zoneDevice
-                zoneIndex = zoneBoard + ',' + zoneDevice
-            elif zoneType == 'EXP':
-                zoneBoard = dev.pluginProps['ad2usbZoneTypeEXP_Board']
-                zoneDevice = dev.pluginProps['ad2usbZoneTypeEXP_Device']
-                if len(zoneBoard) == 1:
-                    zoneBoard = '0' + zoneBoard
-                if len(zoneDevice) == 1:
-                    zoneDevice = '0' + zoneDevice
-                zoneIndex = zoneBoard + ',' + zoneDevice
-            elif zoneType == 'RFX':
-                zoneBoard = dev.pluginProps['ad2usbZoneTypeRFX_Id']
-                zoneDevice = dev.pluginProps['ad2usbZoneTypeRFX_Loop']
-                zoneIndex = zoneBoard
-                if len(zoneDevice) == 1:
-                    zoneDevice = '0' + zoneDevice
-
-            self.advZonesDict[zoneIndex] = {'type': zoneType, 'board': zoneBoard, 'device': zoneDevice, 'devId': zoneDevId, 'number': zoneNumber,
-                                            'logChanges': zoneLogChanges, 'logSupervision': zoneLogSupervision, 'name': zoneName, 'state': zoneState, 'partition': zonePartition}
-            self.logger.debug(u"added record for device:{}, zone:{}".format(zoneName, zoneNumber))
-            self.logger.debug(u"wrote record:{}".format(self.advZonesDict[zoneIndex]))
-
-        elif dev.deviceTypeId == 'ad2usbInterface':
-            addPanelDev(self, dev, 'advanced', ad2usbKeyPadAddress)
-
-        elif dev.deviceTypeId == 'zoneGroup':
-            addGroupDev(self, dev)
-
-    # This block is for deleting zones
-    elif funct == 'del':
-        if dev.deviceTypeId == 'alarmZone':
-            zoneType = dev.pluginProps['ad2usbZoneType']
-            zoneType = zoneType[-3:]
-            zoneDevId = dev.id
-            zoneName = dev.name
-            zoneNumber = dev.pluginProps['zoneNumber']
-            zoneState = ""
-
-            if zoneType == 'REL':
-                zoneBoard = dev.pluginProps['ad2usbZoneTypeREL_Board']
-                zoneDevice = dev.pluginProps['ad2usbZoneTypeREL_Device']
-                if len(zoneBoard) == 1:
-                    zoneBoard = '0' + zoneBoard
-                if len(zoneDevice) == 1:
-                    zoneDevice = '0' + zoneDevice
-                zoneIndex = zoneBoard + ',' + zoneDevice
-            elif zoneType == 'EXP':
-                zoneBoard = dev.pluginProps['ad2usbZoneTypeEXP_Board']
-                zoneDevice = dev.pluginProps['ad2usbZoneTypeEXP_Device']
-                if len(zoneBoard) == 1:
-                    zoneBoard = '0' + zoneBoard
-                if len(zoneDevice) == 1:
-                    zoneDevice = '0' + zoneDevice
-                zoneIndex = zoneBoard + ',' + zoneDevice
-            elif zoneType == 'RFX':
-                zoneBoard = dev.pluginProps['ad2usbZoneTypeRFX_Id']
-                zoneDevice = dev.pluginProps['ad2usbZoneTypeRFX_Loop']
-                zoneIndex = zoneBoard
-                if len(zoneDevice) == 1:
-                    zoneDevice = '0' + zoneDevice
-
-            del self.advZonesDict[zoneIndex]
-            self.logger.debug(u"deleted entry for zone number:{}, name:{}, type:{}".format(
-                zoneNumber, zoneName, zoneType))
-
-    self.logger.debug(u"completed")
-
-
 ################################################################################
 # Now, Let's get started...
 ################################################################################
+
+
 class Plugin(indigo.PluginBase):
     ########################################
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
@@ -359,10 +139,10 @@ class Plugin(indigo.PluginBase):
             dev.name, dev.id, dev.deviceTypeId, self.clearAllOnRestart))
 
         # Always load the basic Dict because we need a zone number to device lookup in advanced mode too.
-        basicBuildDevDict(self, dev, 'add', self.ad2usbKeyPadAddress)
+        self.basicBuildDevDict(dev, 'add', self.ad2usbKeyPadAddress)
 
         if self.ad2usbIsAdvanced:
-            advancedBuildDevDict(self, dev, 'add', self.ad2usbKeyPadAddress)
+            self.advancedBuildDevDict(dev, 'add', self.ad2usbKeyPadAddress)
 
         # migrate state from old displayState to zoneState
         if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'zoneGroup')
@@ -406,13 +186,13 @@ class Plugin(indigo.PluginBase):
 
         # We always load the basic Dict because we need a zone number to device lookup in advanced mode too.
         try:
-            basicBuildDevDict(self, dev, 'del', self.ad2usbKeyPadAddress)
+            self.basicBuildDevDict(dev, 'del', self.ad2usbKeyPadAddress)
         except Exception as err:
             self.logger.error(u"basicBuildDevDict error: {}".format(err))
 
         if self.ad2usbIsAdvanced:
             try:
-                advancedBuildDevDict(self, dev, 'del', self.ad2usbKeyPadAddress)
+                self.advancedBuildDevDict(dev, 'del', self.ad2usbKeyPadAddress)
             except Exception as err:
                 self.logger.error(u"advancedBuildDevDict error: {}".format(err))
 
@@ -452,9 +232,14 @@ class Plugin(indigo.PluginBase):
                     #   self.newProcessMessage(newMessage)
                 else:
                     # try to open the communication again with force reset
-                    self.logger.error(
-                        'Unable to communicate with AlarmDecoder ({} times) - attempting to reconnect...'.format(failedCounter))
+                    if self.isPlaybackCommunicationModeSet and self.hasPlaybackFileBeenRead:
+                        self.logger.warning("Finished reading panel playback file")
+                    else:
+                        self.logger.error(
+                            'Unable to communicate with AlarmDecoder ({} times) - attempting to reconnect...'.format(failedCounter))
+
                     failedCounter += 1
+
                     if not self.ad2usb.setSerialConnection(True):
                         # next try to start comms again with VER and CONFIG
                         self.logger.error('Unable to re-establish communications - resetting communications...')
@@ -1757,3 +1542,232 @@ class Plugin(indigo.PluginBase):
 
             # return None
             return None
+
+    def basicBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
+        """
+        Build/Modify device property dictionaries for basic mode. Called on startup and
+        shutdown this method build an internal cache 'zoneDict'.
+        """
+        self.logger.debug(u"Called for function:{}".format(funct))
+        self.logger.debug(u"received device:{}".format(dev))
+
+        # This block is for adding new zones or keypads
+        if funct == 'add':
+            if dev.deviceTypeId == 'alarmZone' or dev.deviceTypeId == 'alarmZoneVirtual':
+                zoneDevId = dev.id
+                zoneName = dev.name
+                # Make an excepton for pseudo zones, etc. that aren't supported in basic mode
+                # If the panel can't report it, neither can we.
+                try:
+                    zoneNumber = int(dev.pluginProps['zoneNumber'])
+                except:
+                    zoneNumber = 0
+
+                zoneState = ""   # dev.states['zoneState']
+                zoneLogChanges = dev.pluginProps['zoneLogChanges']
+                zoneIndex = zoneNumber
+                self.zonesDict[zoneIndex] = {'devId': zoneDevId, 'number': zoneNumber,
+                                             'logChanges': zoneLogChanges, 'name': zoneName, 'state': zoneState}
+                self.logger.debug(u"added record for device:{}, zone:{}".format(zoneName, zoneNumber))
+                self.logger.debug(u"wrote record:{}".format(self.zonesDict[zoneIndex]))
+
+            elif dev.deviceTypeId == 'ad2usbInterface':
+                self.addPanelDev(dev, 'basic', ad2usbKeyPadAddress)
+
+            elif dev.deviceTypeId == 'zoneGroup':
+                self.addGroupDev(dev)
+
+        # This block is for deleting zones
+        elif funct == 'del':
+            if dev.deviceTypeId == 'alarmZone':
+                zoneNumber = int(dev.pluginProps['zoneNumber'])
+                zoneName = dev.name
+
+                del self.zonesDict[zoneNumber]
+                self.logger.debug(u"deleted entry for zone number:{}, zone name:{}".format(zoneNumber, zoneName))
+
+        self.logger.debug(u"completed")
+
+    # For advanced mode
+    def advancedBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
+        """
+        Build/Modify device property dictionaries for advanced mode. Called on startup and
+        shutdown this method build an internal cache 'advZonesDict'.
+        """
+        self.logger.debug(u"Called for device:{}, type:{}, function:{}".format(dev.name, dev.deviceTypeId, funct))
+        self.logger.debug(u"received device:{}".format(dev))
+
+        # This block is for adding new zones or keypads
+        if funct == 'add':
+            if dev.deviceTypeId == 'alarmZone' or dev.deviceTypeId == 'alarmZoneVirtual':
+                zoneType = dev.pluginProps['ad2usbZoneType']
+                zoneType = zoneType[-3:]
+                zoneDevId = dev.id
+                zoneName = dev.name
+                zoneNumber = dev.pluginProps['zoneNumber']
+                zoneState = ""   # dev.states['zoneState']
+                zoneLogChanges = dev.pluginProps['zoneLogChanges']
+
+                # BUG: logSupervision only exists on alarmZone devices in Devices.xml
+                # it doesn't appear this property is ever used anyway
+                if dev.deviceTypeId == 'alarmZone':
+                    zoneLogSupervision = dev.pluginProps['logSupervision']
+                else:
+                    zoneLogSupervision = "1"  # TO DO: remove this
+
+                zonePartition = dev.pluginProps['zonePartitionNumber']
+
+                if zoneType == 'REL':
+                    zoneBoard = dev.pluginProps['ad2usbZoneTypeREL_Board']
+                    zoneDevice = dev.pluginProps['ad2usbZoneTypeREL_Device']
+                    if len(zoneBoard) == 1:
+                        zoneBoard = '0' + zoneBoard
+                    if len(zoneDevice) == 1:
+                        zoneDevice = '0' + zoneDevice
+                    zoneIndex = zoneBoard + ',' + zoneDevice
+                elif zoneType == 'EXP':
+                    zoneBoard = dev.pluginProps['ad2usbZoneTypeEXP_Board']
+                    zoneDevice = dev.pluginProps['ad2usbZoneTypeEXP_Device']
+                    if len(zoneBoard) == 1:
+                        zoneBoard = '0' + zoneBoard
+                    if len(zoneDevice) == 1:
+                        zoneDevice = '0' + zoneDevice
+                    zoneIndex = zoneBoard + ',' + zoneDevice
+                elif zoneType == 'RFX':
+                    zoneBoard = dev.pluginProps['ad2usbZoneTypeRFX_Id']
+                    zoneDevice = dev.pluginProps['ad2usbZoneTypeRFX_Loop']
+                    zoneIndex = zoneBoard
+                    if len(zoneDevice) == 1:
+                        zoneDevice = '0' + zoneDevice
+
+                self.advZonesDict[zoneIndex] = {'type': zoneType, 'board': zoneBoard, 'device': zoneDevice, 'devId': zoneDevId, 'number': zoneNumber,
+                                                'logChanges': zoneLogChanges, 'logSupervision': zoneLogSupervision, 'name': zoneName, 'state': zoneState, 'partition': zonePartition}
+                self.logger.debug(u"added record for device:{}, zone:{}".format(zoneName, zoneNumber))
+                self.logger.debug(u"wrote record:{}".format(self.advZonesDict[zoneIndex]))
+
+            elif dev.deviceTypeId == 'ad2usbInterface':
+                self.addPanelDev(dev, 'advanced', ad2usbKeyPadAddress)
+
+            elif dev.deviceTypeId == 'zoneGroup':
+                self.addGroupDev(dev)
+
+        # This block is for deleting zones
+        elif funct == 'del':
+            if dev.deviceTypeId == 'alarmZone':
+                zoneType = dev.pluginProps['ad2usbZoneType']
+                zoneType = zoneType[-3:]
+                zoneDevId = dev.id
+                zoneName = dev.name
+                zoneNumber = dev.pluginProps['zoneNumber']
+                zoneState = ""
+
+                if zoneType == 'REL':
+                    zoneBoard = dev.pluginProps['ad2usbZoneTypeREL_Board']
+                    zoneDevice = dev.pluginProps['ad2usbZoneTypeREL_Device']
+                    if len(zoneBoard) == 1:
+                        zoneBoard = '0' + zoneBoard
+                    if len(zoneDevice) == 1:
+                        zoneDevice = '0' + zoneDevice
+                    zoneIndex = zoneBoard + ',' + zoneDevice
+                elif zoneType == 'EXP':
+                    zoneBoard = dev.pluginProps['ad2usbZoneTypeEXP_Board']
+                    zoneDevice = dev.pluginProps['ad2usbZoneTypeEXP_Device']
+                    if len(zoneBoard) == 1:
+                        zoneBoard = '0' + zoneBoard
+                    if len(zoneDevice) == 1:
+                        zoneDevice = '0' + zoneDevice
+                    zoneIndex = zoneBoard + ',' + zoneDevice
+                elif zoneType == 'RFX':
+                    zoneBoard = dev.pluginProps['ad2usbZoneTypeRFX_Id']
+                    zoneDevice = dev.pluginProps['ad2usbZoneTypeRFX_Loop']
+                    zoneIndex = zoneBoard
+                    if len(zoneDevice) == 1:
+                        zoneDevice = '0' + zoneDevice
+
+                del self.advZonesDict[zoneIndex]
+                self.logger.debug(u"deleted entry for zone number:{}, name:{}, type:{}".format(
+                    zoneNumber, zoneName, zoneType))
+
+        self.logger.debug(u"completed")
+
+    def addPanelDev(self, dev, mode, ad2usbKeyPadAddress):
+        """
+        Maintain panel keypad devices cache data. Data is stored in 'panelsDict' property for
+        basic mode; 'partition2address' for advanced mode.
+        """
+        self.logger.debug(u"Called")
+        self.logger.debug(u"received device:{}".format(dev))
+
+        try:
+            alarmPartition = dev.pluginProps['panelPartitionNumber']
+        except:
+            alarmPartition = "1"
+            self.logger.error(
+                u"partition number not found for keypad device:{} - assigning partition 1".format(dev.name))
+            self.logger.error(u"please reconfigure the keypad device to resolve this problem")
+
+        try:
+            alarmPartitionAddress = dev.pluginProps['panelKeypadAddress']
+        except:
+            alarmPartitionAddress = ad2usbKeyPadAddress
+            # TO DO: review this log
+            self.logger.error(
+                u"alarm panel keypad address not found for keypad device:{} - assigning address:{}.".format(alarmPartition, dev.name))
+            self.logger.error(u"reconfigure the keypad device to resolve this problem")
+
+        self.panelsDict[alarmPartitionAddress] = {'devId': dev.id, 'name': dev.name, 'partition': alarmPartition}
+        self.logger.debug(u"added address to partition record:{}".format(self.panelsDict[alarmPartitionAddress]))
+
+        # If advanced mode, add a reverse lookup: partition to keypad address
+        if mode == 'advanced':
+            self.partition2address[alarmPartition] = {'devId': dev.id,
+                                                      'name': dev.name, 'address': alarmPartitionAddress}
+            self.logger.debug(u"added partition to address record:{}".format(self.partition2address[alarmPartition]))
+
+        self.logger.debug(u"completed")
+
+    # TO DO: I should be able to remove this now - replaced by getZoneNumbersForZoneGroup()
+    # and getAllZoneGroupsForZone()
+    def addGroupDev(self, dev):
+        """
+        Maintain zone group device cache data. Data is stored in 'zone2zoneGroupDevDict' property for
+        map of zones -> groups and 'zoneGroup2zoneDict' for zone group -> zones.
+
+        **parameters:**
+        dev - Indigo device object for a Zone Group device
+        """
+        self.logger.debug(u"Called")
+        self.logger.debug(u"received device:{}".format(dev))
+
+        zoneDeviceList = dev.pluginProps[u'zoneDeviceList']
+        zoneLogChanges = dev.pluginProps[u'zoneLogChanges']
+        self.logger.debug(u"Received: zoneDevceList:{}, zoneLogChanges:{}".format(zoneDeviceList, zoneLogChanges))
+
+        # TO DO:
+        # restructure?
+        # zoneGroupDevices = { name: { 'zone': state, ... }, name: {..} }
+        # zoneGroupForZone = { 'zone': groups: [group1, group2, ... ], 'zone' }
+
+        try:
+            for zone in zoneDeviceList:
+                self.logger.debug(u"...found:{}".format(zone))
+                # Create a zone number to zoneGroup device table
+                if zone in self.zone2zoneGroupDevDict:
+                    self.logger.debug(u"IF        got here for:{}, {}".format(zone, self.zone2zoneGroupDevDict[zone]))
+                    self.zone2zoneGroupDevDict[zone].append(int(dev.id))
+                else:
+                    self.logger.debug(u"%IF NOT       got here for:{}".format(zone))
+                    self.zone2zoneGroupDevDict[zone] = []
+                    self.zone2zoneGroupDevDict[zone].append(int(dev.id))
+
+                # Create a zoneGroup device to zone state table
+                if dev.id in self.zoneGroup2zoneDict:
+                    self.zoneGroup2zoneDict[dev.id][zone] = 'Clear'
+                else:
+                    self.zoneGroup2zoneDict[dev.id] = {}
+                    self.zoneGroup2zoneDict[dev.id][zone] = 'Clear'
+
+            self.logger.debug(u"...returned zone2zoneGroupDevDict:{}".format(self.zone2zoneGroupDevDict))
+            self.logger.debug(u"...returned zoneGroup2zoneDict:{}".format(self.zoneGroup2zoneDict))
+        except Exception as err:
+            self.logger.error(u"error adding group zone device:{}".format(str(err)))

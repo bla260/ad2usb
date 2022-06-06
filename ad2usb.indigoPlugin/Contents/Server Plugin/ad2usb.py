@@ -922,7 +922,8 @@ class ad2usb(object):
 
     ########################################
     # Get things rolling
-    def startComm(self, ad2usbIsAdvanced, ad2usbCommType, ad2usbAddress, ad2usbPort, ad2usbSerialPort):
+    # TO DO: remove this - not called
+    def old_startComm(self, ad2usbIsAdvanced, ad2usbCommType, ad2usbAddress, ad2usbPort, ad2usbSerialPort):
         self.logger.debug(u"called")
         self.logger.debug(u"isAdvanced:{}, commType:{}, address:{}, port:{}, serialPort:{}".format(
             ad2usbIsAdvanced, ad2usbCommType, ad2usbAddress, ad2usbPort, ad2usbSerialPort))
@@ -954,7 +955,7 @@ class ad2usb(object):
                     self.logger.info(u"returned from panelMessageRead")
 
                 except Exception as err:
-                    self.logger.error(u"Error in startComm shutdown loop - message:{}".format(str(err)))
+                    self.logger.error(u"Error in old_startComm shutdown loop - message:{}".format(str(err)))
 
             else:
                 self.logger.error(u"Error setting serial connection...")
@@ -995,20 +996,16 @@ class ad2usb(object):
         self.logger.debug(u"called")
 
         try:
-            # if comm is set to panel playback we just return
+            # this section for panel playback
+            # if comm is set to panel playback setSerial and use that value
             if self.plugin.isPlaybackCommunicationModeSet:
                 self.logger.debug(u"Panel Message Playback Set - communication started")
-                if self.__doesPlaybackFileExist():
+                if self.setSerialConnection():
                     return True
                 else:
-                    self.logger.error(u"Panel Message Playback file does not exist:{}".format(
-                        self.plugin.panelMessagePlaybackFilename))
                     return False
 
-                if self.hasPlaybackFileBeenRead:
-                    self.logger.info("Panel Message Playback file has been read")
-                    return False
-
+            # this section and below for IP and USB
             # otherwise lets track if we successfully read the VER and CONFIG messages
             verReadSuccess = False
             configReadSuccess = False
@@ -1088,11 +1085,10 @@ class ad2usb(object):
         This method is called by the plugin shutdown. It will close serial connection and
         set the 'isCommStarted' property to False
         """
-        self.logger.debug(u"called")
-        self.stopReadingMessages = True
-
         try:
             # set the flag first
+            self.logger.debug(u"called")
+            self.stopReadingMessages = True
             self.isCommStarted = False
 
             if self.serialConnection is not None:
@@ -1162,7 +1158,6 @@ class ad2usb(object):
 
         Returns True for success; False if send message fails
         """
-
         try:
             self.logger.debug(u'called')
 
@@ -1487,14 +1482,15 @@ class ad2usb(object):
 
                 # set the comm started flag to false unless the file exists
                 # and we have not already read the entire file
-                self.isCommStarted = False
                 if self.__doesPlaybackFileExist():
                     if self.hasPlaybackFileBeenRead:
+                        self.isCommStarted = False
                         return True
                     else:
                         self.isCommStarted = True
                         return True
                 else:
+                    self.isCommStarted = False
                     return False
 
             # if we're not forcing a reset (default is false)
