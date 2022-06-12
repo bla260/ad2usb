@@ -566,8 +566,8 @@ class ad2usb(object):
                             pass
 
                     else:
-                        self.logger.warning("Unable able to parse message:{}".format(
-                            newMessageObject.invalidReason))
+                        self.logger.warning("Unable to parse:{} - message:{}".format(
+                            newMessageObject.invalidReason, newMessageObject.messageString))
 
                     #
                     #

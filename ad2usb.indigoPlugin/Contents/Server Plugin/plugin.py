@@ -311,6 +311,8 @@ class Plugin(indigo.PluginBase):
         # TO DO: remove this an log success within panelMsgWrite
         self.logger.debug(u"Sent panel message: {}".format(panelMsg))
 
+        # TO DO: added this in 3.0 to fix likely bug where virtual zone
+
         if self.ad2usbIsAdvanced:
             # BUG: the property vZonePartitionNumber must have been old
             # it no longer exists in Devices.xml as of 1.6.0 and onward

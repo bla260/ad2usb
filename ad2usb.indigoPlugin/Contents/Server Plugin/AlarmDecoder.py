@@ -797,7 +797,7 @@ class Message(object):
         else:
             return None
 
-    def setMessageToInvalid(self, reason=''):
+    def setMessageToInvalid(self, reason='reason not provided'):
         """
         sets attributes to ensure the caller knows the message is invalid
         """

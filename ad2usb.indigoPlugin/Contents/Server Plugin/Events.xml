@@ -24,10 +24,10 @@
                 <Option value="6">6</Option>
                 <Option value="7">7</Option>
                 <Option value="8">8</Option>
-              </List> 
+              </List>
             </Field>
           </ConfigUI>
-    </Event> 
+    </Event>
 
     <Event id="systemEvents" filter="self">
         <Name>System Status Events</Name>
@@ -39,8 +39,8 @@
                 <Option value="AC_RESTORE">AC Power Restore</Option>
                 <Option value="LOWBAT">Battery low</Option>
                 <Option value="LOWBAT_RESTORE">Battery Restore</Option>
-                <Option value="RFLOWBAT">Battery low</Option>
-                <Option value="RFLOWBAT_RESTORE">Battery Restore</Option>
+                <Option value="RFLOWBAT">RF Battery low</Option>
+                <Option value="RFLOWBAT_RESTORE">RF Battery Restore</Option>
                 <Option value="TROUBLE">Trouble</Option>
                 <Option value="TROUBLE_RESTORE">Trouble Restore</Option>
               </List>
@@ -57,10 +57,10 @@
                 <Option value="6">6</Option>
                 <Option value="7">7</Option>
                 <Option value="8">8</Option>
-              </List> 
+              </List>
             </Field>
           </ConfigUI>
-    </Event> 
+    </Event>
 
     <Event id="alarmEvents" filter="self">
         <Name>Alarm Events</Name>
@@ -82,7 +82,7 @@
                 <Option value="ALARM_SILENT">Silent Alarm</Option>
                 <Option value="ALARM_ENTRY">Entry Alarm</Option>
                 <Option value="ALARM_AUX">Aux Alarm</Option>
-                <Option value="ALARM_PERIMETER">Perimeter Alarm</Option>       
+                <Option value="ALARM_PERIMETER">Perimeter Alarm</Option>
                 <Option value="ALARM_TRIPPED">Alarm Tripped: Countdown started</Option>
               </List>
             </Field>
@@ -98,10 +98,10 @@
                 <Option value="6">6</Option>
                 <Option value="7">7</Option>
                 <Option value="8">8</Option>
-              </List> 
+              </List>
             </Field>
           </ConfigUI>
-      </Event>  
+      </Event>
 
     <Event id="userEvents" filter="self">
         <Name>User Actions</Name>
@@ -138,9 +138,9 @@
                 <Option value="6">6</Option>
                 <Option value="7">7</Option>
                 <Option value="8">8</Option>
-              </List> 
+              </List>
             </Field>
           </ConfigUI>
-      </Event>  
-        
+      </Event>
+
 </Events>
