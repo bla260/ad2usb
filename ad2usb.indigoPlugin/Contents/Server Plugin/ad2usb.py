@@ -66,7 +66,7 @@ class ad2usb(object):
 
         # set the debug panel playback file
         self.playbackLastLineNumberRead = 0  # tracks the current line
-        self.playbackSleepTime = 3  # 5 seconds sleep between each message
+        self.playbackSleepTime = 5  # 5 seconds sleep between each message
         self.hasPlaybackFileBeenRead = False  # flag to set after reading file
 
         # set the firmware to unknown and the serial connection to None
@@ -560,7 +560,10 @@ class ad2usb(object):
                             self.setFirmware(newMessageObject.firmwareVersion)
 
                         elif (newMessageObject.messageType == 'AUI') and newMessageObject.needsProcessing:
-                            pass
+                            self.logger.debug('AUI message seen')
+
+                        elif (newMessageObject.messageType == 'LRR') and newMessageObject.needsProcessing:
+                            self.logger.debug('LRR message seen')
 
                         else:
                             pass
@@ -881,11 +884,11 @@ class ad2usb(object):
                         user = splitMsg[2]
                         partition = splitMsg[3]
                         function = splitMsg[4]
-                        function = function[0:-2]  # lose the newline
+                        #function = function[0:-2]  # lose the newline
+                        self.logger.debug(
+                            u"LRR Decode - user:{}, partition:{}, function:{}".format(user, partition, function))
 
                         if function in kEventStateDict:
-                            self.logger.debug(
-                                u"LRR Decode - user:{}, partition:{}, function:{}".format(user, partition, function))
                             now = datetime.now()
                             timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1335,6 +1338,11 @@ class ad2usb(object):
                             # split on the "|" and strip the whitespace from the message part of the file
                             lineItems = re.split(r'\|', line)
                             playbackCurrentMessage = lineItems[1].strip()
+
+                            # because this is used for testing and is SO FAST
+                            # we sleep for a set time before returning the message
+                            time.sleep(self.playbackSleepTime)
+
                             # end the for loop we have the one line we're interested
                             break
 

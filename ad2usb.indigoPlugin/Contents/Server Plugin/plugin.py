@@ -94,7 +94,7 @@ class Plugin(indigo.PluginBase):
         self.pluginPrefs = pluginPrefs
 
         # adding new logging object introduced in API 2.0
-        self.logger.info(u"completed")
+        self.logger.info(u"Plugin init completed")
 
      ########################################
     def __del__(self):
@@ -129,7 +129,7 @@ class Plugin(indigo.PluginBase):
 
         self.ad2usb.stopComm()
 
-        self.logger.info(u"completed")
+        self.logger.info("Plugin shutdown completed")
 
     ########################################################
     # device setup/shutdown Calls from Indigo
@@ -178,7 +178,7 @@ class Plugin(indigo.PluginBase):
             except Exception as err:
                 self.logger.warning(u"unable to determine zone number for device:{}, err:{}".format(dev.name, str(err)))
 
-        self.logger.info(u"device comm start completed for {}".format(dev.name))
+        self.logger.info(u"Device startup completed for {}".format(dev.name))
 
     ########################################################
     def deviceStopComm(self, dev):
@@ -196,7 +196,7 @@ class Plugin(indigo.PluginBase):
             except Exception as err:
                 self.logger.error(u"advancedBuildDevDict error: {}".format(err))
 
-        self.logger.info(u"device comm stop completed for {}".format(dev.name))
+        self.logger.info("Device stop completed for {}".format(dev.name))
 
     ########################################################
     # start/stop/restart Calls from Indigo
@@ -260,7 +260,7 @@ class Plugin(indigo.PluginBase):
         except Exception as err:
             self.logger.critical("Error reading and processing AlarmDecoder messages - error:{}".format(str(err)))
 
-        self.logger.info(u"completed")
+        self.logger.info(u"runConcurrentThread completed")
 
     ########################################################
     def stopConcurrentThread(self):
@@ -270,7 +270,7 @@ class Plugin(indigo.PluginBase):
         self.ad2usb.shutdown = True
         self.stopThread = True
 
-        self.logger.info(u"completed")
+        self.logger.info(u"StopConcurrentThread completed")
 
     ########################################################
     # TO DO: This method is never called
@@ -293,43 +293,56 @@ class Plugin(indigo.PluginBase):
     # Action callbacks
     ########################################################
     def virtZoneManage(self, pluginAction):
+        """
+        Updates the Indigo device state for the Virtual Managed Indigo device and then
+        sends a message to the AlarmDecoder via the 'L' command.
+        """
         self.logger.info(u"Called")
         self.logger.debug(u"Received: {}".format(pluginAction))
 
-        devId = pluginAction.deviceId
-        virtDevice = indigo.devices[devId]
-        virtZoneNumber = virtDevice.pluginProps['zoneNumber']
+        try:
 
-        # The L command can be used to open or close zones.
-        # There are two parameters: the zone and the state.
-        # The zone is a zero-padded two-digit number and the state is either 0 or 1.
-        action = pluginAction.props['virtualAction']
-        panelMsg = 'L' + virtZoneNumber + action + '\r'
-        self.logger.debug(u"Sending panel message: {}".format(panelMsg))
-        self.ad2usb.panelMsgWrite(panelMsg)
+            # part 0 - setup - get device ID, device zone as a padded string, and device partition
+            devId = pluginAction.deviceId
+            virtDevice = indigo.devices[devId]
+            virtZoneNumber = self._getPaddedZone(virtDevice.pluginProps['zoneNumber'])
 
-        # TO DO: remove this an log success within panelMsgWrite
-        self.logger.debug(u"Sent panel message: {}".format(panelMsg))
-
-        # TO DO: added this in 3.0 to fix likely bug where virtual zone
-
-        if self.ad2usbIsAdvanced:
             # BUG: the property vZonePartitionNumber must have been old
             # it no longer exists in Devices.xml as of 1.6.0 and onward
             # use zonePartitionNumber instead
             # we check for both to be safe using a dictionary and keys
             # and default to 1 if neither are found
             virtualZonePropertiesDict = virtDevice.pluginProps.to_dict()
-            if 'vZonePartitionNumber' in virtualZonePropertiesDict.keys():
-                virtPartition = virtDevice.pluginProps['vZonePartitionNumber']
-            elif 'zonePartitionNumber' in virtualZonePropertiesDict.keys():
+            if 'zonePartitionNumber' in virtualZonePropertiesDict.keys():
                 virtPartition = virtDevice.pluginProps['zonePartitionNumber']
+            elif 'vZonePartitionNumber' in virtualZonePropertiesDict.keys():
+                virtPartition = virtDevice.pluginProps['vZonePartitionNumber']
             else:
                 virtPartition = '1'
 
-            panelDevice = indigo.devices[self.partition2address[virtPartition]['devId']]
-            panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
+            # TO DO: added this in 3.0 to fix likely bug where virtual zone
+            # could get KeyError if it is first zone state to change
+            # TO DO: remove this code block below to reference all current keypad devices
+            if not self.ad2usb.zoneListInit:
+                for address in self.panelsDict:
+                    self.ad2usb.zoneStateDict[address] = []
+                self.ad2usb.zoneListInit = True
 
+            # part 1 - write the message to AlarmDecoder
+
+            # The L command can be used to open or close zones.
+            # There are two parameters: the zone and the state.
+            # The zone is a zero-padded two-digit number and the state is either 0 or 1.
+            action = pluginAction.props['virtualAction']
+            if (action == '0') or (action == '1'):
+                panelMsg = 'L' + virtZoneNumber + action + '\r'
+                self.logger.debug(u"Sending panel message: {}".format(panelMsg))
+                self.ad2usb.panelMsgWrite(panelMsg)
+
+                # TO DO: remove this and log success within panelMsgWrite
+                self.logger.debug(u"Sent panel message: {}".format(panelMsg))
+
+            # Part 2 - Update the Indigo Device State
             # Update device UI States
             # This shouldn't be necessary, but the AD2USB doesn't send EXP messages for virtual zones
 
@@ -337,34 +350,71 @@ class Plugin(indigo.PluginBase):
             newZoneState = k_CLEAR
             if action == '0':   # Clear
                 newZoneState = k_CLEAR
-                try:   # In case someone tries to set a clear zone to clear
-                    self.ad2usb.zoneStateDict[panelKeypadAddress].remove(int(virtZoneNumber))
-                except:
-                    pass
-                # TO DO: check we can pass a dictionary or indigo dictionary to the logger
-                self.logger.debug(u"Clear - state list: {}".format(self.ad2usb.zoneStateDict))
             elif action == '1':   # Fault
                 newZoneState = k_FAULT
-                self.ad2usb.zoneStateDict[panelKeypadAddress].append(int(virtZoneNumber))
-                self.ad2usb.zoneStateDict[panelKeypadAddress].sort()
-                self.logger.debug(u"Fault - state list: {}".format(self.ad2usb.zoneStateDict))
             elif action == '2':   # Trouble
+                # TO DO: remove this block
                 # TO DO: this used to be string of Trouble - it is not Error
                 # uiValue = 'Trouble' / displayStateValue = 'trouble'
                 newZoneState = k_ERROR
-                self.ad2usb.zoneStateDict[panelKeypadAddress].append(int(virtZoneNumber))
-                self.ad2usb.zoneStateDict[panelKeypadAddress].sort()
-                self.logger.debug(u"Trouble - state list: {}".format(self.ad2usb.zoneStateDict))
             else:
                 # ERROR
                 pass
 
             self.setDeviceState(virtDevice, newZoneState)
 
-            panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
-                self.ad2usb.zoneStateDict[panelKeypadAddress]))
+            # part 3 - update the keypad zone fault list
 
-        self.logger.info(u"completed")
+            # get keypad device for partition
+            # but if that is not found then just get the first keypad
+            myKeypadDevice = self.getKeypadDevice(virtPartition)
+
+            # if keypad does not exist for the specific partition just get the first keypad
+            if myKeypadDevice is None:
+                self.logger.warning("ad2usb Keypad device not found with partition:{}".format(virtPartition))
+                myKeypadDevice = self.getKeypadDevice()  # get the first keypad
+
+            # make sure we have a keypad
+            if myKeypadDevice is None:
+                self.logger.error("No ad2usb keypad device found - cannot update keypad device")
+                return
+            else:
+                myKeypadAddress = myKeypadDevice.pluginProps['panelKeypadAddress']
+                self.logger.warning("Update Virtual Zone Device to correct partition:{}".format(myKeypadAddress))
+
+                # init the zone state list if needed
+                if myKeypadAddress not in self.ad2usb.zoneStateDict.keys():
+                    self.ad2usb.zoneStateDict[myKeypadAddress] = []
+
+                # set default newState
+                if action == '0':   # Clear
+                    try:   # In case someone tries to set a clear zone to clear
+                        self.ad2usb.zoneStateDict[myKeypadAddress].remove(int(virtZoneNumber))
+                    except Exception as err:
+                        pass
+                    # TO DO: check we can pass a dictionary or indigo dictionary to the logger
+                    self.logger.debug(u"Clear - state list: {}".format(self.ad2usb.zoneStateDict))
+                elif action == '1':   # Fault
+                    self.ad2usb.zoneStateDict[myKeypadAddress].append(int(virtZoneNumber))
+                    self.ad2usb.zoneStateDict[myKeypadAddress].sort()
+                    self.logger.debug(u"Fault - state list: {}".format(self.ad2usb.zoneStateDict))
+                elif action == '2':   # Trouble
+                    # TO DO: this used to be string of Trouble - it is not Error
+                    # uiValue = 'Trouble' / displayStateValue = 'trouble'
+                    self.ad2usb.zoneStateDict[myKeypadAddress].append(int(virtZoneNumber))
+                    self.ad2usb.zoneStateDict[myKeypadAddress].sort()
+                    self.logger.debug(u"Trouble - state list: {}".format(self.ad2usb.zoneStateDict))
+                else:
+                    # ERROR
+                    pass
+
+                myKeypadDevice.updateStateOnServer(key='zoneFaultList', value=str(
+                    self.ad2usb.zoneStateDict[myKeypadAddress]))
+
+        except Exception as err:
+            self.logger.error("Unable to update Virtual Zone Device, error:{}".format(str(err)))
+
+        self.logger.debug(u"completed")
 
     ########################################################
     def panelMsgWrite(self, pluginAction):
@@ -417,15 +467,29 @@ class Plugin(indigo.PluginBase):
         self.logger.info(u"Called")
         self.logger.debug(u"Received: {}".format(pluginAction))
 
-        zoneDevice = indigo.devices[int(pluginAction.props['zoneDevice'])]
+        # get the device ID from the Dynamic Menu
+        zoneDeviceId = int(pluginAction.props['zoneDevice'])
+        # get the device object
+        zoneDevice = indigo.devices[zoneDeviceId]
+
+        # get the zone state and force to lower case
+        try:
+            newZoneState = pluginAction.props['zoneState']
+            newZoneState = newZoneState.lower()
+
+        except Exception as err:
+            self.logger.error("Unable to get zoneState:{}".format(str(err)))
+            newZoneState = 'ERROR GETTING zoneState'
 
         # TO DO: address inconsistencies:
         # Actions.xml is 'clear' & 'faulted'
         # zoneState is 'Clear' & 'faulted'
-        if pluginAction.props['zoneState'] == 'clear':
+        if newZoneState == 'clear':
             self.setDeviceState(zoneDevice, k_CLEAR)
-        else:
+        elif (newZoneState == 'faulted') or (newZoneState == 'fault'):
             self.setDeviceState(zoneDevice, k_FAULT)
+        else:
+            self.logger.error("Cannot force zone state change. Unknown state:{}".format(newZoneState))
 
         self.logger.debug(u"completed")
 
@@ -844,7 +908,11 @@ class Plugin(indigo.PluginBase):
 
         myArray = []
 
-        for device in sorted(indigo.devices):
+        # TO DO: can probably remove this method
+        # replaced it with built-in Indigo device dynamic list
+        # sorted() may have worked pre-Python 3
+        # for device in sorted(indigo.devices):
+        for device in indigo.devices:
             if device.deviceTypeId == 'alarmZone':
                 myArray.append((device.id, device.name))
 
@@ -1018,6 +1086,41 @@ class Plugin(indigo.PluginBase):
                 forZoneNumber, str(err)))
             return 0
 
+    def getZoneNumberForDevice(self, forDevice):
+        """
+        Returns a zone number (int) for a given Indigo Device object. Returns None if the
+        object cannot be read or the zone number is 0 or not an integer.
+
+        **parameters:**
+        forDevice - Indigo Device Object
+        """
+        # set
+        zoneName = None
+        zoneNumber = None
+
+        try:
+            # get device ID and the device
+            zoneName = forDevice.name
+            zoneNumber = forDevice.pluginProps['zoneNumber']
+
+            if int(zoneNumber) > 0:
+                return int(zoneNumber)
+            else:
+                self.logger.error(
+                    'Zone Number is not an valid value:{} for device named:{}'.format(zoneNumber, zoneName))
+                return None
+
+        except Exception as err:
+            if zoneName is None:
+                self.logger.error('Unable to get Zone Name - error:{} for device object:{}'.format(str(err), forDevice))
+            elif zoneNumber is None:
+                self.logger.error('Unable to get Zone Number - error:{} for device named:{}'.format(str(err), zoneName))
+            else:
+                self.logger.error(
+                    'Unable to get Zone Number - error:{} for device object:{}'.format(str(err), forDevice))
+
+            return None
+
     def getZoneStateForDeviceId(self, forDeviceId=0):
         """
         returns the state property "zoneState" (string) for device id.
@@ -1190,7 +1293,7 @@ class Plugin(indigo.PluginBase):
     # Indigo Event Triggers: Start and Stop
     ########################################
     def triggerStartProcessing(self, trigger):
-        self.logger.info(u"called for trigger:{}".format(trigger.name))
+        self.logger.info(u"Enabling trigger:{}".format(trigger.name))
         self.logger.debug(u"received trigger:{}".format(trigger))
         self.logger.debug(u"starting trigger dict:{}".format(self.triggerDict))
 
@@ -1223,7 +1326,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################
     def triggerStopProcessing(self, trigger):
-        self.logger.debug(u"called for trigger:{}".format(trigger.name))
+        self.logger.debug(u"Disabling for trigger:{}".format(trigger.name))
         self.logger.debug(u"Received trigger:{}".format(trigger.name))
 
         event = trigger.pluginProps['indigoTrigger'][0]
@@ -1511,27 +1614,64 @@ class Plugin(indigo.PluginBase):
         # we should never get here but just in case
         return string
 
-    def getKeypadDevice(self):
+    def getKeypadDevice(self, partition=None):
         """
-        Checks if at least one AlarmDecoder 'ad2usb Keypad' Indigo device exists and returns
-        the Indigo device object. If no keypad devices exists; None is returned.
+        If no partition parameter is provided, this method checks if at least one AlarmDecoder
+        'ad2usb Keypad' Indigo device exists and returns the Indigo device object.
+
+        If a parition parameter is provided, the keypad is only returned if the partition
+        number of the keypad device matches partition parameter. Otherwise None is returned.
+
+        If no keypad devices exists; None is returned.
+
+        **parameters**
+        partition - a partition value as a string (e.g. "2")
         """
         try:
             allKeypadDevices = []
 
-            # all devices
+            # get all the keypad devices
             for device in indigo.devices.iter("self"):
                 # just the Keypad Devices - should only be 1
                 # but log an error if there are more than 1
                 if device.deviceTypeId == 'ad2usbInterface':
                     allKeypadDevices.append(device)
 
+            # the case of no devices
             if len(allKeypadDevices) == 0:
                 self.logger.error("No Indigo ad2usb Keypad device found; exactly one (1) should be defined")
                 return None
 
-            elif len(allKeypadDevices) == 1:
+            # the case of only one device and no parition parameter
+            elif (len(allKeypadDevices) == 1) and (partition is None):
                 self.logger.debug("exactly one Indigo ad2usb Keypad device found")
+                return allKeypadDevices[0]
+
+            # the case of only one device and parition parameter provided
+            elif (len(allKeypadDevices) == 1) and (partition is not None):
+                if allKeypadDevices[0].pluginProps['panelPartitionNumber'] == partition:
+                    self.logger.debug("ad2usb Keypad device matches parition:{}".format(partition))
+                    return allKeypadDevices[0]
+                else:
+                    self.logger.debug("ad2usb Keypad device with partition:{} found but does not math parition:{}".format(
+                        allKeypadDevices[0].pluginProps['panelPartitionNumber'], partition))
+                    return None
+
+                self.logger.debug("exactly one Indigo ad2usb Keypad device found")
+                return allKeypadDevices[0]
+
+            # the case of mutiple keypad devices and no parition parameter
+            elif (len(allKeypadDevices) > 1) and (partition is None):
+                for oneKeypadDevice in allKeypadDevices:
+                    if oneKeypadDevice.pluginProps['panelPartitionNumber'] == partition:
+                        return oneKeypadDevice
+
+                # if we get here none of the keypad devices matched the partition
+                return None
+
+            # the case of mutiple keypad devices and parition parameter provided
+            elif (len(allKeypadDevices) > 1) and (partition is not None):
+                self.logger.warning("Multiple Indigo ad2usb Keypad devices found; exactly only (1) should be defined")
                 return allKeypadDevices[0]
 
             else:
@@ -1773,3 +1913,27 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(u"...returned zoneGroup2zoneDict:{}".format(self.zoneGroup2zoneDict))
         except Exception as err:
             self.logger.error(u"error adding group zone device:{}".format(str(err)))
+
+    def _getPaddedZone(self, zoneNumber):
+        """
+        Returns a 2-digit padded zone number as a string. Returns None if zoneNumber is neither
+        a string or int.
+
+        **parameters:**
+        zoneNumber - integer or string of the zone number to convert to string
+        """
+        if isinstance(zoneNumber, int):
+            if len(str(zoneNumber)) == 1:
+                return '0' + str(zoneNumber)
+            else:
+                return str(zoneNumber)
+
+        elif isinstance(zoneNumber, str):
+            if len(zoneNumber) == 1:
+                return '0' + zoneNumber
+            else:
+                return zoneNumber
+
+        else:
+            self.logger.debug('Unable to generate padded zone string')
+            return None

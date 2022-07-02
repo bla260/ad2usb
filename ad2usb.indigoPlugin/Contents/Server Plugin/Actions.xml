@@ -14,7 +14,7 @@
 			<Field id="armingCode" type="textfield" hidden="true" defaultValue='#2' />
 		</ConfigUI>
 	</Action>
-	
+
 	<Action id="writeArmStayPanel">
 		<Name>Arm-Stay</Name>
 		<CallbackMethod>panelQuckArmWrite</CallbackMethod>
@@ -69,12 +69,12 @@
 
 <!-- ...force a zone to a specific state... -->
 	<Action id="forceZoneStateChange">
-		<Name>Force a zone state change</Name>
+		<Name>Force Alarm Zone state change</Name>
 		<CallbackMethod>forceZoneStateChange</CallbackMethod>
 		<ConfigUI>
 			<Field id="zoneDevice" type="menu" >
 				<Label>Zone:</Label>
-				<List class="self" method="getZoneList" dynamicReload="yes"/>
+				<List class="indigo.devices" filter="self.alarmZone"/>
 			</Field>
 			<Field id='zoneState' type='menu' defaultValue="clear" >
 				<Label>Set state to:</Label>
@@ -85,22 +85,20 @@
 			</Field>
 		</ConfigUI>
 	</Action>
-	
-<!--... and faulting/clearing virtual zones -->	
 
+<!--... and faulting/clearing virtual zones -->
 	<Action id="virtualZoneActons" deviceFilter='self.alarmZoneVirtual'>
-		<Name>Change a virtual zone's state</Name>	
+		<Name>Change a Virtual Zone's state</Name>
 		<CallbackMethod>virtZoneManage</CallbackMethod>
 		<ConfigUI>
 			<Field id="virtualAction" type="menu" defaultValue='1'>
 				<Label>Set zone to:</Label>
 				<List>
-					<Option value="0">Clear</Option>
-					<Option value="1">Faulted</Option>
-					<Option value="2">Trouble</Option>
-				</List>	
+					<Option value="0">Clear (Closed)</Option>
+					<Option value="1">Fault (Open)</Option>
+					<!-- Option value="2">Trouble</Option> -->
+				</List>
 			</Field>
 		</ConfigUI>
 	</Action>
 </Actions>
-
