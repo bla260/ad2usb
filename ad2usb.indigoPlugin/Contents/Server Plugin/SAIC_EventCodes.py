@@ -1,5 +1,28 @@
 # this is from APPENDIX C: EVENT CODES in SIA DC-05-1999.09
 # fields are key=code, [ event, data type: zone or user ]
+# Mapping to old LRR messages
+# ACLOSS - 301
+# AC_RESTORE -
+# LOWBAT - 302
+# LOWBAT_RESTORE -
+# RFLOWBAT - 384
+# RFLOWBAT_RESTORE -
+# TROUBLE - 300
+# TROUBLE_RESTORE -
+
+# ALARM_PANIC - 120
+# ALARM_FIRE - 110
+# ALARM_AUDIBLE - 123
+# ALARM_SILENT - 122
+# ALARM_ENTRY - 134
+# ALARM_AUX -
+# ALARM_PERIMETER - 131
+# ALARM_TRIPPED -
+
+# OPEN
+# ARM_AWAY
+# ARM_STAY - 441
+
 kCODE = {'100': ['Medical', 'zone'],
          '101': ['Personal Emergency', 'zone'],
          '102': ['Fail to report in', 'zone'],

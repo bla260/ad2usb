@@ -347,7 +347,7 @@ class ad2usb(object):
                     if zoneStateDict['sup']:
                         supervisionMessage = True
                         if zLogSupervision:  # make sure we want this logged
-                            self.logger.info(u"Zone:{} supervision received. ({})".format(zName, rawData[1:-2]))
+                            self.logger.info(u"Zone:{} supervision received. ({})".format(zName, rawData.strip()))
                             # Add update here to save last supervised to zone states
 
                 else:  # An unrecognized message type
@@ -884,7 +884,7 @@ class ad2usb(object):
                         user = splitMsg[2]
                         partition = splitMsg[3]
                         function = splitMsg[4]
-                        #function = function[0:-2]  # lose the newline
+                        function = function.rstrip()  # if newline exists strip it
                         self.logger.debug(
                             u"LRR Decode - user:{}, partition:{}, function:{}".format(user, partition, function))
 
@@ -1341,7 +1341,11 @@ class ad2usb(object):
 
                             # because this is used for testing and is SO FAST
                             # we sleep for a set time before returning the message
-                            time.sleep(self.playbackSleepTime)
+                            # unless its countdown timer and then we sleep only 1 sec
+                            if "May Exit Now" in playbackCurrentMessage:
+                                time.sleep(1)
+                            else:
+                                time.sleep(self.playbackSleepTime)
 
                             # end the for loop we have the one line we're interested
                             break

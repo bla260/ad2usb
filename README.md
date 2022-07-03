@@ -48,7 +48,7 @@ Indigo Managed Virtual Zone | The AlarmDecoder's Zone Expander Emulation feature
 
 ### Actions
 
-The ad2usb plugin adds new Actions for **ad2usb Keypad** and **Alarm Zone** devices.
+The ad2usb plugin adds several Actions for **ad2usb Keypad** and **Alarm Zone** devices.
 
 #### Keypad Actions
 You can use Indigo Actions to Arm & Disarm your panel and invoke panel events. Four types of Arm Actions are available. Refer to your Alarm Users Guide for description of each. You can also writes an arbitrary message to the panel via the keypad. **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring the Write to Panel action.
