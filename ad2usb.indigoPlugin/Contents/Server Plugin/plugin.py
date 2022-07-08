@@ -248,7 +248,7 @@ class Plugin(indigo.PluginBase):
                                 'Unable to re-establish communications - check AlarmDecoder and Plugin Configure settings')
 
                 # built in sleep
-                self.sleep(2.2)
+                self.sleep(2)
 
             # failed counter > 50
             self.logger.error('AlarmDecoder communication fail count exceeded 50 consecutvie times')
@@ -842,14 +842,21 @@ class Plugin(indigo.PluginBase):
                         valuesDict['ad2usbPort'], valuesDict['ad2usbSerialPort'])
 
             # set a flag
-            self.hasAlarmDecoderVersionBeenRead = False
+            self.hasAlarmDecoderConfigBeenRead = False
 
             # send config - detailed logging is handled by the underlying methods
             # TO DO: change this close other thread connection(?) and read here
             self.ad2usb.sendAlarmDecoderConfigCommand()
-            time.sleep(1)  # TO DO: this is suboptimal
 
-            if self.hasAlarmDecoderVersionBeenRead:
+            # the reading of the CONFIG response is handled on another thread
+            # we wait a max of 4 seconds
+            timeout = time.time() + 4   # 4 seconds from now
+
+            # we loop for up to 4 seconds or until the CONFIG was read
+            while (time.time() < timeout) and (self.hasAlarmDecoderConfigBeenRead is False):
+                time.sleep(1)  # sleep for 1 second
+
+            if self.hasAlarmDecoderConfigBeenRead:
                 valuesDict['msgControl'] = '1'  # success
 
                 # update the config dialog with new settings from AlarmDecoder

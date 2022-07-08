@@ -93,7 +93,7 @@
 
 	<Field id="ad2usbConfigRead" type="button" >
 		<Label/>
-		<Title>Read ad2usb Config</Title>
+		<Title>Retrieve ad2usb Config</Title>
 		<CallbackMethod>ConfigButtonPressed</CallbackMethod>
 	</Field>
 	<Field id="makeSpace3" type="label">
@@ -115,13 +115,13 @@
 	</Field>
 
 	<Field id="msgTestFail2" type="label" visibleBindingId="msgControl" visibleBindingValue="3">
-		<Label>	  	Either this ad2usb board or firmware version.
-		Does not support automatic configuration, or your ad2usb
+		<Label>	  	Either this ad2usb board or firmware version
+		does not support automatic configuration, or your ad2usb
 		is connected by USB. You will need to use the MonoGUI or a
 		Terminal session to configuration the board.</Label>
 	</Field>
 
-	<Field id="msgTestFail4" type="label" visibleBindingId="msgControl" visibleBindingValue="4">
+	<Field id="msgTestFail4" type="label" visibleBindingId="msgControl" visibleBindingValue="4" defaultValue="">
 		<Label>Reading AlarmDecoder CONFIG considered success in Panel Playback Debug mode.</Label>
 	</Field>
 

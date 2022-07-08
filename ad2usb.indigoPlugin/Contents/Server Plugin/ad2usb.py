@@ -552,9 +552,9 @@ class ad2usb(object):
                     # process select messages
                     if newMessageObject.isValidMessage:
                         if (newMessageObject.messageType == 'CONFIG') and newMessageObject.needsProcessing:
-                            self.plugin.hasAlarmDecoderConfigBeenRead = True
                             self.processAlarmDecoderConfigString(
                                 newMessageObject.getMessageAttribute('configMessageString'))
+                            self.plugin.hasAlarmDecoderConfigBeenRead = True
 
                         elif (newMessageObject.messageType == 'VER') and newMessageObject.needsProcessing:
                             self.setFirmware(newMessageObject.firmwareVersion)
@@ -1118,9 +1118,6 @@ class ad2usb(object):
         try:
             self.logger.debug(u'called')
 
-            # set a flag that we reset when CONFIG message is read
-            self.plugin.hasAlarmDecoderConfigBeenRead = False
-
             # don't run if in playback mode
             if self.plugin.isPlaybackCommunicationModeSet:
                 self.logger.debug(u'Panel Message Playback Set - cannot send AlarmDecoder CONFIG command')
@@ -1446,7 +1443,7 @@ class ad2usb(object):
                     myErrorMessage = 'encoding string to bytes'
                     panelMessageInBytes = message.encode("utf8")
 
-                    self.logger.debug(u'attempting to write from the AlarmDecoder')
+                    self.logger.debug(u'attempting to write to the AlarmDecoder')
                     myErrorMessage = 'writing bytes to serial object'
                     serialObject.write(panelMessageInBytes)
 
