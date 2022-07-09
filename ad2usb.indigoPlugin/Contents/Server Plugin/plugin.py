@@ -212,7 +212,7 @@ class Plugin(indigo.PluginBase):
             while True and (failedCounter < 50):
                 # is communicaiton to AlarmDecoder OK?
                 if self.ad2usb.isCommStarted:
-                    self.logger.debug('AlarmDecoder comm is started, will attempt to read message...')
+                    self.logger.debug('AlarmDecoder comm has successfully started, will attempt to read message...')
 
                     # reset failed counter
                     failedCounter = 0
@@ -230,6 +230,8 @@ class Plugin(indigo.PluginBase):
                     # newMessage = self.ad2usb.newReadMessage()
                     # if newMessage.needsProcessing:
                     #   self.newProcessMessage(newMessage)
+
+                # else we had a comm failure
                 else:
                     # try to open the communication again with force reset
                     if self.isPlaybackCommunicationModeSet and self.hasPlaybackFileBeenRead:
@@ -248,13 +250,14 @@ class Plugin(indigo.PluginBase):
                                 'Unable to re-establish communications - check AlarmDecoder and Plugin Configure settings')
 
                 # built in sleep
-                self.sleep(2)
+                self.sleep(0.5)
 
             # failed counter > 50
-            self.logger.error('AlarmDecoder communication fail count exceeded 50 consecutvie times')
+            self.logger.error('AlarmDecoder communication fail count exceeded 50 consecutive times')
 
         except self.StopThread:
             self.ad2usb.stopReadingMessages = True
+            self.logger.info('AlarmDecoder StopThread received')
             pass    # Optionally catch the StopThread exception and do any needed cleanup.
 
         except Exception as err:
@@ -263,14 +266,14 @@ class Plugin(indigo.PluginBase):
         self.logger.info(u"runConcurrentThread completed")
 
     ########################################################
-    def stopConcurrentThread(self):
-        self.logger.debug(u"Called")
-
-        # TO DO: rename this property to stopReadingMessages
-        self.ad2usb.shutdown = True
-        self.stopThread = True
-
-        self.logger.info(u"StopConcurrentThread completed")
+    # def stopConcurrentThread(self):
+    #     self.logger.debug(u"Called")
+    #
+    #     # TO DO: rename this property to stopReadingMessages
+    #     self.ad2usb.shutdown = True
+    #     self.stopThread = True
+    #
+    #     self.logger.info(u"StopConcurrentThread completed")
 
     ########################################################
     # TO DO: This method is never called
@@ -688,6 +691,7 @@ class Plugin(indigo.PluginBase):
                 # if we made it this far all checks are complete and user choices look good
                 # so return True (client will then close the dialog window).
                 self.logger.debug(u"completed")
+                valuesDict['msgControl'] == '0'  # reset back empty message
                 return (True, valuesDict)
 
         elif valuesDict['msgControl'] == '2':
@@ -697,6 +701,7 @@ class Plugin(indigo.PluginBase):
 
         elif valuesDict['msgControl'] == '4':
             self.logger.debug(u"prefs validated for Playback mode")
+            valuesDict['msgControl'] == '0'  # reset back empty message
             return (True, valuesDict)
 
         else:
@@ -849,10 +854,10 @@ class Plugin(indigo.PluginBase):
             self.ad2usb.sendAlarmDecoderConfigCommand()
 
             # the reading of the CONFIG response is handled on another thread
-            # we wait a max of 4 seconds
-            timeout = time.time() + 4   # 4 seconds from now
+            # we wait a max of the 2 x SERIAL_TIMEOUT
+            timeout = time.time() + (2 * self.ad2usb.getTimeout())
 
-            # we loop for up to 4 seconds or until the CONFIG was read
+            # we loop for up to the timeout set above or until the CONFIG was read
             while (time.time() < timeout) and (self.hasAlarmDecoderConfigBeenRead is False):
                 time.sleep(1)  # sleep for 1 second
 
@@ -888,7 +893,7 @@ class Plugin(indigo.PluginBase):
 
             else:
                 valuesDict['msgControl'] = '2'  # error
-                self.logger.warning(u"did not read config from AlarmDecoder configuraiton")
+                self.logger.warning(u"did not read config from AlarmDecoder configuration")
 
         except Exception as err:
             self.logger.error(u"unable to read AlarmDecoder Config:{}".format(str(err)))
@@ -1388,7 +1393,7 @@ class Plugin(indigo.PluginBase):
     def generateAlarmDecoderConfigString(self):
         """
         reads the internal property 'configSettings' and returns a valid AlarmDecoder config string
-        ex: 'CADDRESS=20&DEDUPLICATE=Y\\r'
+        ex: 'CADDRESS=20&DEDUPLICATE=Y\r'
         """
         self.logger.debug(u'called')
 
@@ -1398,7 +1403,7 @@ class Plugin(indigo.PluginBase):
 
         # strip the last '&' since it is not needed
         self.logger.debug(u'CONFIG string is:{}'.format(configString[:-1]))
-        return configString[:-1]  # strip the trailing '&'
+        return configString[:-1] + '\r'  # strip the trailing '&' and add '\r'
 
     def __initPanelLogging(self):
         try:

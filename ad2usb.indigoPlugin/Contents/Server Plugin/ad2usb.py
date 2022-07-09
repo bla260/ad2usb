@@ -31,6 +31,9 @@ kZoneStateDisplayValues = {'faulted': 'Fault', 'Clear': 'Clear'}
 k_CLEAR = 'Clear'  # key: Clear, value: Clear - should convert key to 'clear'
 k_FAULT = 'faulted'  # key: faulted, value: Fault - should convert to 'fault'
 
+# serial port timeout ex: 2 (seconds) or None (infinite)
+k_SERIAL_TIMEOUT = 5
+
 ################################################################################
 # Globals
 ################################################################################
@@ -62,7 +65,6 @@ class ad2usb(object):
         self.lastApZonesBypassed = 0
 
         self.stopReadingMessages = False
-        self.shutdownComplete = False
 
         # set the debug panel playback file
         self.playbackLastLineNumberRead = 0  # tracks the current line
@@ -532,467 +534,416 @@ class ad2usb(object):
     # Read the panel message stream
     #
     def panelMsgRead(self, ad2usbIsAdvanced):
-        self.logger.debug(u"called")
-        self.logger.debug(u"isAdvanced:{}".format(ad2usbIsAdvanced))
+        """
+        Gets and processes a message from the AlarmDecoder. Will call a wrapper function to read
+        the alarm panel message: IP, Serial, or from a File (test mode). Either the wrapper will
+        timeout after a set number of seconds and this funciton will end - returning blank message or one (1)
+        a message will be returned by the wrapper and processed.
+
+        Returns None if no message processed (timeout), True if processed succesfully, False if
+        an error was found during processing
+        """
+        self.logger.debug("call with isAdvanced:{}".format(ad2usbIsAdvanced))
 
         lastPanelMsg = ""
-        while self.stopReadingMessages is False:
-            doNotProcessThisMessage = False  # default to process every message
-            rawData = ""
-            try:
-                while (len(rawData) == 0) and (self.stopReadingMessages is False):
-                    # this should read one line and block while waiting for another line
-                    rawData = self.panelReadWrapper(self.serialConnection)
+        doNotProcessThisMessage = False  # default to process every message
+        rawData = ""
 
-                    # ############## New Message Parser ########################
-                    #
-                    # added this code to begin to test the message Object
-                    newMessageObject = AlarmDecoder.Message(rawData, self.firmwareVersion, self.logger)
+        try:
+            # check if we've Disabled the plugin in the main thread before continuing
+            if self.stopReadingMessages is True:
+                return None
 
-                    # process select messages
-                    if newMessageObject.isValidMessage:
-                        if (newMessageObject.messageType == 'CONFIG') and newMessageObject.needsProcessing:
-                            self.processAlarmDecoderConfigString(
-                                newMessageObject.getMessageAttribute('configMessageString'))
-                            self.plugin.hasAlarmDecoderConfigBeenRead = True
+            # read the data from IP, Serial, or File device
+            # will timeout set by k_SERIAL_TIMEOUT
+            rawData = self.panelReadWrapper(self.serialConnection)
 
-                        elif (newMessageObject.messageType == 'VER') and newMessageObject.needsProcessing:
-                            self.setFirmware(newMessageObject.firmwareVersion)
-
-                        elif (newMessageObject.messageType == 'AUI') and newMessageObject.needsProcessing:
-                            self.logger.debug('AUI message seen')
-
-                        elif (newMessageObject.messageType == 'LRR') and newMessageObject.needsProcessing:
-                            self.logger.debug('LRR message seen')
-
-                        else:
-                            pass
-
-                    else:
-                        self.logger.warning("Unable to parse:{} - message:{}".format(
-                            newMessageObject.invalidReason, newMessageObject.messageString))
-
-                    #
-                    #
-                    # ############## End New Message Parser ########################
-
-                    # TO DO: this shouldn't happen
-                    if rawData == '':
-                        doNotProcessThisMessage = True
-                        if self.stopReadingMessages is False:
-                            self.logger.error(u"AD2USB Connection/Read Error")
-
-            except Exception as err:
-                # don't process any message we had an error reading
+            # the panelReadWrapper will return with an empty message when the
+            # serial timeout is reached - ignore these and loop back to read
+            # we do this to enable Indigo to invoke a graceful Disable/Stop of the plugin
+            if rawData == '':
                 doNotProcessThisMessage = True
-                self.logger.error(u"Error reading AlarmDecoder message - error:{}".format(str(err)))
-                self.logger.error(u"Error reading AlarmDecoder message - raw data is:{}".format(rawData))
+                self.logger.debug('read null message or timeout reached')
+                return None
+            else:
+                # message Read was successful - log the raw message
+                self.logger.debug(u"Read ad2usb message:{}".format(repr(rawData)))
 
-                if self.stopReadingMessages is True:
-                    self.logger.info(u"Stop reading messages has been set")
-                    self.shutdownComplete = True
+                # write the message to the panel log too if panel logging is enabled
+                if self.plugin.isPanelLoggingEnabled:
+                    self.plugin.panelLogger.info(u"{}".format(rawData.rstrip()))
+
+            # ############## New Message Parser ########################
+            #
+
+            # added this code to begin to test the message Object
+            newMessageObject = AlarmDecoder.Message(rawData, self.firmwareVersion, self.logger)
+
+            # process select messages
+            if newMessageObject.isValidMessage:
+                if (newMessageObject.messageType == 'CONFIG') and newMessageObject.needsProcessing:
+                    self.processAlarmDecoderConfigString(
+                        newMessageObject.getMessageAttribute('configMessageString'))
+                    self.plugin.hasAlarmDecoderConfigBeenRead = True
+
+                elif (newMessageObject.messageType == 'VER') and newMessageObject.needsProcessing:
+                    self.setFirmware(newMessageObject.firmwareVersion)
+
+                elif (newMessageObject.messageType == 'AUI') and newMessageObject.needsProcessing:
+                    self.logger.debug('AUI message seen')
+
+                elif (newMessageObject.messageType == 'LRR') and newMessageObject.needsProcessing:
+                    # attempt to send VER command if VER not known
+                    if self.firmwareVersion == '':
+                        if self.sendAlarmDecoderVersionCommand() is False:
+                            self.logger.error("Unable to send VER command.")
+
+                    self.logger.debug('LRR message seen')
+
                 else:
-                    self.logger.error(u"Will try next message")
+                    pass
 
-            # message Read was successful - log it
-            self.logger.debug(u"Read ad2usb message:{}".format(repr(rawData)))
-
-            # write the message to the panel log too if panel logging is enabled
-            if self.plugin.isPanelLoggingEnabled:
-                self.plugin.panelLogger.info(u"{}".format(rawData.rstrip()))
+            else:
+                self.logger.warning("Unable to parse:{} - message:{}".format(
+                    newMessageObject.invalidReason, newMessageObject.messageString))
 
             #
-            # Process Message Section
             #
+            # ############## End New Message Parser ########################
 
-            # if we don't want to process this message go back to top of while loop
-            if doNotProcessThisMessage:
-                continue
+        except Exception as err:
+            # don't process any message we had an error reading
+            doNotProcessThisMessage = True
+            self.logger.error(u"Error reading AlarmDecoder message - error:{}".format(str(err)))
+            self.logger.error(u"Error reading AlarmDecoder message - raw data is:{}".format(rawData))
+            self.logger.error(u"Will discard and try next message")
+            return False
 
-            # Start processing the message
-            # Start by checking if this message is "Press * for faults"
-            try:
-                if len(rawData) > 0 and rawData[0] == "[":  # A valid panel message
-                    self.logger.debug(u"raw zone type is:{}".format(rawData[0:4]))
+        #
+        # Process Message Section
+        #
 
-                    # First split the message into parts and see if we need to send a * to get the faults
-                    splitMsg = re.split('[\[\],]', rawData)
-                    msgText = splitMsg[7]
-                    # Python 3 fix:
-                    # was string.find(msgText, ' * ')
-                    if msgText.find(' * ') >= 0:
-                        self.logger.debug(u"Received a Press * message:{}".format(rawData))
-                        self.panelWriteWrapper(self.serialConnection, '*')
-                        # That's all we need to do for this messsage
+        # if we don't want to process this message return
+        if doNotProcessThisMessage:
+            return None
 
-                    elif rawData[30:38] == '00000000':
-                        self.logger.debug(u"System Message: we passed on this one")
-                        pass  # Ignore system messages (no keypad address)
+        # Start processing the message
+        # Start by checking if this message is "Press * for faults"
+        try:
+            if len(rawData) > 0 and rawData[0] == "[":  # A valid panel message
+                self.logger.debug(u"raw zone type is:{}".format(rawData[0:4]))
 
-                    else:
-                        # Get a list of keypad addresses this message was sent to
-                        readThisMessage = False
-                        foundAddress = False
-                        lastAddress = ''
-                        try:
-                            # if only 1 partition, we don't care about keypad addresses
-                            if self.plugin.numPartitions == 1:
-                                panelKeypadAddress = str(self.plugin.ad2usbKeyPadAddress)
-                                foundKeypadAddress = panelKeypadAddress
-                                readThisMessage = True
+                # First split the message into parts and see if we need to send a * to get the faults
+                splitMsg = re.split('[\[\],]', rawData)
+                msgText = splitMsg[7]
+                # Python 3 fix:
+                # was string.find(msgText, ' * ')
+                if msgText.find(' * ') >= 0:
+                    self.logger.debug(u"Received a Press * message:{}".format(rawData))
+                    self.panelWriteWrapper(self.serialConnection, '*')
+                    # That's all we need to do for this messsage
+
+                elif rawData[30:38] == '00000000':
+                    self.logger.debug(u"System Message: we passed on this one")
+                    pass  # Ignore system messages (no keypad address)
+
+                else:
+                    # Get a list of keypad addresses this message was sent to
+                    readThisMessage = False
+                    foundAddress = False
+                    lastAddress = ''
+                    try:
+                        # if only 1 partition, we don't care about keypad addresses
+                        if self.plugin.numPartitions == 1:
+                            panelKeypadAddress = str(self.plugin.ad2usbKeyPadAddress)
+                            foundKeypadAddress = panelKeypadAddress
+                            readThisMessage = True
+                        else:
+                            # The msg sub-string with the keypad addresses (in hex)
+                            keypadAddressField = rawData[30:38]
+                            # Convert the address field to a binary string
+                            addrHex = self.hex2bin(keypadAddressField)
+                            self.logger.debug(u"addrHex:{}".format(addrHex))
+                            for panelKeypadAddress in self.plugin.panelsDict:       # loop through the keypad device dict
+                                bitPosition = -1  # reset this each pass through the loop
+                                panelAddress = -1  # reset this each pass through the loop
+                                panelAddress = int(panelKeypadAddress)
+                                self.logger.debug(u"panelAddress:{}".format(panelAddress))
+                                # determine the bit position for the current address
+                                bitPosition = 8 - (panelAddress % 8) + int(panelAddress / 8) * 8
+                                self.logger.debug(u"bitPosition:{}, bit at bitPosition:{}".format(
+                                    bitPosition, addrHex[bitPosition-1]))
+                                if addrHex[bitPosition-1] == '1':                   # See if we have a one in our slot
+                                    self.logger.debug(u"matched key={}".format(panelKeypadAddress))
+                                    foundKeypadAddress = panelKeypadAddress
+                                    readThisMessage = True   # Yes, we can read this message
+                                    if foundAddress:
+                                        self.logger.error(u"more than one matching keypad address. previous:{}, current:{}".format(
+                                            lastAddress, panelKeypadAddress))
+                                    foundAddress = True
+                                    lastAddress = panelKeypadAddress
+
+                    except Exception as keypadException:
+                        self.logger.error(u"Keypad Address keypadAddressField:{}, panelAddress:{}, bitPosition:{}".format(
+                            keypadAddressField, panelAddress, bitPosition))
+                        self.logger.error(u"Keypad Address Error:{}".format(keypadException))
+
+                    if readThisMessage:
+                        # Now look to see if the message has changed since the last one we processed
+                        self.logger.debug(u"Panel Message: Before:{}".format(lastPanelMsg))
+                        self.logger.debug(u"Panel Message: Current:{}".format(rawData))
+                        # If it hasn't, start again
+                        if rawData == lastPanelMsg:  # The alarm status has not changed
+                            self.logger.debug(u"no panel status change")
+                        else:
+                            # Example: [1000000100000000----]
+                            # 1 = READY                           10 = ALARM OCCURRED STICKY BIT (cleared 2nd disarm)
+                            # 2 = ARMED AWAY  <*                  11 = ALARM BELL (cleared 1st disarm)
+                            # 3 = ARMED HOME  <*                  12 = BATTERY LOW
+                            # 4 = BACK LIGHT                      13 = ENTRY DELAY OFF (ARMED INSTANT/MAX) <*
+                            # 5 = Programming Mode                14 = FIRE ALARM
+                            # 6 = Beep 1-7 ( 3 = beep 3 times )   15 = CHECK ZONE - TROUBLE
+                            # 7 = A ZONE OR ZONES ARE BYPASSED    16 = PERIMETER ONLY (ARMED STAY/NIGHT)
+                            # 8 = AC Power                        17 - 20 unused
+                            # 9 = CHIME MODE
+                            #
+                            panelFlags = rawData[0:23]
+                            panelBitStatus = panelFlags[1:4]
+                            apReadyMode = panelFlags[1]
+
+                            apArmedMode = '0'
+                            armedMode = 'unArmed'
+                            if panelFlags[2] == '1':
+                                apArmedMode = '1'
+                                armedMode = 'armedAway'
+                                if panelFlags[13] == '1':
+                                    armedMode = 'armedMax'
+                            elif panelFlags[3] == '1':
+                                apArmedMode = '1'
+                                armedMode = 'armedStay'
+                                if panelFlags[13] == '1':
+                                    armedMode = 'armedInstant'
+
+                            apProgramMode = panelFlags[5]
+                            apZonesBypassed = panelFlags[7]
+                            apACPower = panelFlags[8]
+                            apChimeMode = panelFlags[9]
+                            apAlarmOccurred = panelFlags[10]
+                            apAlarmBellOn = panelFlags[11]
+                            apBatteryLow = panelFlags[12]
+                            apFireAlarm = panelFlags[14]
+                            apCheckZones = panelFlags[15]
+
+                            self.logger.debug(u"Panel message:{}".format(panelFlags))
+
+                            # self.ALARM_STATUS = {'000': 'Fault', '001': 'armedStay', '010': 'armedAway', '100': 'ready'}
+                            panelTxtStatus = self.plugin.ALARM_STATUS[panelBitStatus]
+                            if panelTxtStatus == 'ready':
+                                displayState = 'enabled'
+                                displayStateUi = 'Ready'
+                            elif panelTxtStatus == 'Fault':
+                                displayState = 'faulted'
+                                displayStateUi = 'Fault'
                             else:
-                                # The msg sub-string with the keypad addresses (in hex)
-                                keypadAddressField = rawData[30:38]
-                                # Convert the address field to a binary string
-                                addrHex = self.hex2bin(keypadAddressField)
-                                self.logger.debug(u"addrHex:{}".format(addrHex))
-                                for panelKeypadAddress in self.plugin.panelsDict:       # loop through the keypad device dict
-                                    bitPosition = -1  # reset this each pass through the loop
-                                    panelAddress = -1  # reset this each pass through the loop
-                                    panelAddress = int(panelKeypadAddress)
-                                    self.logger.debug(u"panelAddress:{}".format(panelAddress))
-                                    # determine the bit position for the current address
-                                    bitPosition = 8 - (panelAddress % 8) + int(panelAddress / 8) * 8
-                                    self.logger.debug(u"bitPosition:{}, bit at bitPosition:{}".format(
-                                        bitPosition, addrHex[bitPosition-1]))
-                                    if addrHex[bitPosition-1] == '1':                   # See if we have a one in our slot
-                                        self.logger.debug(u"matched key={}".format(panelKeypadAddress))
-                                        foundKeypadAddress = panelKeypadAddress
-                                        readThisMessage = True   # Yes, we can read this message
-                                        if foundAddress:
-                                            self.logger.error(u"more than one matching keypad address. previous:{}, current:{}".format(
-                                                lastAddress, panelKeypadAddress))
-                                        foundAddress = True
-                                        lastAddress = panelKeypadAddress
+                                displayState = panelTxtStatus
+                                displayStateUi = panelTxtStatus
 
-                        except Exception as keypadException:
-                            self.logger.error(u"Keypad Address keypadAddressField:{}, panelAddress:{}, bitPosition:{}".format(
-                                keypadAddressField, panelAddress, bitPosition))
-                            self.logger.error(u"Keypad Address Error:{}".format(keypadException))
+                            lastPanelMsg = rawData
+                            panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
+                            self.logger.debug(u"Found dev:{}, id:{}".format(panelDevice.name, panelDevice.id))
 
-                        if readThisMessage:
-                            # Now look to see if the message has changed since the last one we processed
-                            self.logger.debug(u"Panel Message: Before:{}".format(lastPanelMsg))
-                            self.logger.debug(u"Panel Message: Current:{}".format(rawData))
-                            # If it hasn't, start again
-                            if rawData == lastPanelMsg:  # The alarm status has not changed
-                                self.logger.debug(u"no panel status change")
+                            # panelDevice = indigo.devices[self.plugin.alarmDevId]
+                            panelDevice.updateStateOnServer(key='LCDLine1', value=rawData[61:77])
+                            panelDevice.updateStateOnServer(key='LCDLine2', value=rawData[77:93])
+                            panelDevice.updateStateOnServer(key='panelState', value=panelTxtStatus)
+                            panelDevice.updateStateOnServer(
+                                key='displayState', value=displayState, uiValue=displayStateUi)
+                            panelDevice.updateStateOnServer(key='programMode', value=apProgramMode)
+                            panelDevice.updateStateOnServer(key='zonesBypassed', value=apZonesBypassed)
+                            panelDevice.updateStateOnServer(key='acPower', value=apACPower)
+                            panelDevice.updateStateOnServer(key='chimeMode', value=apChimeMode)
+                            panelDevice.updateStateOnServer(key='alarmOccurred', value=apAlarmOccurred)
+                            panelDevice.updateStateOnServer(key='alarmBellOn', value=apAlarmBellOn)
+                            panelDevice.updateStateOnServer(key='batteryLow', value=apBatteryLow)
+                            panelDevice.updateStateOnServer(key='fireAlarm', value=apFireAlarm)
+                            panelDevice.updateStateOnServer(key='checkZones', value=apCheckZones)
+                            panelDevice.updateStateOnServer(key='panelReady', value=apReadyMode)
+                            panelDevice.updateStateOnServer(key='panelArmed', value=apArmedMode)
+                            panelDevice.updateStateOnServer(key='armedMode', value=armedMode)
+                            if apAlarmBellOn == '1' or apFireAlarm == 1:
+                                splitMsg = re.split('[\[\],]', rawData)
+                                # apAlarmedZone = int(splitMsg[3])  # try this as a string to deal with commercial panels
+                                apAlarmedZone = splitMsg[3]
+                                panelDevice.updateStateOnServer(key='alarmedZone', value=apAlarmedZone)
+                                if apAlarmBellOn == '1':
+                                    self.logger.info(u"alarm tripped by zone:{}".format(apAlarmedZone))
+                                else:
+                                    self.logger.info(u"fire alarm tripped by zone:{}".format(apAlarmedZone))
+
                             else:
-                                # Example: [1000000100000000----]
-                                # 1 = READY                           10 = ALARM OCCURRED STICKY BIT (cleared 2nd disarm)
-                                # 2 = ARMED AWAY  <*                  11 = ALARM BELL (cleared 1st disarm)
-                                # 3 = ARMED HOME  <*                  12 = BATTERY LOW
-                                # 4 = BACK LIGHT                      13 = ENTRY DELAY OFF (ARMED INSTANT/MAX) <*
-                                # 5 = Programming Mode                14 = FIRE ALARM
-                                # 6 = Beep 1-7 ( 3 = beep 3 times )   15 = CHECK ZONE - TROUBLE
-                                # 7 = A ZONE OR ZONES ARE BYPASSED    16 = PERIMETER ONLY (ARMED STAY/NIGHT)
-                                # 8 = AC Power                        17 - 20 unused
-                                # 9 = CHIME MODE
-                                #
-                                panelFlags = rawData[0:23]
-                                panelBitStatus = panelFlags[1:4]
-                                apReadyMode = panelFlags[1]
+                                panelDevice.updateStateOnServer(key='alarmedZone', value='n/a')
+                                splitMsg = re.split('[\[\],]', rawData)
 
-                                apArmedMode = '0'
-                                armedMode = 'unArmed'
-                                if panelFlags[2] == '1':
-                                    apArmedMode = '1'
-                                    armedMode = 'armedAway'
-                                    if panelFlags[13] == '1':
-                                        armedMode = 'armedMax'
-                                elif panelFlags[3] == '1':
-                                    apArmedMode = '1'
-                                    armedMode = 'armedStay'
-                                    if panelFlags[13] == '1':
-                                        armedMode = 'armedInstant'
-
-                                apProgramMode = panelFlags[5]
-                                apZonesBypassed = panelFlags[7]
-                                apACPower = panelFlags[8]
-                                apChimeMode = panelFlags[9]
-                                apAlarmOccurred = panelFlags[10]
-                                apAlarmBellOn = panelFlags[11]
-                                apBatteryLow = panelFlags[12]
-                                apFireAlarm = panelFlags[14]
-                                apCheckZones = panelFlags[15]
-
-                                self.logger.debug(u"Panel message:{}".format(panelFlags))
-
-                                # self.ALARM_STATUS = {'000': 'Fault', '001': 'armedStay', '010': 'armedAway', '100': 'ready'}
-                                panelTxtStatus = self.plugin.ALARM_STATUS[panelBitStatus]
-                                if panelTxtStatus == 'ready':
-                                    displayState = 'enabled'
-                                    displayStateUi = 'Ready'
-                                elif panelTxtStatus == 'Fault':
-                                    displayState = 'faulted'
-                                    displayStateUi = 'Fault'
-                                else:
-                                    displayState = panelTxtStatus
-                                    displayStateUi = panelTxtStatus
-
-                                lastPanelMsg = rawData
-                                panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
-                                self.logger.debug(u"Found dev:{}, id:{}".format(panelDevice.name, panelDevice.id))
-
-                                # panelDevice = indigo.devices[self.plugin.alarmDevId]
-                                panelDevice.updateStateOnServer(key='LCDLine1', value=rawData[61:77])
-                                panelDevice.updateStateOnServer(key='LCDLine2', value=rawData[77:93])
-                                panelDevice.updateStateOnServer(key='panelState', value=panelTxtStatus)
-                                panelDevice.updateStateOnServer(
-                                    key='displayState', value=displayState, uiValue=displayStateUi)
-                                panelDevice.updateStateOnServer(key='programMode', value=apProgramMode)
-                                panelDevice.updateStateOnServer(key='zonesBypassed', value=apZonesBypassed)
-                                panelDevice.updateStateOnServer(key='acPower', value=apACPower)
-                                panelDevice.updateStateOnServer(key='chimeMode', value=apChimeMode)
-                                panelDevice.updateStateOnServer(key='alarmOccurred', value=apAlarmOccurred)
-                                panelDevice.updateStateOnServer(key='alarmBellOn', value=apAlarmBellOn)
-                                panelDevice.updateStateOnServer(key='batteryLow', value=apBatteryLow)
-                                panelDevice.updateStateOnServer(key='fireAlarm', value=apFireAlarm)
-                                panelDevice.updateStateOnServer(key='checkZones', value=apCheckZones)
-                                panelDevice.updateStateOnServer(key='panelReady', value=apReadyMode)
-                                panelDevice.updateStateOnServer(key='panelArmed', value=apArmedMode)
-                                panelDevice.updateStateOnServer(key='armedMode', value=armedMode)
-                                if apAlarmBellOn == '1' or apFireAlarm == 1:
-                                    splitMsg = re.split('[\[\],]', rawData)
-                                    # apAlarmedZone = int(splitMsg[3])  # try this as a string to deal with commercial panels
-                                    apAlarmedZone = splitMsg[3]
-                                    panelDevice.updateStateOnServer(key='alarmedZone', value=apAlarmedZone)
-                                    if apAlarmBellOn == '1':
-                                        self.logger.info(u"alarm tripped by zone:{}".format(apAlarmedZone))
-                                    else:
-                                        self.logger.info(u"fire alarm tripped by zone:{}".format(apAlarmedZone))
-
-                                else:
-                                    panelDevice.updateStateOnServer(key='alarmedZone', value='n/a')
-                                    splitMsg = re.split('[\[\],]', rawData)
-
-                                # Catch an alarm tripped event
-                                try:
-                                    if rawData[61:74] == "DISARM SYSTEM":
-                                        now = datetime.now()
-                                        timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
-                                        partition = panelDevice.pluginProps['panelPartitionNumber']
-                                        function = 'ALARM_TRIPPED'
-                                        user = 'unknown'
-                                        self.logger.debug(u"alarm tripped:{}, partition:{}, function:{}".format(
-                                            user, partition, function))
-
-                                        panelDevice.updateStateOnServer(key='lastChgBy', value=user)
-                                        panelDevice.updateStateOnServer(key='lastChgTo', value=function)
-                                        panelDevice.updateStateOnServer(key='lastChgAt', value=timeStamp)
-                                        if self.plugin.logArmingEvents:
-                                            self.logger.info(
-                                                u"Alarm partition {} set to {} caused/entered by {}".format(partition, function, user))
-
-                                        self.executeTrigger(partition, user, function)
-                                except Exception as err:
-                                    self.logger.error(u'ALARM TRIPPED:{}'.format(str(err)))
-
-                            # Setup some variables for the next few steps
-                            msgBitMap = splitMsg[1]
-                            msgZoneNum = int(splitMsg[3])
-                            realZone = False
+                            # Catch an alarm tripped event
                             try:
-                                bMsgZoneNum = int(msgText[7:9])
-                                realZone = True
-                            except:
-                                pass
-                                # 0fc = comm failure; 0f* = Field?
-                                # self.logError("%s: Panel reports: %s" % (funcName, msgText), self.logName)
+                                if rawData[61:74] == "DISARM SYSTEM":
+                                    now = datetime.now()
+                                    timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
+                                    partition = panelDevice.pluginProps['panelPartitionNumber']
+                                    function = 'ALARM_TRIPPED'
+                                    user = 'unknown'
+                                    self.logger.debug(u"alarm tripped:{}, partition:{}, function:{}".format(
+                                        user, partition, function))
 
-                            msgKey = msgText[1:6]
-                            self.logger.debug(u"msgKey is:{}, msgTxt is:{}".format(msgKey, msgText))
-                            if msgZoneNum in self.plugin.zonesDict:  # avoid issues with count down timers on arm
-                                zoneData = self.plugin.zonesDict[int(msgZoneNum)]
-                                zDevId = zoneData['devId']
-                                #zLogChanges = zoneData['logChanges']
-                                zName = zoneData['name']
-                                indigoDevice = indigo.devices[zDevId]
+                                    panelDevice.updateStateOnServer(key='lastChgBy', value=user)
+                                    panelDevice.updateStateOnServer(key='lastChgTo', value=function)
+                                    panelDevice.updateStateOnServer(key='lastChgAt', value=timeStamp)
+                                    if self.plugin.logArmingEvents:
+                                        self.logger.info(
+                                            u"Alarm partition {} set to {} caused/entered by {}".format(partition, function, user))
 
+                                    self.executeTrigger(partition, user, function)
+                            except Exception as err:
+                                self.logger.error(u'ALARM TRIPPED:{}'.format(str(err)))
+
+                        # Setup some variables for the next few steps
+                        msgBitMap = splitMsg[1]
+                        msgZoneNum = int(splitMsg[3])
+                        realZone = False
+                        try:
+                            bMsgZoneNum = int(msgText[7:9])
+                            realZone = True
+                        except:
+                            pass
+                            # 0fc = comm failure; 0f* = Field?
+                            # self.logError("%s: Panel reports: %s" % (funcName, msgText), self.logName)
+
+                        msgKey = msgText[1:6]
+                        self.logger.debug(u"msgKey is:{}, msgTxt is:{}".format(msgKey, msgText))
+                        if msgZoneNum in self.plugin.zonesDict:  # avoid issues with count down timers on arm
+                            zoneData = self.plugin.zonesDict[int(msgZoneNum)]
+                            zDevId = zoneData['devId']
+                            #zLogChanges = zoneData['logChanges']
+                            zName = zoneData['name']
+                            indigoDevice = indigo.devices[zDevId]
+
+                        self.logger.debug(
+                            u"number of zones bypassed - current:{}, last:{}".format(apZonesBypassed, self.lastApZonesBypassed))
+
+                        # Manage bypassed zones
+                        if apZonesBypassed != self.lastApZonesBypassed:
                             self.logger.debug(
-                                u"number of zones bypassed - current:{}, last:{}".format(apZonesBypassed, self.lastApZonesBypassed))
-
-                            # Manage bypassed zones
-                            if apZonesBypassed != self.lastApZonesBypassed:
-                                self.logger.debug(
-                                    u"change in zone bypass count - current:{}, last:{}".format(apZonesBypassed, self.lastApZonesBypassed))
-                                # There has been a change is the bypass list
-                                if apZonesBypassed == "0":
-                                    self.logger.debug(u"zones bypassed is now zero")
-                                    self.lastApZonesBypassed = apZonesBypassed
-                                    # Clear the bypass state of all zones
-                                    for zone in self.zoneBypassDict.keys():
-                                        bZoneData = self.plugin.zonesDict[int(zone)]
-                                        bZDevid = bZoneData['devId']
-                                        bIndigoDevice = indigo.devices[bZDevid]
-                                        bIndigoDevice.updateStateOnServer(key='bypassState', value=False)
-
-                                        # after setting bypass set the device state to itself (no change)
-                                        # to for force display to account for bypass state change
-                                        self.plugin.setDeviceState(bIndigoDevice, bIndigoDevice.displayStateValRaw)
-
-                                        self.logger.debug(
-                                            u"clearing bypass state for zone:{}, devid:{}".format(zone, bZDevid))
-                                        self.logger.debug(u"zone:{}, data:{}".format(zone, self.plugin.zonesDict[zone]))
-
-                                    # and now clear the list of bypassed zones
-                                    self.zoneBypassDict.clear()
-
-                            if apZonesBypassed == "1" and msgKey == "BYPAS" and realZone is True:
-                                # A zone has been bypassed.
-                                if bMsgZoneNum in self.zoneBypassDict:
-                                    self.logger.debug(
-                                        u"zone bypass state zone:{}, name:{} already recorded".format(bMsgZoneNum, zName))
-                                else:
-                                    self.zoneBypassDict[bMsgZoneNum] = True
-                                    self.logger.info(
-                                        u"Alarm zone number:{}, name:{} has been bypassed".format(bMsgZoneNum, zName))
-                                    self.lastApZonesBypassed = apZonesBypassed
-                                    indigoDevice.updateStateOnServer(key='bypassState', value=True)
+                                u"change in zone bypass count - current:{}, last:{}".format(apZonesBypassed, self.lastApZonesBypassed))
+                            # There has been a change is the bypass list
+                            if apZonesBypassed == "0":
+                                self.logger.debug(u"zones bypassed is now zero")
+                                self.lastApZonesBypassed = apZonesBypassed
+                                # Clear the bypass state of all zones
+                                for zone in self.zoneBypassDict.keys():
+                                    bZoneData = self.plugin.zonesDict[int(zone)]
+                                    bZDevid = bZoneData['devId']
+                                    bIndigoDevice = indigo.devices[bZDevid]
+                                    bIndigoDevice.updateStateOnServer(key='bypassState', value=False)
 
                                     # after setting bypass set the device state to itself (no change)
                                     # to for force display to account for bypass state change
-                                    self.plugin.setDeviceState(indigoDevice, indigoDevice.displayStateValRaw)
+                                    self.plugin.setDeviceState(bIndigoDevice, bIndigoDevice.displayStateValRaw)
 
-                            # OK, Now let's see if we have a zone event
-                            if not ad2usbIsAdvanced and len(self.plugin.zonesDict) > 0:
-                                self.logger.debug(u'calling basic')
-                                self.logger.debug(u'Zone:{}, Key:{}'.format(msgZoneNum, msgKey))
+                                    self.logger.debug(
+                                        u"clearing bypass state for zone:{}, devid:{}".format(zone, bZDevid))
+                                    self.logger.debug(u"zone:{}, data:{}".format(zone, self.plugin.zonesDict[zone]))
 
-                                if msgKey == "FAULT" or apReadyMode == '1':
-                                    self.logger.debug(u"ready to call basic msg handler")
-                                    self.basicReadZoneMessage(rawData, msgBitMap, msgZoneNum,
-                                                              msgText, msgKey, panelDevice)
+                                # and now clear the list of bypassed zones
+                                self.zoneBypassDict.clear()
 
-                elif rawData[1:9] == u'SER2SOCK' or len(rawData) == 0:
-                    # ignore system messages
-                    self.logger.debug(u"SER2SOCK connection or null message - do nothing")
-                    pass
+                        if apZonesBypassed == "1" and msgKey == "BYPAS" and realZone is True:
+                            # A zone has been bypassed.
+                            if bMsgZoneNum in self.zoneBypassDict:
+                                self.logger.debug(
+                                    u"zone bypass state zone:{}, name:{} already recorded".format(bMsgZoneNum, zName))
+                            else:
+                                self.zoneBypassDict[bMsgZoneNum] = True
+                                self.logger.info(
+                                    u"Alarm zone number:{}, name:{} has been bypassed".format(bMsgZoneNum, zName))
+                                self.lastApZonesBypassed = apZonesBypassed
+                                indigoDevice.updateStateOnServer(key='bypassState', value=True)
 
-                elif rawData[1:4] == 'LRR':   # panel state information  - mostly for events
+                                # after setting bypass set the device state to itself (no change)
+                                # to for force display to account for bypass state change
+                                self.plugin.setDeviceState(indigoDevice, indigoDevice.displayStateValRaw)
+
+                        # OK, Now let's see if we have a zone event
+                        if not ad2usbIsAdvanced and len(self.plugin.zonesDict) > 0:
+                            self.logger.debug(u'calling basic')
+                            self.logger.debug(u'Zone:{}, Key:{}'.format(msgZoneNum, msgKey))
+
+                            if msgKey == "FAULT" or apReadyMode == '1':
+                                self.logger.debug(u"ready to call basic msg handler")
+                                self.basicReadZoneMessage(rawData, msgBitMap, msgZoneNum,
+                                                          msgText, msgKey, panelDevice)
+
+            elif rawData[1:9] == u'SER2SOCK' or len(rawData) == 0:
+                # ignore system messages
+                self.logger.debug(u"SER2SOCK connection or null message - do nothing")
+                pass
+
+            elif rawData[1:4] == 'LRR':   # panel state information  - mostly for events
+                self.logger.debug(u"Processing LRR Message:{}, logging option:{}".format(
+                    rawData, self.plugin.logArmingEvents))
+                # EVENT DATA - Either the User Number who preformed the action or the zone that was bypassed.
+                # PARTITION - The panel partition the event applies to. 0 indicates all partitions such as ACLOSS event.
+                # EVENT TYPES - One of the following events. Note: the programming mode for enabling each type is also provided.
+                # eg. !LRR:002,1,OPEN
+
+                try:
                     self.logger.debug(u"Processing LRR Message:{}, logging option:{}".format(
                         rawData, self.plugin.logArmingEvents))
-                    # EVENT DATA - Either the User Number who preformed the action or the zone that was bypassed.
-                    # PARTITION - The panel partition the event applies to. 0 indicates all partitions such as ACLOSS event.
-                    # EVENT TYPES - One of the following events. Note: the programming mode for enabling each type is also provided.
-                    # eg. !LRR:002,1,OPEN
+                    splitMsg = re.split('[!:,]', rawData)
+                    user = splitMsg[2]
+                    partition = splitMsg[3]
+                    function = splitMsg[4]
+                    function = function.rstrip()  # if newline exists strip it
+                    self.logger.debug(
+                        u"LRR Decode - user:{}, partition:{}, function:{}".format(user, partition, function))
 
-                    try:
-                        self.logger.debug(u"Processing LRR Message:{}, logging option:{}".format(
-                            rawData, self.plugin.logArmingEvents))
-                        splitMsg = re.split('[!:,]', rawData)
-                        user = splitMsg[2]
-                        partition = splitMsg[3]
-                        function = splitMsg[4]
-                        function = function.rstrip()  # if newline exists strip it
-                        self.logger.debug(
-                            u"LRR Decode - user:{}, partition:{}, function:{}".format(user, partition, function))
+                    if function in kEventStateDict:
+                        now = datetime.now()
+                        timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
 
-                        if function in kEventStateDict:
-                            now = datetime.now()
-                            timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
+                        panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
+                        # panelDevice = indigo.devices[self.plugin.partition2address[partition]['devId']]
+                        panelDevice.updateStateOnServer(key='lastChgBy', value=user)
+                        panelDevice.updateStateOnServer(key='lastChgTo', value=function)
+                        panelDevice.updateStateOnServer(key='lastChgAt', value=timeStamp)
+                        if self.plugin.logArmingEvents:
+                            self.logger.info(
+                                u"Alarm partition {} set to {} caused/entered by {}".format(partition, function, user))
 
-                            panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
-                            # panelDevice = indigo.devices[self.plugin.partition2address[partition]['devId']]
-                            panelDevice.updateStateOnServer(key='lastChgBy', value=user)
-                            panelDevice.updateStateOnServer(key='lastChgTo', value=function)
-                            panelDevice.updateStateOnServer(key='lastChgAt', value=timeStamp)
-                            if self.plugin.logArmingEvents:
-                                self.logger.info(
-                                    u"Alarm partition {} set to {} caused/entered by {}".format(partition, function, user))
-
-                            self.executeTrigger(partition, user, function)
-                    except Exception as err:
-                        self.logger.error(u"LRR Error:{}".format(str(err)))
-
-                else:
-                    # We check the length of self.plugin.zonesDict so we will not try to update zones if none exist
-                    # and then call the advanced mode handler.
-                    # it is Ok that we skipped the panel update code, we'll catch that on the full ad2usb message
-
-                    if ad2usbIsAdvanced and len(self.plugin.zonesDict) > 0 and rawData[1:4] != "AUI":
-                        self.logger.debug(u"Calling advanced for:{}".format(rawData[1:4]))
-                        self.advancedReadZoneMessage(rawData)  # indigoDevice, panelKeypadAddress)
-
-                self.logger.debug(u"panelMsgRead End")
-
-            except Exception as err:
-                self.logger.error(u'Error on line:{}'.format(sys.exc_info()[-1].tb_lineno))
-                self.logger.error(u"Error:{}".format(str(err)))
-
-        self.logger.info(u"AlarmDecoder message reading stopped")
-        self.logger.debug(u"completed")
-
-    ########################################
-    # Get things rolling
-    # TO DO: remove this - not called
-    def old_startComm(self, ad2usbIsAdvanced, ad2usbCommType, ad2usbAddress, ad2usbPort, ad2usbSerialPort):
-        self.logger.debug(u"called")
-        self.logger.debug(u"isAdvanced:{}, commType:{}, address:{}, port:{}, serialPort:{}".format(
-            ad2usbIsAdvanced, ad2usbCommType, ad2usbAddress, ad2usbPort, ad2usbSerialPort))
-
-        self.logger.debug(u"Read alarm status dict:{}".format(self.plugin.ALARM_STATUS))
-        self.logger.debug(u"Loading zonesDict")
-
-        for zone in sorted(self.plugin.zonesDict):
-            self.logger.debug(u"...Index:{}, Data:{}".format(zone, self.plugin.zonesDict[zone]))
-
-        self.stopReadingMessages is False
-        retryCount = 0
-        # firstTry = True
-
-        # TO DO: convert to use setURL and integrate with stop/start/restart
-        while self.stopReadingMessages is False:
-
-            # set the serial connection property - will open if needed
-            if self.setSerialConnection():
-                try:
-                    if self.plugin.isPlaybackCommunicationModeSet:
-                        # read a test/debug file of panel messages
-                        # it doesn't matter what the connection object is so long as it exists
-                        self.logger.info('In Playback debug mode - no connection created...')
-                    else:
-                        self.logger.info(u"connected to AlarmDecoder")
-
-                    self.panelMsgRead(ad2usbIsAdvanced)
-                    self.logger.info(u"returned from panelMessageRead")
-
+                        self.executeTrigger(partition, user, function)
                 except Exception as err:
-                    self.logger.error(u"Error in old_startComm shutdown loop - message:{}".format(str(err)))
+                    self.logger.error(u"LRR Error:{}".format(str(err)))
 
             else:
-                self.logger.error(u"Error setting serial connection...")
-                # retry 3 times for 10 seconds (30 sec)
-                # then 3 times for 30 seconds (total of 2 mins)
-                # then 3 times for 5 minutes (total of 17 mins)
-                # then 3 times for 30 minutes (total of 1 hour and 47 mins)
-                retryCount += 1
-                if retryCount <= 3:
-                    sleepTime = 10
-                    self.logger.warning(u"trying serial connection again in {} seconds...".format(sleepTime))
-                    time.sleep(sleepTime)
-                elif (retryCount > 3) and (retryCount <= 6):
-                    sleepTime = 30
-                    self.logger.warning(u"trying serial connection again in {} seconds...".format(sleepTime))
-                    time.sleep(sleepTime)
-                elif (retryCount > 6) and (retryCount <= 9):
-                    sleepTime = 5
-                    self.logger.error(u"trying serial connection again in {} minutes...".format(sleepTime))
-                    time.sleep(sleepTime * 60)
-                elif (retryCount > 9) and (retryCount <= 12):
-                    sleepTime = 30
-                    self.logger.error(u"trying serial connection again in {} minutes...".format(sleepTime))
-                    time.sleep(sleepTime * 60)
-                elif retryCount > 12:
-                    self.logger.critical(
-                        'Failed to connect to AlarmDecoder after several attempts. Check connection to AlarmDecoder')
-                    self.stopReadingMessages = True
+                # We check the length of self.plugin.zonesDict so we will not try to update zones if none exist
+                # and then call the advanced mode handler.
+                # it is Ok that we skipped the panel update code, we'll catch that on the full ad2usb message
+
+                if ad2usbIsAdvanced and len(self.plugin.zonesDict) > 0 and rawData[1:4] != "AUI":
+                    self.logger.debug(u"Calling advanced for:{}".format(rawData[1:4]))
+                    self.advancedReadZoneMessage(rawData)  # indigoDevice, panelKeypadAddress)
+
+            self.logger.debug(u"panelMsgRead End")
+
+        except Exception as err:
+            self.logger.error(u'Error on line:{}'.format(sys.exc_info()[-1].tb_lineno))
+            self.logger.error(u"Error:{}".format(str(err)))
 
         self.logger.debug(u"completed")
 
     def newStartComm(self):
         """
-        Initiates serial port open call and send C and V commands and read CONFIG and VER
+        Initiates serial port open call and sends C and V commands and read CONFIG and VER.
+        The reading of the output of these two messages will happen in runConcurrentThread.
 
         Return True for success; False for failure
         """
@@ -1010,8 +961,8 @@ class ad2usb(object):
 
             # this section and below for IP and USB
             # otherwise lets track if we successfully read the VER and CONFIG messages
-            verReadSuccess = False
-            configReadSuccess = False
+            verSendSuccess = False
+            configSendSuccess = False
 
             # try to open the serial connection
             # TO DO: put send and read of V and CONFIG into 2 methods
@@ -1019,47 +970,14 @@ class ad2usb(object):
                 self.logger.info(u"AlarmDecoder communication started...")
 
                 if self.sendAlarmDecoderVersionCommand():
-                    # run a loop loking for VER message, max 10 times
-                    maxReadLines = 10
-                    ignoredMessageCount = 0
-                    while (maxReadLines > 0):
-                        messageString = self.panelReadWrapper(self.serialConnection)
-                        # count down from 10 to 1
-                        maxReadLines = maxReadLines - 1
-                        # create an object
-                        messageObject = AlarmDecoder.Message(messageString)
-                        if messageObject.messageType == 'VER':
-                            self.setFirmware(messageObject.firmwareVersion)
-                            self.logger.info(u"AlarmDecoder firmware version is:{}".format(self.firmwareVersion))
-                            verReadSuccess = True
-                        else:
-                            ignoredMessageCount += 1
-
-                    self.logger.info("Ignored {} messages reading VER".format(ignoredMessageCount))
+                    verSendSuccess = True
+                    self.logger.info(u"AlarmDecoder VER (version) command sent")
 
                 if self.sendAlarmDecoderConfigCommand():
-                    # run a loop loking for CONFIG message, max 10 times
-                    maxReadLines = 10
-                    ignoredMessageCount = 0
-                    while (maxReadLines > 0):
-                        messageString = self.panelReadWrapper(self.serialConnection)
-                        # count down from 10 to 1
-                        maxReadLines = maxReadLines - 1
-                        # create an object
-                        messageObject = AlarmDecoder.Message(messageString, self.firmwareVersion)
-                        if messageObject.messageType == 'CONFIG':
-                            configString = messageObject.getMessageAttribute('configMessageString')
-                            self.processAlarmDecoderConfigString(configString)
-                            self.logger.info(u"AlarmDecoder config string is:{}".format(configString))
-                            self.logger.info(u"AlarmDecoder config settings are:{}".format(
-                                self.plugin.configSettings))
-                            configReadSuccess = True
-                        else:
-                            ignoredMessageCount += 1
+                    configSendSuccess = True
+                    self.logger.info(u"AlarmDecoder C (config) command sent")
 
-                    self.logger.info("Ignored {} messages reading CONFIG".format(ignoredMessageCount))
-
-            if verReadSuccess and configReadSuccess:
+            if verSendSuccess and configSendSuccess:
                 self.logger.info(u"AlarmDecoder communication startup completed successfully")
 
                 # TO DO: remove this? ported this log from old startComm
@@ -1069,10 +987,11 @@ class ad2usb(object):
                 self.isCommStarted = True
                 return True
             else:
-                if not configReadSuccess:
-                    self.logger.error(u"Unable to read AlarmDecoder CONFIG")
-                if not verReadSuccess:
-                    self.logger.error(u"Unable to read AlarmDecoder VERSION")
+                if not configSendSuccess:
+                    self.logger.error(u"Unable to send AlarmDecoder CONFIG command")
+                if not verSendSuccess:
+                    self.logger.error(
+                        u"Unable to send AlarmDecoder VERSION command. LRR messages will be ignored until firmware version is known.")
 
                 self.isCommStarted = False
                 return False
@@ -1128,8 +1047,6 @@ class ad2usb(object):
                 self.logger.debug(u'attempting to get serial connection')
                 if (self.setSerialConnection()) and (self.serialConnection is not None):
                     self.logger.debug(u"established connection to send CONFIG command")
-                    # change the timeout for this command
-                    self.serialConnection.timeout = 2
 
                     # send message to AlarmDecoder
                     configCommand = kADCommands['CONFIG']
@@ -1137,9 +1054,6 @@ class ad2usb(object):
                     self.panelWriteWrapper(self.serialConnection, configCommand)
                     self.logger.debug(u'sent CONFIG command to AlarmDecoder')
 
-                    # reset the timeout to None
-                    self.serialConnection.timeout = None
-                    self.logger.debug(u'reset timeout back to None')
                     return True
 
             else:
@@ -1161,21 +1075,27 @@ class ad2usb(object):
         try:
             self.logger.debug(u'called')
 
-            # open a new connection as the URL could have changed
-            self.logger.debug(u'attempting to get serial connection...')
-            if self.setSerialConnection():
+            # don't run if in playback mode
+            if self.plugin.isPlaybackCommunicationModeSet:
+                self.logger.debug(u'Panel Message Playback Set - cannot send AlarmDecoder VER command')
+                return False
 
-                self.logger.debug(u'attempting to set new timeout...')
-                self.serialConnection.timeout = 2
-                self.logger.debug(u"new timeout set...")
+            if (self.plugin.ad2usbCommType == 'IP') or (self.plugin.ad2usbCommType == 'USB'):
 
-                verCommand = kADCommands['VER']
-                self.logger.debug(u'attempting to send VER command:{} to AlarmDecoder'.format(verCommand))
-                self.panelWriteWrapper(self.serialConnection, verCommand)
-                self.logger.debug(u"VER command sent...")
+                self.logger.debug(u'attempting to get serial connection')
+                if (self.setSerialConnection()) and (self.serialConnection is not None):
+                    self.logger.debug(u"established connection to send VER command")
 
-                self.serialConnection.timeout = None
-                self.logger.debug(u"timeout reset to None...")
+                    # send message to AlarmDecoder
+                    verCommand = kADCommands['VER']
+                    self.logger.debug(u'attempting to send VER command:{} to AlarmDecoder'.format(verCommand))
+                    self.panelWriteWrapper(self.serialConnection, verCommand)
+                    self.logger.debug(u"VER command sent...")
+                    return True
+
+            else:
+                self.logger.debug(u'commType is not IP or USB:{}'.format(self.plugin.ad2usbCommType))
+                return False
 
         except Exception as err:
             self.logger.error(
@@ -1203,17 +1123,13 @@ class ad2usb(object):
                     if len(configString) > 0:
                         self.logger.debug(
                             u'attempting to update CONFIG settings:{} to AlarmDecoder'.format(configString))
-                        self.logger.debug('setting timeout...')
-                        self.serialConnection.timeout = 2
+
                         if self.panelWriteWrapper(self.serialConnection, configString):
                             self.logger.debug(u'AlarmDecoder CONFIG written successfully')
                             self.logger.debug('resetting timeout...')
-                            self.serialConnection.timeout = None
                             return True
                         else:
                             self.logger.error(u'AlarmDecoder CONFIG write failed')
-                            self.logger.debug('resetting timeout...')
-                            self.serialConnection.timeout = None
                             return False
                     else:
                         self.logger.warning(u'AlarmDecoder CONFIG settings to write was empty')
@@ -1373,8 +1289,8 @@ class ad2usb(object):
 
     def panelReadWrapper(self, serialObject):
         """
-        this is a wrapper to support Python 2 and 3 serial communications. Python 2 is a string. Python 3 is bytes and must be decoded.
-        returns a string of the message read or empty string if there are any errors
+        this is a wrapper to support Python 2 and 3 serial communications. Python 2 is a string. Python 3 is bytes and
+        must be decoded. Returns a string of the message read or empty string if there are any errors or if timeout is reached
         """
         self.logger.debug(u'called')
 
@@ -1468,6 +1384,13 @@ class ad2usb(object):
         self.logger.debug(u'called')
         return self.plugin.URL
 
+    def getTimeout(self):
+        """
+        returns the value of the timeout constant k_SERIAL_TIMEOUT
+        """
+        self.logger.debug(u'called')
+        return k_SERIAL_TIMEOUT
+
     def setSerialConnection(self, forceReset=False):
         """
         Sets the property "serialConnection" to a serial connection object to the AlarmDecoder
@@ -1538,8 +1461,8 @@ class ad2usb(object):
             # attempt to create a new serial object and connect
             self.serialConnection = serial.serial_for_url(theURL, baudrate=115200)
 
-            # set a timeout to wait indefinitley on readline
-            self.serialConnection.timeout = None
+            # set a timeout to not wait indefinitely on readline
+            self.serialConnection.timeout = k_SERIAL_TIMEOUT
 
             # log and return success
             self.isCommStarted = True
@@ -1554,7 +1477,7 @@ class ad2usb(object):
 
     def setFirmware(self, firmwareVersion):
         """
-        Set the property of the firmware version supplied and logs to INFO if it changed.
+        Set the property named 'firmwareVersion' of the firmware version supplied and logs to INFO if it changed.
 
         Returns True if changed; False otherwise
         """

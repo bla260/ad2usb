@@ -28,16 +28,17 @@ class Message(object):
         self.needsProcessing = False
         self.messageType = 'UNK'
         self.messageString = ''
-        defaultFirmwareVersion = 'V2.2a.6'
 
         # check for valid firmware and logger parameters
         if firmwareVersion == 'V2.2a.6':
             self.firmwareVersion = firmwareVersion
-        elif firmwareVersion == 'V2.2a.8.8':
+        # TO DO: correct the string below when new version of firmware is supported
+        elif firmwareVersion == 'V2.2a.8.8--FUTURE':
             self.firmwareVersion = firmwareVersion
         elif firmwareVersion == '':
-            # default to the old firmware
-            self.firmwareVersion = defaultFirmwareVersion
+            self.isValidMessage = False
+            self.needsProcessing = False
+            self.invalidReason = 'firmware not provided'
         else:
             self.isValidMessage = False
             self.needsProcessing = False
@@ -134,12 +135,16 @@ class Message(object):
                 self.logger.debug(
                     'read {} ({}) message type - starting parsing'.format(self.messageType, self.firmwareVersion))
                 self.parseMessage_LRR()
+            elif self.firmwareVersion == '':
+                self.logger.warning(
+                    'cannot read {} message type - firmware version not read from AlarmDecoder yet'.format(self.messageType))
+                self.setMessageToInvalid('Unidentified firmware')
             else:
                 # need firmware version to process LRR
                 # TO DO: change to error
                 self.logger.warning(
-                    'cannot read {} message type - unknown firmware version:{}'.format(self.messageType, self.firmwareVersion))
-                self.setMessageToInvalid('Unidentified firmware')
+                    'cannot read {} message type - unsupported firmware version:{}'.format(self.messageType, self.firmwareVersion))
+                self.setMessageToInvalid('Unsupported firmware')
 
         elif self.messageString[0:4] == '!KPE':
             self.isValidMessage = True
