@@ -103,27 +103,29 @@ class ad2usb(object):
     # Event queue management and trigger initiation
     def executeTrigger(self, partition, user, event):
         self.logger.debug(u"called with partition:{}, user:{}, event:{}".format(partition, user, event))
+        partition = str(partition)
 
         if event in self.plugin.triggerDict:
             self.logger.debug(u"found event trigger:{}".format(self.plugin.triggerDict[event]))
             try:
-                if self.plugin.triggerDict[event][partition]:
+                if partition in self.plugin.triggerDict[event]:
                     # We have a winner
-                    indigo.trigger.execute(int(self.plugin.triggerDict[event][partition]))
                     self.logger.debug(u"matched event trigger:{}".format(self.plugin.triggerDict[event][partition]))
+                    indigo.trigger.execute(int(self.plugin.triggerDict[event][partition]))
             except:
                 pass
+        # TO DO: refactor to use only events - add method to catch updates of triggers
         if isinstance(user, int):
             user = str(int(user))  # get rid of the leading zeroes
             if user in self.plugin.triggerDict:
                 self.logger.debug(u"found user trigger:{}".format(self.plugin.triggerDict[user]))
                 try:
-                    if self.plugin.triggerDict[user][partition]:
+                    if partition in self.plugin.triggerDict[user]:
                         if self.plugin.triggerDict[user][partition]['event'] == event:
                             # We have a winner
-                            indigo.trigger.execute(int(self.plugin.triggerDict[user][partition]['tid']))
                             self.logger.debug(u"matched user trigger:{}".format(
                                 self.plugin.triggerDict[user][partition]))
+                            indigo.trigger.execute(int(self.plugin.triggerDict[user][partition]['tid']))
                 except:
                     pass
 
@@ -368,7 +370,7 @@ class ad2usb(object):
                     self.logger.error(u"updateAllZoneGroups Error:{}".format(str(err)))
 
         else:
-            if rawData[0:8] != '!setting' and rawData[0:7] != '!CONFIG' and rawData[0:2] != '!>' and rawData[0:4] != '!KPE' and rawData[0:8] != '!Sending':
+            if rawData[0:8] != '!setting' and rawData[0:7] != '!CONFIG' and rawData[0:2] != '!>' and rawData[0:4] != '!KPE' and rawData[0:8] != '!Sending' and rawData[0:4] != '!VER':
                 self.logger.error(u"Unknown message received:{}".format(rawData))
 
         self.logger.debug(u"completed")
@@ -548,6 +550,8 @@ class ad2usb(object):
         lastPanelMsg = ""
         doNotProcessThisMessage = False  # default to process every message
         rawData = ""
+        messageReadSuccessfully = False
+        skipOldMesssageProcessing = False  # used to skip legacy message processing
 
         try:
             # check if we've Disabled the plugin in the main thread before continuing
@@ -579,8 +583,13 @@ class ad2usb(object):
             # added this code to begin to test the message Object
             newMessageObject = AlarmDecoder.Message(rawData, self.firmwareVersion, self.logger)
 
-            # process select messages
+            # process select messages - return if we don't want to process
+            # using old methods
             if newMessageObject.isValidMessage:
+                # set 2 values to use in Exception handler section
+                messageReadSuccessfully = True
+                messageType = newMessageObject.messageType
+
                 if (newMessageObject.messageType == 'CONFIG') and newMessageObject.needsProcessing:
                     self.processAlarmDecoderConfigString(
                         newMessageObject.getMessageAttribute('configMessageString'))
@@ -595,8 +604,15 @@ class ad2usb(object):
                 elif (newMessageObject.messageType == 'LRR') and newMessageObject.needsProcessing:
                     # attempt to send VER command if VER not known
                     if self.firmwareVersion == '':
+                        self.logger.warning(
+                            'LRR message seen but firmware unknown - will attempt to send firmware message to AlarmDecoder')
                         if self.sendAlarmDecoderVersionCommand() is False:
                             self.logger.error("Unable to send VER command.")
+
+                    # check if we should process it
+                    if newMessageObject.isValidMessage:
+                        skipOldMesssageProcessing = True
+                        self.process_LRR_Message(newMessageObject)
 
                     self.logger.debug('LRR message seen')
 
@@ -614,9 +630,17 @@ class ad2usb(object):
         except Exception as err:
             # don't process any message we had an error reading
             doNotProcessThisMessage = True
-            self.logger.error(u"Error reading AlarmDecoder message - error:{}".format(str(err)))
-            self.logger.error(u"Error reading AlarmDecoder message - raw data is:{}".format(rawData))
-            self.logger.error(u"Will discard and try next message")
+            if messageReadSuccessfully:
+                self.logger.error(u"Error processing AlarmDecoder message - error:{}".format(str(err)))
+                self.logger.error(
+                    u"Error processing AlarmDecoder message type:{} - raw data is:{}".format(messageType, rawData))
+                self.logger.error(u"Will discard and try next message")
+
+            else:
+                self.logger.error(u"Error reading AlarmDecoder message - error:{}".format(str(err)))
+                self.logger.error(u"Error reading AlarmDecoder message - raw data is:{}".format(rawData))
+                self.logger.error(u"Will discard and try next message")
+
             return False
 
         #
@@ -627,7 +651,11 @@ class ad2usb(object):
         if doNotProcessThisMessage:
             return None
 
-        # Start processing the message
+        # used to skip legacy message processing
+        if skipOldMesssageProcessing:
+            return True  # message was processed in the new section
+
+        # Start LEGACY / OLD processing the message
         # Start by checking if this message is "Press * for faults"
         try:
             if len(rawData) > 0 and rawData[0] == "[":  # A valid panel message
@@ -888,40 +916,7 @@ class ad2usb(object):
                 pass
 
             elif rawData[1:4] == 'LRR':   # panel state information  - mostly for events
-                self.logger.debug(u"Processing LRR Message:{}, logging option:{}".format(
-                    rawData, self.plugin.logArmingEvents))
-                # EVENT DATA - Either the User Number who preformed the action or the zone that was bypassed.
-                # PARTITION - The panel partition the event applies to. 0 indicates all partitions such as ACLOSS event.
-                # EVENT TYPES - One of the following events. Note: the programming mode for enabling each type is also provided.
-                # eg. !LRR:002,1,OPEN
-
-                try:
-                    self.logger.debug(u"Processing LRR Message:{}, logging option:{}".format(
-                        rawData, self.plugin.logArmingEvents))
-                    splitMsg = re.split('[!:,]', rawData)
-                    user = splitMsg[2]
-                    partition = splitMsg[3]
-                    function = splitMsg[4]
-                    function = function.rstrip()  # if newline exists strip it
-                    self.logger.debug(
-                        u"LRR Decode - user:{}, partition:{}, function:{}".format(user, partition, function))
-
-                    if function in kEventStateDict:
-                        now = datetime.now()
-                        timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
-
-                        panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
-                        # panelDevice = indigo.devices[self.plugin.partition2address[partition]['devId']]
-                        panelDevice.updateStateOnServer(key='lastChgBy', value=user)
-                        panelDevice.updateStateOnServer(key='lastChgTo', value=function)
-                        panelDevice.updateStateOnServer(key='lastChgAt', value=timeStamp)
-                        if self.plugin.logArmingEvents:
-                            self.logger.info(
-                                u"Alarm partition {} set to {} caused/entered by {}".format(partition, function, user))
-
-                        self.executeTrigger(partition, user, function)
-                except Exception as err:
-                    self.logger.error(u"LRR Error:{}".format(str(err)))
+                pass  # converted to new message processing
 
             else:
                 # We check the length of self.plugin.zonesDict so we will not try to update zones if none exist
@@ -1487,6 +1482,68 @@ class ad2usb(object):
             return True  # changed
         else:
             return False  # no change
+
+    def process_LRR_Message(self, messageObject):
+        """
+        For LRR messages we update all the possible keypad devices based on the parition provided
+        by the LRR message. A parition of 0 = all partitions. We then call any triggers associated
+        with the LRR events.
+        """
+        self.logger.debug("called with:{}".format(messageObject.getMessageProperties()))
+
+        # EVENT DATA - Either the User Number who preformed the action or the zone that was bypassed.
+        # PARTITION - The panel partition the event applies to. 0 indicates all partitions such as ACLOSS event.
+        # EVENT TYPES - One of the following events. Note: the programming mode for enabling each type is also provided.
+        # eg. !LRR:002,1,OPEN
+
+        try:
+            # message parsed:{'eventData': '008', 'partition': 1, 'eventType': 'ACLOSS', 'eventDataAsInt': 8, 'isKnownLRR': True}
+
+            # get some shorter variable names from the message object
+            partition = messageObject.getMessageAttribute('partition')
+            eventType = messageObject.getMessageAttribute('eventType')
+            user = ''
+            zone = ''
+            if messageObject.getMessageAttribute('isUserEvent'):
+                user = messageObject.getMessageAttribute('eventData')
+            elif messageObject.getMessageAttribute('isZoneEvent'):
+                zone = messageObject.getMessageAttribute('eventData')
+
+            # get a list of keypads for the partition
+            keypadsToUpdate = []
+            if messageObject.getMessageAttribute('isAllPartitions'):
+                keypadsToUpdate = self.plugin.getAllKeypadDevices()
+            else:
+                oneKeypad = self.plugin.getKeypadDevice(partition)
+                if oneKeypad is not None:
+                    keypadsToUpdate.append(oneKeypad)
+
+            self.logger.debug('Will update:{} keypad devices'.format(len(keypadsToUpdate)))
+
+            # update all the applicable keypads
+            now = datetime.now()
+            timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
+            for oneKeypad in keypadsToUpdate:
+                oneKeypad.updateStateOnServer(key='lastChgTo', value=eventType)
+                oneKeypad.updateStateOnServer(key='lastChgAt', value=timeStamp)
+                # will show user or blank if not a user event
+                oneKeypad.updateStateOnServer(key='lastChgBy', value=user)
+                # TO DO: Add Zone details to keypad state
+
+                self.logger.debug('Updated keypad device:{} with partition number:{}'.format(oneKeypad.name, partition))
+
+            # log event
+            if self.plugin.logArmingEvents:
+                if messageObject.getMessageAttribute('isUserEvent'):
+                    self.logger.info("Alarm partition {} set to {} by {}".format(partition, eventType, user))
+                if messageObject.getMessageAttribute('isZoneEvent'):
+                    self.logger.info("Alarm partition:{} zone:{} had event:{}".format(partition, zone, eventType))
+
+            # now check to see if any triggers need to be called
+            self.executeTrigger(partition, user, eventType)
+
+        except Exception as err:
+            self.logger.error(u"LRR Error:{}".format(str(err)))
 
     def __doesPlaybackFileExist(self):
         """

@@ -483,6 +483,7 @@ class Message(object):
 
         **properties created:**
         eventData (string) - either the user number of the person performing the action or the zone that was bypassed
+        user (string) - if its a user event this is the same as eventData, blank otherwise
         partition (int) - the panel partition the event applies to; 0 indicates that it's destined for all partitions
         eventType (string) - see below for valid values:
         OPEN, ARM_AWAY, ARM_STAY, ACLOSS, AC_RESTORE, LOWBAT, LOWBAT_RESTORE, RFLOWBAT,
@@ -497,7 +498,11 @@ class Message(object):
             self.messageDetails['LRR'] = {}
             self.messageDetails['LRR']['eventData'] = ''
             self.messageDetails['LRR']['partition'] = 0
+            self.messageDetails['LRR']['user'] = ''
             self.messageDetails['LRR']['eventType'] = ''
+            self.messageDetails['LRR']['isUserEvent'] = False
+            self.messageDetails['LRR']['isZoneEvent'] = False
+            self.messageDetails['LRR']['isAllPartitions'] = False
 
             # strip first 5 chars from the message - !EXP:
             messageText = self.messageString[5:]
@@ -509,24 +514,69 @@ class Message(object):
             self.messageDetails['LRR']['partition'] = int(messageItems[1])
             self.messageDetails['LRR']['eventType'] = messageItems[2]
 
-            lrrStrings = ['ALARM_EXIT_ERROR', 'TROUBLE', 'BYPASS', 'ACLOSS',
-                          'LOWBAT', 'TEST_CALL', 'OPEN', 'ARM_AWAY', 'ARM_STAY',
-                          'RFLOWBAT', 'CANCEL', 'RESTORE', 'TROUBLE_RESTORE',
-                          'BYPASS_RESTORE', 'AC_RESTORE', 'LOWBAT_RESTORE', 'RFLOWBAT_RESTORE',
-                          'TEST_RESTORE', 'ALARM_PANIC', 'ALARM_FIRE', 'ALARM_ENTRY', 'ALARM_AUX',
-                          'ALARM_AUDIBLE', 'ALARM_SILENT', 'ALARM_PERIMETER', 'ALARM_TRIPPED']
+            # if parition == 0 then partiion is ALL
+            if self.messageDetails['LRR']['partition'] == 0:
+                self.messageDetails['LRR']['isAllPartitions'] = True
+
+            # determine valid event type and user vs. paritition event
+            validLRREvents = {
+                'ACLOSS': {'type': 'zone', 'desc': 'Indicates that AC power was lost'},
+                'AC_RESTORE': {'type': 'zone', 'desc': 'Indicates that AC power was restored'},
+                'ALARM_AUDIBLE': {'type': 'zone', 'desc': 'Indicates that an audible alarm is in progress'},
+                'ALARM_AUX': {'type': 'zone', 'desc': 'Indicates that an auxiliary alarm type was triggered'},
+                'ALARM_ENTRY': {'type': 'zone', 'desc': 'Indicates that there was an entry alarm'},
+                'ALARM_EXIT_ERROR': {'type': 'zone', 'desc': 'Indicates an error when a zone is not closed during arming'},
+                'ALARM_FIRE': {'type': 'zone', 'desc': 'Indicates that there is a fire'},
+                'ALARM_PANIC': {'type': 'zone', 'desc': 'Indicates that there is a panic'},
+                'ALARM_PERIMETER': {'type': 'zone', 'desc': 'Indicates that there was a perimeter alarm'},
+                'ALARM_SILENT': {'type': 'zone', 'desc': 'Indicates that there was a silent alarm'},
+                'ALARM_TRIPPED': {'type': 'zone', 'desc': 'Alarm Tripped'},
+                'ARM_AWAY': {'type': 'user', 'desc': 'Indicates that the system was armed AWAY'},
+                'ARM_STAY': {'type': 'user', 'desc': 'Indicates that the system was armed STAY'},
+                'BYPASS': {'type': 'zone', 'desc': 'Indicates that a zone has been bypassed'},
+                'BYPASS_RESTORE': {'type': 'zone', 'desc': 'Indicates that the bypassed zone was restored'},
+                'CANCEL': {'type': 'user', 'desc': 'Indicates that the alarm was canceled after second disarm'},
+                'LOWBAT': {'type': 'zone', 'desc': 'Low battery indication'},
+                'LOWBAT_RESTORE': {'type': 'zone', 'desc': 'Indicates that the low battery has been restored'},
+                'OPEN': {'type': 'user', 'desc': 'Indicates that the alarm is disarmed'},
+                'RFLOWBAT': {'type': 'zone', 'desc': 'Low battery indication for the RF transmitter'},
+                'TEST_CALL': {'type': 'zone', 'desc': 'Indicates a phone test when in testing mode'},
+                'TEST_RESTORE': {'type': 'zone', 'desc': 'Indicates that a zone was restored in testing mode'},
+                'TROUBLE': {'type': 'zone', 'desc': 'Indicates that a zone is reporting a tamper or failure'},
+                'TROUBLE_RESTORE': {'type': 'zone', 'desc': 'Indicates that the trouble event was restored'},
+                'RESTORE': {'type': 'zone', 'desc': 'Indicates that the alarm was restored'},
+                'RFLOWBAT_RESTORE': {'type': 'zone', 'desc': 'Indicates that the low battery on the RF transmitter has been restored.'}
+                }
+
+            # build list of zone vs. user types
+            LRRUserEvents = []
+            LRRZoneEvents = []
+            for oneType in validLRREvents.keys():
+                if validLRREvents[oneType]['type'] == 'user':
+                    LRRUserEvents.append(oneType)
+                elif validLRREvents[oneType]['type'] == 'zone':
+                    LRRZoneEvents.append(oneType)
 
             # check if it is a known LRR message event type
-            if self.messageDetails['LRR']['eventType'] in lrrStrings:
+            if self.messageDetails['LRR']['eventType'] in validLRREvents.keys():
                 self.messageDetails['LRR']['isKnownLRR'] = True
+                self.needsProcessing = True
+
+                # next determine if its a zone of user message
+                if self.messageDetails['LRR']['eventType'] in LRRUserEvents:
+                    self.messageDetails['LRR']['isUserEvent'] = True
+                    self.messageDetails['LRR']['user'] = self.messageDetails['LRR']['eventData']
+                elif self.messageDetails['LRR']['eventType'] in LRRZoneEvents:
+                    self.messageDetails['LRR']['isZoneEvent'] = True
+
             else:
                 self.logger.warning('Unknown LRR (v2.2a.6) eventType:{} message parsed:{}'.format(
                     self.messageDetails['LRR']['eventType'], self.messageDetails['LRR']))
 
                 self.logger.warning('Post this messages in the Indigo User Forum')
                 self.messageDetails['LRR']['isKnownLRR'] = False
+                self.needsProcessing = False
 
-            self.needsProcessing = True
             self.logger.debug('LRR (v2.2a.6) message parsed:{}'.format(self.messageDetails['LRR']))
 
         except Exception as err:

@@ -162,7 +162,7 @@ class Plugin(indigo.PluginBase):
 
             # if the no current state or we want to clear on restart
             if dev.displayStateValRaw == "" or self.clearAllOnRestart:
-                self.setDeviceState(dev, k_CLEAR)
+                self.setDeviceState(dev, k_CLEAR, True)  # True for ignore Bypass
 
         # if its and alarmZone or virtualZone device check if the device
         # is marked as bypass in Indigo and load or del the cache
@@ -203,7 +203,11 @@ class Plugin(indigo.PluginBase):
     ########################################################
     def runConcurrentThread(self):
         try:
-            self.logger.info(u"Called")
+            # add some dumps of internal dictionaries
+            self.logger.debug("Trigger Dict:{}".format(self.triggerDict))
+            self.logger.debug("Advanced Device Dict:{}".format(self.advZonesDict))
+
+            self.logger.info(u"AlarmDecoder message processing started")
 
             # when runConcurrentThread starts set the flag to start reading messages
             self.ad2usb.stopReadingMessages = False
@@ -297,11 +301,12 @@ class Plugin(indigo.PluginBase):
     ########################################################
     def virtZoneManage(self, pluginAction):
         """
-        Updates the Indigo device state for the Virtual Managed Indigo device and then
-        sends a message to the AlarmDecoder via the 'L' command.
+        Does three things:
+        1. Updates the Indigo device state for the Virtual Managed Indigo device
+        2. Sends a message to the AlarmDecoder via the 'L' command.
+        3. Updates the Keypad device for the partition of the device
         """
-        self.logger.info(u"Called")
-        self.logger.debug(u"Received: {}".format(pluginAction))
+        self.logger.debug(u"call with:{}".format(pluginAction))
 
         try:
 
@@ -372,36 +377,35 @@ class Plugin(indigo.PluginBase):
             # but if that is not found then just get the first keypad
             myKeypadDevice = self.getKeypadDevice(virtPartition)
 
-            # if keypad does not exist for the specific partition just get the first keypad
+            # if keypad does not exist for the specific partition do nothing
             if myKeypadDevice is None:
                 self.logger.warning("ad2usb Keypad device not found with partition:{}".format(virtPartition))
-                myKeypadDevice = self.getKeypadDevice()  # get the first keypad
-
-            # make sure we have a keypad
-            if myKeypadDevice is None:
-                self.logger.error("No ad2usb keypad device found - cannot update keypad device")
                 return
+
+            # we have a keypad device
             else:
                 myKeypadAddress = myKeypadDevice.pluginProps['panelKeypadAddress']
-                self.logger.warning("Update Virtual Zone Device to correct partition:{}".format(myKeypadAddress))
+                self.logger.debug("Updating Keypad Device:{} with partition:{}".format(
+                    myKeypadDevice.name, virtPartition))
 
                 # init the zone state list if needed
                 if myKeypadAddress not in self.ad2usb.zoneStateDict.keys():
                     self.ad2usb.zoneStateDict[myKeypadAddress] = []
 
                 # set default newState
-                if action == '0':   # Clear
+                if newZoneState == k_CLEAR:   # Clear
                     try:   # In case someone tries to set a clear zone to clear
                         self.ad2usb.zoneStateDict[myKeypadAddress].remove(int(virtZoneNumber))
                     except Exception as err:
                         pass
-                    # TO DO: check we can pass a dictionary or indigo dictionary to the logger
                     self.logger.debug(u"Clear - state list: {}".format(self.ad2usb.zoneStateDict))
-                elif action == '1':   # Fault
+
+                elif newZoneState == k_FAULT:   # Fault
                     self.ad2usb.zoneStateDict[myKeypadAddress].append(int(virtZoneNumber))
                     self.ad2usb.zoneStateDict[myKeypadAddress].sort()
                     self.logger.debug(u"Fault - state list: {}".format(self.ad2usb.zoneStateDict))
-                elif action == '2':   # Trouble
+
+                elif newZoneState == k_ERROR:   # Trouble
                     # TO DO: this used to be string of Trouble - it is not Error
                     # uiValue = 'Trouble' / displayStateValue = 'trouble'
                     self.ad2usb.zoneStateDict[myKeypadAddress].append(int(virtZoneNumber))
@@ -421,8 +425,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################################
     def panelMsgWrite(self, pluginAction):
-        self.logger.info(u"Called")
-        self.logger.debug(u"Received: {}".format(pluginAction))
+        self.logger.debug(u"called with:{}".format(pluginAction))
 
         if pluginAction.props['keypadAddress'] == '':
             address = self.ad2usbKeyPadAddress
@@ -449,8 +452,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################################
     def panelQuckArmWrite(self, pluginAction):
-        self.logger.info(u"Called")
-        self.logger.debug(u"Received: {}".format(pluginAction))
+        self.logger.debug(u"called with:{}".format(pluginAction))
 
         if pluginAction.props['keypadAddress'] == '':
             address = self.ad2usbKeyPadAddress
@@ -467,8 +469,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################################
     def forceZoneStateChange(self, pluginAction):
-        self.logger.info(u"Called")
-        self.logger.debug(u"Received: {}".format(pluginAction))
+        self.logger.debug(u"called with:{}".format(pluginAction))
 
         # get the device ID from the Dynamic Menu
         zoneDeviceId = int(pluginAction.props['zoneDevice'])
@@ -974,9 +975,11 @@ class Plugin(indigo.PluginBase):
 
         return myArray
 
-    def getAllZoneGroups(self):
+    def getAllZoneGroups(self, includeDisabled=False):
         """
-        returns an array of device.id [integer] for all Zone Group devices
+        Returns an array of device.id [integer] for all Zone Group devices. By default
+        disabled Zone Group devices are not included. Optionally pass parameter True
+        to include disabled Zone Group devices.
         """
         self.logger.debug(u"called")
 
@@ -987,7 +990,8 @@ class Plugin(indigo.PluginBase):
             for device in indigo.devices.iter("self"):
                 # just the Zone Groups
                 if device.deviceTypeId == 'zoneGroup':
-                    zoneGroups.append(device.id)
+                    if device.enabled or (includeDisabled is True):
+                        zoneGroups.append(device.id)
 
             self.logger.debug(u"all zones groups are:{}".format(zoneGroups))
             return zoneGroups
@@ -1220,20 +1224,28 @@ class Plugin(indigo.PluginBase):
             self.logger.error("Error trying to update all zone groups, current zone group id:{}, error:{}".format(
                 zoneGroupDeviceId, str(err)))
 
-    def setDeviceState(self, forDevice, newState='NONE'):
+    def setDeviceState(self, forDevice, newState='NONE', ignoreBypass=False):
         """
         updates the indio.device for a given device object (indigo.device) and new state (string)
-        the state is the key - not the value in the Devices.xml
+        the state is the key - not the value in the Devices.xml. The default logic for Bypassed
+        devices is to update the text display and internal state but not the icon. If ignoreBypass
+        is set to True, devices will CLEAR and FAULT normally and ignore the Bypass state. This is
+        used internally to reset all devices.
 
         **parameters**:
         forDevice -- a valid indigo.device object
         newState -- a string for the new state value - use a k_CONSTANT
+        ignoreBypass -- boolean (default False) - see above
         """
         self.logger.debug(u"called with name:{}, id:{}, new state:{}".format(forDevice.name, forDevice.id, newState))
 
         try:
             # get the current bypass state of the device
             isBypassed = self.isDeviceBypassed(forDevice)
+
+            # for a force reset to all devices we pass the optional ignoreBypass
+            if ignoreBypass:
+                isBypassed = False
 
             if newState == k_CLEAR:
                 if isBypassed:
@@ -1626,6 +1638,30 @@ class Plugin(indigo.PluginBase):
         # we should never get here but just in case
         return string
 
+    def getAllKeypadDevices(self, includeDisabled=False):
+        """
+        Returns an array of 'ad2usb Keypad' Indigo device objects. By default disabled
+        keypad devices will not be included. Optionally pass parameter of True to include
+        disable devices too.
+        """
+        try:
+            self.logger.debug('called')
+
+            allKeypadDevices = []
+
+            # get all the keypad devices
+            for device in indigo.devices.iter("self"):
+                # just the Keypad Devices
+                if device.deviceTypeId == 'ad2usbInterface':
+                    if device.enabled or (includeDisabled is True):
+                        allKeypadDevices.append(device)
+
+            return allKeypadDevices
+
+        except Exception as err:
+            self.logger.error(u"error retrieving ad2usb Keypad devices from Indigo, msg:{}".format(str(err)))
+            return None
+
     def getKeypadDevice(self, partition=None):
         """
         If no partition parameter is provided, this method checks if at least one AlarmDecoder
@@ -1640,54 +1676,47 @@ class Plugin(indigo.PluginBase):
         partition - a partition value as a string (e.g. "2")
         """
         try:
-            allKeypadDevices = []
-
-            # get all the keypad devices
-            for device in indigo.devices.iter("self"):
-                # just the Keypad Devices - should only be 1
-                # but log an error if there are more than 1
-                if device.deviceTypeId == 'ad2usbInterface':
-                    allKeypadDevices.append(device)
+            allKeypadDevices = self.getAllKeypadDevices()
+            partitionAsString = str(partition)
 
             # the case of no devices
             if len(allKeypadDevices) == 0:
                 self.logger.error("No Indigo ad2usb Keypad device found; exactly one (1) should be defined")
                 return None
 
-            # the case of only one device and no parition parameter
+            # the case of only one device and no parition parameter provided
             elif (len(allKeypadDevices) == 1) and (partition is None):
                 self.logger.debug("exactly one Indigo ad2usb Keypad device found")
                 return allKeypadDevices[0]
 
-            # the case of only one device and parition parameter provided
+            # the case of only one device and parition parameter is provided
             elif (len(allKeypadDevices) == 1) and (partition is not None):
-                if allKeypadDevices[0].pluginProps['panelPartitionNumber'] == partition:
-                    self.logger.debug("ad2usb Keypad device matches parition:{}".format(partition))
+                if allKeypadDevices[0].pluginProps['panelPartitionNumber'] == partitionAsString:
+                    self.logger.debug("ad2usb Keypad device matches parition:{}".format(partitionAsString))
                     return allKeypadDevices[0]
                 else:
-                    self.logger.debug("ad2usb Keypad device with partition:{} found but does not math parition:{}".format(
+                    self.logger.debug("ad2usb Keypad device with partition:{} found but does not match parition:{}".format(
                         allKeypadDevices[0].pluginProps['panelPartitionNumber'], partition))
                     return None
 
-                self.logger.debug("exactly one Indigo ad2usb Keypad device found")
+            # the case of mutiple keypad devices and no parition parameter provided
+            # return the None
+            elif (len(allKeypadDevices) > 1) and (partition is None):
+                self.logger.warning("Multiple Indigo ad2usb Keypad devices found; returning first keypad device")
                 return allKeypadDevices[0]
 
-            # the case of mutiple keypad devices and no parition parameter
-            elif (len(allKeypadDevices) > 1) and (partition is None):
+            # the case of mutiple keypad devices and parition parameter provided but not '0'
+            elif (len(allKeypadDevices) > 1) and (partition is not None):
                 for oneKeypadDevice in allKeypadDevices:
-                    if oneKeypadDevice.pluginProps['panelPartitionNumber'] == partition:
+                    if oneKeypadDevice.pluginProps['panelPartitionNumber'] == partitionAsString:
                         return oneKeypadDevice
 
                 # if we get here none of the keypad devices matched the partition
                 return None
 
-            # the case of mutiple keypad devices and parition parameter provided
-            elif (len(allKeypadDevices) > 1) and (partition is not None):
-                self.logger.warning("Multiple Indigo ad2usb Keypad devices found; exactly only (1) should be defined")
-                return allKeypadDevices[0]
-
             else:
-                self.logger.warning("Multiple Indigo ad2usb Keypad devices found; exactly only (1) should be defined")
+                self.logger.warning(
+                    "Multiple Indigo ad2usb Keypad devices found and unexpected conditions - partition:{}".format(partition))
                 self.logger.info("Using ad2usb Keypad:{}".allKeypadDevices[0].name)
                 return allKeypadDevices[0]
 
