@@ -397,7 +397,7 @@
 			</Field>
 		</ConfigUI>
 
-		<UiDisplayStateId>displayState</UiDisplayStateId>
+		<UiDisplayStateId>panelState</UiDisplayStateId>
 		<States>
 			<State id="panelState">
 				<ValueType>
@@ -405,7 +405,11 @@
 						<Option value="ready">Ready to Arm</Option>
 						<Option value="Fault">Faulted</Option>
 						<Option value="armedStay">Armed Stay</Option>
+						<Option value="armedNightStay">Armed Night Stay</Option>
 						<Option value="armedAway">Armed Away</Option>
+						<Option value="armedInstant">Armed Instant</Option>
+						<Option value="armedMax">Armed Max</Option>
+						<Option value="error">Error</Option>
 					</List>
 				</ValueType>
 				<TriggerLabel>Alarm State Changed</TriggerLabel>
@@ -517,11 +521,6 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>Zone which tripped the alarm</TriggerLabel>
 				<ControlPageLabel>Zone which tripped the alarm</ControlPageLabel>
-			</State>
-			<State id="displayState">
-				<ValueType>String</ValueType>
-				<TriggerLabel> </TriggerLabel>
-				<ControlPageLabel> </ControlPageLabel>
 			</State>
 		</States>
 	</Device>

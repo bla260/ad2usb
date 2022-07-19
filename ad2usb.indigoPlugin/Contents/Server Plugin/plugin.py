@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 ####################
 # ad2usb Alarm Plugin
-# Developed and copyright by Richard Perlman -- indigo AT perlman DOT com
+# Originally developed Richard Perlman -- indigo AT perlman DOT com
 
 import logging  # needed for CONSTANTS
 import re
@@ -11,19 +11,7 @@ import serial
 import sys
 import indigo   # Not needed. But it supresses lint errors
 from ad2usb import ad2usb
-
-################################################################################
-# Globals
-################################################################################
-# Log levels dictionary and reverse dictionary name->number
-kLoggingLevelNames = {'CRITICAL': 50, 'ERROR': 40, 'WARNING': 30, 'INFO': 20, 'DEBUG': 10}
-kLoggingLevelNumbers = {50: 'CRITICAL', 40: 'ERROR', 30: 'WARNING', 20: 'INFO', 10: 'DEBUG'}
-
-# Custom Zone State - see Devices.xml
-kZoneStateDisplayValues = {'faulted': 'Fault', 'Clear': 'Clear'}
-k_CLEAR = 'Clear'  # key: Clear, value: Clear - should convert key to 'clear'
-k_FAULT = 'faulted'  # key: faulted, value: Fault - should convert to 'fault'
-k_ERROR = 'error'  # key: error, value: Error - also referred to as Trouble
+import AD2USB_Constants  # Global Constants
 
 ################################################################################
 # Now, Let's get started...
@@ -93,6 +81,8 @@ class Plugin(indigo.PluginBase):
         self.pluginDisplayName = pluginDisplayName
         self.pluginPrefs = pluginPrefs
 
+        self.isThisFirstStartup = True
+
         # adding new logging object introduced in API 2.0
         self.logger.info(u"Plugin init completed")
 
@@ -106,13 +96,15 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         self.logger.debug(u"called")
 
-        self.ALARM_STATUS = {'000': 'Fault', '001': 'armedStay', '010': 'armedAway', '100': 'ready'}
+        self.ALARM_STATUS = AD2USB_Constants.k_PANEL_BIT_MAP
         self.zonesDict = {}
         self.advZonesDict = {}
 
         mode = 'Basic'
         if self.ad2usbIsAdvanced:
             mode = 'Advanced'
+
+        self.isThisFirstStartup = True
 
         # initilizae the ad2usb object with the plugin as a parameters
         # ad2usb init will:
@@ -144,7 +136,7 @@ class Plugin(indigo.PluginBase):
         if self.ad2usbIsAdvanced:
             self.advancedBuildDevDict(dev, 'add', self.ad2usbKeyPadAddress)
 
-        # migrate state from old displayState to zoneState
+        # migrate for version 1.8.0 state from old displayState to zoneState
         if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'zoneGroup')
                 or (dev.deviceTypeId == 'alarmZoneVirtual')):
 
@@ -153,27 +145,40 @@ class Plugin(indigo.PluginBase):
                 self.logger.info(u"Upgrading states on device:{}".format(dev.name))
                 self.logger.debug(u"current device:{}".format(dev))
                 dev.stateListOrDisplayStateIdChanged()
-                self.setDeviceState(dev, k_CLEAR)
+                self.setDeviceState(dev, AD2USB_Constants.k_CLEAR)
                 self.logger.debug(u"revised device:{}".format(dev))
 
-        # new method to start the devices with zoneState state
+        # migrate for version 3.1.0 state from old displayState to panelState
+        if dev.deviceTypeId == 'ad2usbInterface':
+
+            if dev.displayStateId == 'displayState':
+                # refresh from updated Devices.xml
+                self.logger.info(u"Upgrading states on device:{}".format(dev.name))
+                self.logger.debug(u"current device:{}".format(dev))
+                dev.stateListOrDisplayStateIdChanged()
+                self.setKeypadDeviceState(dev, AD2USB_Constants.k_PANEL_READY)
+                self.logger.debug(u"revised device:{}".format(dev))
+
+        # if clear all devices is set or a new device clear the devices with zoneState state
         if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'zoneGroup')
                 or (dev.deviceTypeId == 'alarmZoneVirtual')):
 
             # if the no current state or we want to clear on restart
             if dev.displayStateValRaw == "" or self.clearAllOnRestart:
-                self.setDeviceState(dev, k_CLEAR, True)  # True for ignore Bypass
+                self.setDeviceState(dev, AD2USB_Constants.k_CLEAR, True)  # True for ignore Bypass
 
         # if its and alarmZone or virtualZone device check if the device
         # is marked as bypass in Indigo and load or del the cache
+        # zone bypass cache is not kept for new starts so bypass state should not
+        # be set on plugin restart
         if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'alarmZoneVirtual')):
             try:
                 validZoneNumber = int(dev.pluginProps['zoneNumber'])
                 if self.isDeviceBypassed(dev):
-                    self.ad2usb.zoneBypassDict[validZoneNumber] = True
+                    self.ad2usb.listOfZonesBypassed[validZoneNumber] = True
                 else:
-                    if validZoneNumber in self.ad2usb.zoneBypassDict:
-                        del self.ad2usb.zoneBypassDict[validZoneNumber]
+                    if validZoneNumber in self.ad2usb.listOfZonesBypassed:
+                        del self.ad2usb.listOfZonesBypassed[validZoneNumber]
 
             except Exception as err:
                 self.logger.warning(u"unable to determine zone number for device:{}, err:{}".format(dev.name, str(err)))
@@ -208,6 +213,16 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("Advanced Device Dict:{}".format(self.advZonesDict))
 
             self.logger.info(u"AlarmDecoder message processing started")
+
+            # check if this is a fresh start versus runConcurrentThread being called
+            # a second time in the same instance
+            if self.isThisFirstStartup:
+                # if so - clear all devices if the properties flag is set
+                if self.clearAllOnRestart:
+                    self.__clearAllDevices(includeDisabled=True)
+
+                # reset the first start flag - is reset to True in init and startup
+                self.isThisFirstStartup = False
 
             # when runConcurrentThread starts set the flag to start reading messages
             self.ad2usb.stopReadingMessages = False
@@ -355,16 +370,16 @@ class Plugin(indigo.PluginBase):
             # This shouldn't be necessary, but the AD2USB doesn't send EXP messages for virtual zones
 
             # set default newState
-            newZoneState = k_CLEAR
+            newZoneState = AD2USB_Constants.k_CLEAR
             if action == '0':   # Clear
-                newZoneState = k_CLEAR
+                newZoneState = AD2USB_Constants.k_CLEAR
             elif action == '1':   # Fault
-                newZoneState = k_FAULT
+                newZoneState = AD2USB_Constants.k_FAULT
             elif action == '2':   # Trouble
                 # TO DO: remove this block
                 # TO DO: this used to be string of Trouble - it is not Error
                 # uiValue = 'Trouble' / displayStateValue = 'trouble'
-                newZoneState = k_ERROR
+                newZoneState = AD2USB_Constants.k_ERROR
             else:
                 # ERROR
                 pass
@@ -393,22 +408,26 @@ class Plugin(indigo.PluginBase):
                     self.ad2usb.zoneStateDict[myKeypadAddress] = []
 
                 # set default newState
-                if newZoneState == k_CLEAR:   # Clear
+                if newZoneState == AD2USB_Constants.k_CLEAR:   # Clear
                     try:   # In case someone tries to set a clear zone to clear
                         self.ad2usb.zoneStateDict[myKeypadAddress].remove(int(virtZoneNumber))
                     except Exception as err:
                         pass
                     self.logger.debug(u"Clear - state list: {}".format(self.ad2usb.zoneStateDict))
 
-                elif newZoneState == k_FAULT:   # Fault
+                elif newZoneState == AD2USB_Constants.k_FAULT:   # Fault
                     self.ad2usb.zoneStateDict[myKeypadAddress].append(int(virtZoneNumber))
+                    self.ad2usb.zoneStateDict[myKeypadAddress] = self.ad2usb.__uniqList(
+                        self.ad2usb.zoneStateDict[myKeypadAddress])
                     self.ad2usb.zoneStateDict[myKeypadAddress].sort()
                     self.logger.debug(u"Fault - state list: {}".format(self.ad2usb.zoneStateDict))
 
-                elif newZoneState == k_ERROR:   # Trouble
+                elif newZoneState == AD2USB_Constants.k_ERROR:   # Trouble
                     # TO DO: this used to be string of Trouble - it is not Error
                     # uiValue = 'Trouble' / displayStateValue = 'trouble'
                     self.ad2usb.zoneStateDict[myKeypadAddress].append(int(virtZoneNumber))
+                    self.ad2usb.zoneStateDict[myKeypadAddress] = self.ad2usb.__uniqList(
+                        self.ad2usb.zoneStateDict[myKeypadAddress])
                     self.ad2usb.zoneStateDict[myKeypadAddress].sort()
                     self.logger.debug(u"Trouble - state list: {}".format(self.ad2usb.zoneStateDict))
                 else:
@@ -489,9 +508,9 @@ class Plugin(indigo.PluginBase):
         # Actions.xml is 'clear' & 'faulted'
         # zoneState is 'Clear' & 'faulted'
         if newZoneState == 'clear':
-            self.setDeviceState(zoneDevice, k_CLEAR)
+            self.setDeviceState(zoneDevice, AD2USB_Constants.k_CLEAR)
         elif (newZoneState == 'faulted') or (newZoneState == 'fault'):
-            self.setDeviceState(zoneDevice, k_FAULT)
+            self.setDeviceState(zoneDevice, AD2USB_Constants.k_FAULT)
         else:
             self.logger.error("Cannot force zone state change. Unknown state:{}".format(newZoneState))
 
@@ -1074,7 +1093,8 @@ class Plugin(indigo.PluginBase):
 
     def getDeviceIdForZoneNumber(self, forZoneNumber=''):
         """
-        returns the device.id (integer) for the Zone Number (Address) provided or 0 if not found
+        Returns the device.id (integer) for the Zone Number (Address) provided or 0 if not found.
+        This only looks at Alarm Zone and Virtual Zone devices. Keypad devices are not included.
 
         **parameters**:
         forZoneNumber -- an string that is the Zone Number (Address)
@@ -1200,15 +1220,15 @@ class Plugin(indigo.PluginBase):
                         zoneState = self.getZoneStateForDeviceId(deviceId)
                         self.logger.debug(u"checking alarm zone number:{}, id:{}, with state:{}".format(
                             zoneNumber, deviceId, zoneState))
-                        if zoneState == k_FAULT:
+                        if zoneState == AD2USB_Constants.k_FAULT:
                             zoneGroupIsFaulted = True
                             self.logger.debug(u"zone group:{} will be faulted".format(zoneGroupDevice.name))
                             break
 
                 # determine the new zone group state
-                newZoneGroupZoneState = k_CLEAR
+                newZoneGroupZoneState = AD2USB_Constants.k_CLEAR
                 if zoneGroupIsFaulted:
-                    newZoneGroupZoneState = k_FAULT
+                    newZoneGroupZoneState = AD2USB_Constants.k_FAULT
 
                 # update the device state if it changed
                 self.logger.debug(u"zone group state current:{}, new:{}".format(
@@ -1247,25 +1267,68 @@ class Plugin(indigo.PluginBase):
             if ignoreBypass:
                 isBypassed = False
 
-            if newState == k_CLEAR:
+            if newState == AD2USB_Constants.k_CLEAR:
                 if isBypassed:
-                    forDevice.updateStateOnServer(key='zoneState', value=k_CLEAR, uiValue='Bypass')
+                    forDevice.updateStateOnServer(key='zoneState', value=AD2USB_Constants.k_CLEAR,
+                                                  uiValue=AD2USB_Constants.kZoneStateUIValues[AD2USB_Constants.k_BYPASS])
                     forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
                 else:
-                    forDevice.updateStateOnServer(key='zoneState', value=k_CLEAR, uiValue='Clear')
+                    forDevice.updateStateOnServer(key='zoneState', value=AD2USB_Constants.k_CLEAR,
+                                                  uiValue=AD2USB_Constants.kZoneStateUIValues[AD2USB_Constants.k_CLEAR])
                     forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
 
                 # TO DO: consider removing on/off state
                 forDevice.updateStateOnServer(key='onOffState', value=False)
 
-            elif newState == k_FAULT:
-                forDevice.updateStateOnServer(key='zoneState', value=k_FAULT, uiValue='Fault')
+            elif newState == AD2USB_Constants.k_FAULT:
+                forDevice.updateStateOnServer(key='zoneState', value=newState,
+                                              uiValue=AD2USB_Constants.kZoneStateUIValues[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
                 # TO DO: consider removing on/off state
                 forDevice.updateStateOnServer(key='onOffState', value=True)
 
-            elif newState == k_ERROR:
+            elif newState == AD2USB_Constants.k_ERROR:
                 forDevice.setErrorStateOnServer('Error')
+                forDevice.updateStateImageOnServer(indigo.kStateImageSel.Error)
+
+            else:
+                self.logger.error(u"Unable to set device name:{}, id:{}, to state:{}".format(
+                    forDevice.name, forDevice.id, newState))
+
+        except Exception as err:
+            self.logger.error(u"Unable to set device:{}, to state:{}, error:{}".format(forDevice, newState, str(err)))
+
+    def setKeypadDeviceState(self, forDevice, newState='NONE'):
+        """
+        Updates the indio.device for a given ad2usb keypad device object (indigo.device) and new state (string)
+        The state is the key - not the value in the Devices.xml.
+
+        **parameters**:
+        forDevice -- a valid indigo.device object
+        newState -- a string for the new state value - use a k_CONSTANT
+        """
+        self.logger.debug(u"called with name:{}, id:{}, new state:{}".format(forDevice.name, forDevice.id, newState))
+
+        try:
+
+            # skip if not a keypad device
+            if forDevice.deviceTypeId != 'ad2usbInterface':
+                return False
+
+            # this addresses READY and all ARMED states
+            if newState in AD2USB_Constants.k_COMMON_STATES_DISPLAYS:
+                forDevice.updateStateOnServer(key='panelState', value=newState,
+                                              uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
+                forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+
+            elif newState == AD2USB_Constants.k_PANEL_FAULT:
+                forDevice.updateStateOnServer(key='panelState', value=newState,
+                                              uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
+                forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+
+            elif newState == AD2USB_Constants.k_ERROR:
+                forDevice.updateStateOnServer(key='panelState', value=newState,
+                                              uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.Error)
 
             else:
@@ -1480,7 +1543,7 @@ class Plugin(indigo.PluginBase):
         # this section does nothing if new log preferences are set
 
         # check if new Indigo Log settings do not yet exist
-        if pluginPrefs.get("indigoLoggingLevel", "9999") not in kLoggingLevelNames.keys():
+        if pluginPrefs.get("indigoLoggingLevel", "9999") not in AD2USB_Constants.kLoggingLevelNames.keys():
             # look for old logging preferences
             oldLogSetting = pluginPrefs.get("showDebugInfo1", "9999")  # as of 1.6.1
 
@@ -1495,7 +1558,7 @@ class Plugin(indigo.PluginBase):
                 pluginPrefs['indigoLoggingLevel'] = "INFO"  # INFO
 
         # check if new plugin Log settings do not yet exist
-        if pluginPrefs.get("pluginLoggingLevel", "9999") not in kLoggingLevelNames.keys():
+        if pluginPrefs.get("pluginLoggingLevel", "9999") not in AD2USB_Constants.kLoggingLevelNames.keys():
             # look for old logging preferences
             oldLogSetting = pluginPrefs.get("showDebugInfo1", "9999")  # as of 1.6.1
 
@@ -1545,10 +1608,10 @@ class Plugin(indigo.PluginBase):
         # we're using level names as strings in the PluginConfig.xml and logging uses integers
 
         # Indigo Log
-        if self.indigoLoggingLevel in kLoggingLevelNames.keys():
-            self.indigo_log_handler.setLevel(kLoggingLevelNames[self.indigoLoggingLevel])
+        if self.indigoLoggingLevel in AD2USB_Constants.kLoggingLevelNames.keys():
+            self.indigo_log_handler.setLevel(AD2USB_Constants.kLoggingLevelNames[self.indigoLoggingLevel])
             self.logger.info(u"Indigo logging level set to:{} ({})".format(
-                self.indigoLoggingLevel, kLoggingLevelNames[self.indigoLoggingLevel]))
+                self.indigoLoggingLevel, AD2USB_Constants.kLoggingLevelNames[self.indigoLoggingLevel]))
         else:
             self.indigo_log_handler.setLevel(logging.INFO)
             self.logger.error(u"Invalid Indigo logging level:{} - setting level to INFO".format(self.indigoLoggingLevel))
@@ -1560,10 +1623,10 @@ class Plugin(indigo.PluginBase):
             '%(asctime)s.%(msecs)03d\t%(levelname)s\t%(thread)d %(name)s.%(funcName)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         self.plugin_file_handler.setFormatter(pluginLogFormatter)
 
-        if self.pluginLoggingLevel in kLoggingLevelNames.keys():
-            self.plugin_file_handler.setLevel(kLoggingLevelNames[self.pluginLoggingLevel])
+        if self.pluginLoggingLevel in AD2USB_Constants.kLoggingLevelNames.keys():
+            self.plugin_file_handler.setLevel(AD2USB_Constants.kLoggingLevelNames[self.pluginLoggingLevel])
             self.logger.info(u"Plugin logging level set to:{} ({})".format(
-                self.pluginLoggingLevel, kLoggingLevelNames[self.pluginLoggingLevel]))
+                self.pluginLoggingLevel, AD2USB_Constants.kLoggingLevelNames[self.pluginLoggingLevel]))
         else:
             self.plugin_file_handler.setLevel(logging.INFO)
             self.logger.error(
@@ -1954,6 +2017,42 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(u"...returned zoneGroup2zoneDict:{}".format(self.zoneGroup2zoneDict))
         except Exception as err:
             self.logger.error(u"error adding group zone device:{}".format(str(err)))
+
+    def __clearAllDevices(self, includeDisabled=False):
+        """
+        Clears the state of all enabled AlarmDecoder plugin devices: Zone, Zone Group, Virtual Zone, and Keypad.
+        If disabled flag is set to True then it will also try to clear disabled devices.
+        """
+        try:
+            self.logger.debug("called with:{}".format(includeDisabled))
+
+            # get all the AlarmDecoder devices
+            for device in indigo.devices.iter("self"):
+
+                # Clear the device is the device is enabled or the includeDisabled flag is True
+                if (device.enabled is True) or (includeDisabled is True):
+
+                    # clear zone devices
+                    if device.deviceTypeId == 'alarmZone':
+                        device.updateStateOnServer(key='bypassState', value=False, clearErrorState=True)
+                        self.setDeviceState(forDevice=device, newState=AD2USB_Constants.k_CLEAR, ignoreBypass=True)
+
+                    # clear virtual zone devices
+                    elif device.deviceTypeId == 'alarmZoneVirtual':
+                        device.updateStateOnServer(key='bypassState', value=False, clearErrorState=True)
+                        self.setDeviceState(forDevice=device, newState=AD2USB_Constants.k_CLEAR, ignoreBypass=True)
+
+                    # clear zone groups
+                    elif device.deviceTypeId == 'zoneGroup':
+                        self.setDeviceState(forDevice=device, newState=AD2USB_Constants.k_CLEAR, ignoreBypass=True)
+
+                    # the Keypad Devices
+                    elif device.deviceTypeId == 'ad2usbInterface':
+                        self.setKeypadDeviceState(forDevice=device, newState=AD2USB_Constants.k_PANEL_READY)
+
+        except Exception as err:
+            self.logger.error("Unable to clear all devices - msg:{}".format(str(err)))
+            return False
 
     def _getPaddedZone(self, zoneNumber):
         """
