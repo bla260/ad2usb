@@ -1,5 +1,6 @@
 import re
 import SAIC_EventCodes
+import AD2USB_Constants
 
 # valid AlarmDecoder MessageType regardless of firmware - used to establish valid message or not
 kVALIDMESSAGEHEADERS = ['!>', '!CONFIG', '!AUI', '!CRC', '!EXP', '!ERR', '!KPE', '!KPM', '!LRR', '!REL', '!RFX', '!VER']
@@ -16,8 +17,13 @@ kCAPABILITIES = ['TX', 'RX', 'SM', 'VZ', 'RF', 'ZX', 'RE', 'AU', '3X', 'CG', 'DD
 
 class Message(object):
     """
-    This object is initialized with a string from the AlarmDecoder and an optional but desired firmware version.
-    You can then identify details about the message via properties and methods of the class.
+    This object is initialized with a string from the AlarmDecoder and an optional but recommended firmware version.
+    It will parse the message. You can then identify details about the message via properties and methods of the class.
+
+    Common properties are:
+    isValidMessage (boolean) - is this a valid AlarmDecoder message
+    needsProcessing (boolean) - is this a message that needs to be processed
+    messageType (char) - a 3 letter char that matches the AlarmDecoder protocol for message types
     """
 
     def __init__(self, messageString='', firmwareVersion='', logger=None):
@@ -195,7 +201,7 @@ class Message(object):
                 most are 0 or 1; except BEEPS (int), ERROR_REPORT (?), and ADEMCO_OR_DSC ("A or "D")
                 READY, ARMED_AWAY, ARMED_HOME, BACKLIGHT, PGM_MODE, BEEPS, ZONES_BYPASSED, AC_ON,
                 CHIME_MODE, ALARM_OCCURRED, ALARM_BELL_ON, BATTERY_LOW, ARMED_INSTANT, FIRE,
-                CHECK_ZONE, ARMED_STAY, ERROR_REPORT, ADEMCO_OR_DSC
+                CHECK_ZONE, ARMED_STAY_NIGHT, ERROR_REPORT, ADEMCO_OR_DSC
         """
 
         # return if not a KPM message
@@ -268,6 +274,52 @@ class Message(object):
                         # bit number to add = k * 8 - 0, 8, 16, 24
                         self.messageDetails['KPM']['keypadDestinations'].append(i+hexPair*8)
 
+            # ##########
+            # parse the alphanumeric message for certain cases
+            # akm = alphanumericKeypadMessage
+            akm = self.messageDetails['KPM']['alphanumericKeypadMessage']
+
+            # Hit * for faults
+            if " * " in akm:
+                self.messageDetails['KPM']['isPressForFaultMessage'] = True
+
+            # DISARM - Alarm Tripped
+            elif akm[1:14] == "DISARM SYSTEM":
+                self.messageDetails['KPM']['isAlarmTripped'] = True
+
+            # BYPAS
+            elif akm[1:6] == "BYPAS":
+                # zoneNumberAsInt has bypassed zone details
+                self.messageDetails['KPM']['isBypassZone'] = True
+
+            # ARMED .. May Exit Countdown
+            elif ("ARMED" in akm) and ("Exit Now" in akm):
+                self.messageDetails['KPM']['isCountdown'] = True
+                self.messageDetails['KPM']['countdownTimeRemaining'] = self.messageDetails['KPM']['zoneNumberAsInt']
+
+            # FAULT
+            elif akm[1:6] == "FAULT":
+                # zoneNumberAsInt has bypassed zone details
+                self.messageDetails['KPM']['isFault'] = True
+
+            #
+            # ########## END
+
+            # determine the panel state
+            if self.getKPMattr(flag='READY') == 1:
+                self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_READY
+
+            elif self.getKPMattr(flag='ARMED_AWAY') == 1:
+                self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_AWAY
+
+            elif self.getKPMattr(flag='ARMED_HOME') == 1:
+                self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_STAY
+
+            # TO DO: address ARMED_INSTANT and ARMED_STAY_NIGHT
+            else:
+                # do nothing - that is OK
+                pass
+
             self.needsProcessing = True
             self.logger.debug('KPM message parsed:{}'.format(self.messageDetails['KPM']))
 
@@ -302,7 +354,7 @@ class Message(object):
         bitFieldNames = ['READY', 'ARMED_AWAY', 'ARMED_HOME', 'BACKLIGHT', 'PGM_MODE',
                          'BEEPS', 'ZONES_BYPASSED', 'AC_ON', 'CHIME_MODE', 'ALARM_OCCURRED',
                          'ALARM_BELL_ON', 'BATTERY_LOW', 'ARMED_INSTANT', 'FIRE', 'CHECK_ZONE',
-                         'ARMED_STAY', 'ERROR_REPORT', 'ADEMCO_OR_DSC']
+                         'ARMED_STAY_NIGHT', 'ERROR_REPORT', 'ADEMCO_OR_DSC']
 
         # initialize return value dictionary with None for each item
         returnDictionary = {}
@@ -443,6 +495,7 @@ class Message(object):
 
             # strip first 5 chars from the message - !RFX:
             messageText = self.messageString[5:]
+            self.logger.debug('RFX message data items are:{}'.format(messageText))
 
             # serial number, data = split on comma
             messageItems = re.split(',', messageText)
@@ -458,6 +511,7 @@ class Message(object):
                 return
             else:
 
+                self.logger.debug('RFX message data value is:{}'.format(dataAsInt))
                 # determine if its bit flags
                 bitFlags = ['UNK1', 'LOWBAT', 'SUP', 'UNK4', 'LOOP3', 'LOOP2', 'LOOP4', 'LOOP1']
                 for i in range(0, 8):
@@ -851,6 +905,29 @@ class Message(object):
             return self.messageDetails[self.messageType][attributeName]
         else:
             return None
+
+    def getKPMattr(self, flag=''):
+        """
+        Returns the flag value from the Keypad Message Bit Field.
+        Valid flags are: READY, ARMED_AWAY, ARMED_HOME, BACKLIGHT, PGM_MODE,
+        BEEPS, ZONES_BYPASSED, AC_ON, CHIME_MODE, ALARM_OCCURRED,
+        ALARM_BELL_ON, BATTERY_LOW, ARMED_INSTANT, FIRE, CHECK_ZONE,
+        ARMED_STAY_NIGHT, ERROR_REPORT, ADEMCO_OR_DSC
+        """
+
+        if self.messageType == 'KPM':
+            if flag in self.messageDetails['KPM']['keypadFlags'].keys():
+                return self.messageDetails['KPM']['keypadFlags'][flag]
+            else:
+                return None
+        else:
+            return None
+
+    def attr(self, attributeName=''):
+        """
+        Short name version for getMessageAttribute() method.
+        """
+        return self.getMessageAttribute(attributeName)
 
     def setMessageToInvalid(self, reason='reason not provided'):
         """

@@ -25,7 +25,7 @@ This plugin requires both a [NuTech AlarmDecoder](https://www.alarmdecoder.com) 
 A more complete list is available from NuTech on their website. While the NuTech AlarmDecoder AD2* interface also supports alarm panels sold by DSC, this plugin is not tested with those panels. Users with DSC panels should look at the DSC Alarm plugin.
 
 **Important Notes** :
-1. An older version of the AlarmDecoders' firmware, version 2.2a.6, is required. The Plugin may not start or run with any other version. Support for the latest version of the firmware is planned in a future release in July 2022.
+1. An older version of the AlarmDecoders' firmware, version 2.2a.6, is required. The Plugin may not start or run with any other version. Support for the latest version of the firmware is planned in a future release in August 2022.
 2. While the panels listed should work, the developer testing for each release is limited to only on a VISTA-20P. Leverage the [Indigo ad2usb User Forum](https://forums.indigodomo.com/viewtopic.php?f=22&t=7584) to ask other users about their experience with your specific alarm panel model.
 3. Works only in the plugin's basic mode
 
@@ -39,11 +39,21 @@ The ad2usb plugin adds the following device options to Indigo.
 
 Device Type | Description
 ----------- | -----------
-ad2usb Keypad | The AlarmDecoder Keypad emulator. You should add one Indigo ad2usb Keypad Device which represents your NuTech AlarmDecoder device.
+ad2usb Keypad | The AlarmDecoder Keypad emulator. You should add one Indigo ad2usb Keypad Device which represents your NuTech AlarmDecoder device. Systems with a single partition should only have one keypad. Systems with multiple partitions can have multiple keypad devices defined: one for each partition. Keypads can have several states: Ready, Armed-Away, Armed-Stay, Armed-Max, Armed-Night (Night-Stay), and Fault. Unless a Zone is Bypassed, A Fault will display as the Keypad state when any Alarm Zone device on the same partition that the Keypad is on state becomes Fault. One exception to this is if the Alarm Zone is Bypassed. When an Alarm Zone is Bypassed the Indigo UI icon for the Keypad and the bypassed Alarm Zone device will change to the Fault icon but the actual state will not change.
 Alarm Zone | Standard alarm zone such as window or door sensors. Add one Indigo Alarm Zone device for each sensor you have configured with your alarm panel that you want to integrate with Indigo. Each Alarm Zone device has these three state variables with possible values shown in parenthesis: `zoneState` (Fault or Clear), `onOffState` (On or Off), and `bypassState` (On or Off). States `zoneState` and `onOffState` are somewhat redundant since when an alarm zone changes state both are change, they exist so you can create triggers on any changes of the state name of your preference.
 Zone Group | Creates a group of Alarm Zones. This allows you to create a group of alarm zones devices that treated as single device within Indigo Triggers. Zone groups have the same states as Alarm Zones with the exception they do not have the `bypassState`. Zone Groups change to Fault (or On) when **ANY** of their Zone's change from Clear to Fault (or Off to On). Zone Groups change to Clear (or Off) once **ALL** of their Zones are Clear (or Off).
 Indigo Managed Virtual Zone | The AlarmDecoder's Zone Expander Emulation feature allows the AlarmDecoder to act in place of a physical expander board and make use of virtual zones with your panel. After enabling it on both the alarm panel and the AlarmDecoder you can begin opening and closing zones, which will be relayed back to the panel. [See the AlarmDecoder Protocol Documentation for more details.](https://www.alarmdecoder.com/wiki/index.php/Protocol#Zone_Emulation). You can create an Indigo Managed Virtual Zone to use this capability. After creating the Indigo Managed Virtual Zone, you call a specific Action, "Change a Virtual Zone's state", which will change the state of the device in Indigo and send Open or Close messages to your alarm panel. **CAUTION**: Do not set a trigger on a Virtual Zone's device change to call the "Change a Virtual Zone's state" or you will have an infinite loop. See the "Alarm Zone Actions" section.
 
+### Bypass Rules for Indigo Devices
+
+Indigo will behave the same as an alarm panel for Bypassed devices. The table below outlines Alarm Zone and Keypad devices behavior.
+
+Alarm Zone Bypassed Status | Alarm Device State | Indigo Alarm Zone Device State | Indigo Alarm Zone Device UI Display | Indigo Keypad Device State | Indigo Keypad UI Display | Additional Info
+-------------------------- | ------------------ | ------------------------------ | ----------------------------------- | -------------------------- | ------------------------ | ---------------
+Bypassed | Clear | Bypassed | Grey Icon | Clear | Green Icon | Indigo, like the Alarm panel, does not detect changes in the Alarm Zone device's state when Bypassed. The grey icon is shown instead of the green, indicating the Alarm Zone is device Bypassed.
+Bypassed | Fault | Bypassed | Red Icon | Clear | Green Icon | Indigo, like the Alarm panel, does not detect changes in the Alarm Zone device's state when Bypassed. The Alarm Zone icon will change from grey to red when a Fault is detected on a bypassed zone, but the Keypad device will not recognize it as a Fault. The Alarm Zone Indigo device state will remain "Bypass", only the icon in the UI will change.
+Not Bypassed | Clear | Clear | Green Icon | Clear | Green Icon | Both the Alarm Zone and Keypad Device will show Clear unless another Alarm Zone device on the same partition has Faulted. Keypad devices will Fault when **ANY** of their Alarm Zone devices Fault and are Clear when **ALL** of their devices are Clear.
+Not Bypassed | Fault | Fault | Red Icon | Fault | Red Icon | When an Alarm Zone device change to Fault, the Keypad Device will also change to Fault for the Keypad Device that is on the same partition as the Alarm Zone device. If you have multiple partitions, Keypad Devices with a partition number different from the Alarm Zone will not change state based on Alarm Zone devices on other partitions.
 
 
 ### Actions
@@ -78,7 +88,7 @@ Event | Description
 Panel Arming Events | Detect when your panel is Disarmed, Armed Away, or Armed Stay
 System Status Event | Detect when your alarm panel has any of these system status events: AC Power Loss, AC Power Restore, Panel Battery Low, Panel Battery Restore, RF Battery Low, RF Battery Restore, Trouble, and Trouble Restore
 Alarm Events | Detect when your panel has any of these Alarm events: Panic Alarm, Fire Alarm, Audible Alarm, Silent Alarm, Entry Alarm, Aux Alarm, Perimeter Alarm, Alarm Tripped: Countdown started
-User Actions | Detect when an alarm panel user ID you specify has initiated any these events: Disarmed, Armed Stay, Armed Away. **NOTE:** These events require either a real or emulated LRR. More information is *TBP*.
+User Actions | User Actions are detected from Long Range Radio (LRR) messages on the alarm panel. A real or emulated LRR is required. Using these events, you can detect when an alarm panel user ID you specify has initiated any these events: Disarmed, Armed Stay, Armed Away.
 
 ### Indigo Client UI
 #### General
@@ -139,11 +149,12 @@ It is recommended that you Disable and then Enable the Plugin after making Confi
 
 #### Operating parameters
 - **Operate in advanced mode:** Most users will be fine with Basic Mode (the default). If Advanced Mode is needed enable it here.
-  - Basic Mode - *TBP*
-  - Advanced Mode - *TBP*
+  - Basic Mode - The AlarmDecoder is capable of reading numerous message types. Refer to the [Protocol dcoumentation](https://www.alarmdecoder.com/wiki/index.php/Protocol) for details (note: the online documentation refers to the latest firmaware of the AlarmDecoder). Basic mode limits your device configuration to Zone Numbers and the Plugin will only process Keypad messages.
+  - Advanced Mode - Advanced mode allows you to configure Relay, Expander, and Wireless devices (note: advanced mode is not needed if you have these devices so long as your keypad messages include the zone numbers for these devices).
+
 
 - **Log arm/disarm events:** Choose whether to log arm/disarm events. These events are logged with the log level of INFO and will only be visible in the logs if you log level setting are INFO or DEBUG.
-- **Clear all Zone devices on plugin restart:** When selected all devices are set to Clear on restart of the plugin. This is the recommended setting. When set, if Indigo and your alarm panel are reporting not in sync then you can clear all faults on your alarm panel and then restart the plugin.
+- **Clear all Zone devices on plugin restart:** When selected all devices are set to Clear on restart of the plugin **or** when enabling communication of a device. This is the recommended setting. When set, if Indigo and your alarm panel are reporting not in sync then you can clear the faults on your alarm panel for the zone in question and then disable and re-enable communications in the Indigo Client UI. You can also restart the plugin to clear all ad2usb devices.
 - **Number of Partitions:** Select the number of partitions for your alarm system. Refer to your alarm setup. The default of "1" is typical for most home installations.
 
 #### AD2USB Device Configuration
@@ -153,7 +164,7 @@ These configuration parameters in this section will be written to the AlarmDecod
 - **Remove duplicate messages:** If enabled, removes duplicate alphanumeric keypad messages.
 - **Virtual Zone Expanders(s) (Max 2):** *TBP*
 - **Virtual Relay Module(s):** *TBP*
-- **Virtual Long Range Radio:** *TBP*
+- **Virtual Long Range Radio:** The AlarmDecoder can emulate a Long Range Radio (LRR) expander and then receive LRR messages from your alarm panel. Enabling this feature may require enabling Long Range Radio output on your alarm panel. Consult your alarm panel's programming guide. AlarmDecoder firmware versions V2.2a.6 and V2.2a.8.8 differ in how LRR messages are structured. The current version of the plugin can only process LRR messages from firmware version V2.2a.6. The newer V2.2a.8.8 firmware's LRR messages will be supported in a future release.
 
 #### Log Configuration
 - **Indigo Event Log Level**: See Logging section.
@@ -189,7 +200,7 @@ To be able to be supported you'll need to have some level of logging enabled. Th
 
 The path for logs is `/Library/Application Support/Perceptive Automation/<Indigo Version Number>/Logs/com.berkinet.ad2usb`. Note that part of the file path is dependent on your version of Indigo.
 
-### Reporting Bugs
+### Getting Help and Reporting Bugs
 Start by asking on the support forum. If more info is needed, I'll typically ask for this via a private message or email:
 
 - Specify if it is a a USB or IP based AlarmDecoder

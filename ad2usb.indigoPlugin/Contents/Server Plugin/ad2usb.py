@@ -14,6 +14,7 @@ import sys
 import string
 import time
 import AlarmDecoder
+import AD2USB_Constants
 # from string import atoi
 
 # kRespDecode = ['loop1', 'loop4', 'loop2', 'loop3', 'bit3', 'sup', 'bat', 'bit0']
@@ -25,11 +26,6 @@ kEventStateDict = ['OPEN', 'ARM_AWAY', 'ARM_STAY', 'ACLOSS', 'AC_RESTORE', 'LOWB
                    'TROUBLE_RESTORE', 'ALARM_PANIC', 'ALARM_FIRE', 'ALARM_AUDIBLE',
                    'ALARM_SILENT', 'ALARM_ENTRY', 'ALARM_AUX', 'ALARM_PERIMETER', 'ALARM_TRIPPED']
 kADCommands = {'CONFIG': 'C\r', 'VER': 'V\r'}
-
-# Custom Zone State - see Devices.xml
-kZoneStateDisplayValues = {'faulted': 'Fault', 'Clear': 'Clear'}
-k_CLEAR = 'Clear'  # key: Clear, value: Clear - should convert key to 'clear'
-k_FAULT = 'faulted'  # key: faulted, value: Fault - should convert to 'fault'
 
 # serial port timeout ex: 2 (seconds) or None (infinite)
 k_SERIAL_TIMEOUT = 5
@@ -61,14 +57,14 @@ class ad2usb(object):
 
         self.zoneListInit = False
         self.zoneStateDict = {}
-        self.zoneBypassDict = {}  # dict with key of zone number as int, values are True
+        self.listOfZonesBypassed = {}  # dict with key of zone number as int, values are True
         self.lastApZonesBypassed = 0
 
         self.stopReadingMessages = False
 
         # set the debug panel playback file
         self.playbackLastLineNumberRead = 0  # tracks the current line
-        self.playbackSleepTime = 5  # 5 seconds sleep between each message
+        self.playbackSleepTime = 8  # 5 seconds sleep between each message
         self.hasPlaybackFileBeenRead = False  # flag to set after reading file
 
         # set the firmware to unknown and the serial connection to None
@@ -272,10 +268,11 @@ class ad2usb(object):
                     if zoneState == zoneOn:
                         self.logger.debug(u"zoneOn zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
-                        self.plugin.setDeviceState(indigoDevice, k_FAULT)
+                        self.plugin.setDeviceState(indigoDevice, AD2USB_Constants.k_FAULT)
 
                         # Maintain the zone fault state
                         self.zoneStateDict[panelKeypadAddress].append(int(zNumber))
+                        self.zoneStateDict[panelKeypadAddress] = self.__uniqList(self.zoneStateDict[panelKeypadAddress])
                         self.zoneStateDict[panelKeypadAddress].sort()
                         panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                             self.zoneStateDict[panelKeypadAddress]))
@@ -284,7 +281,7 @@ class ad2usb(object):
                     elif zoneState == zoneOff:
                         self.logger.debug(u"zoneOff zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
-                        self.plugin.setDeviceState(indigoDevice, k_CLEAR)
+                        self.plugin.setDeviceState(indigoDevice, AD2USB_Constants.k_CLEAR)
 
                         # Maintain the zone fault state
                         try:
@@ -318,11 +315,13 @@ class ad2usb(object):
                     if zoneStateDict[wirelessLoop]:
                         self.logger.debug(u"zoneOn zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
-                        self.plugin.setDeviceState(indigoDevice, k_FAULT)
+                        self.plugin.setDeviceState(indigoDevice, AD2USB_Constants.k_FAULT)
 
                         # Maintain the zone fault state
                         try:
                             self.zoneStateDict[panelKeypadAddress].append(int(zNumber))
+                            self.zoneStateDict[panelKeypadAddress] = self.__uniqList(
+                                self.zoneStateDict[panelKeypadAddress])
                             self.zoneStateDict[panelKeypadAddress].sort()
                             panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                                 self.zoneStateDict[panelKeypadAddress]))
@@ -333,7 +332,7 @@ class ad2usb(object):
                     elif not zoneStateDict[wirelessLoop]:
                         self.logger.debug(u"zoneOff zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
-                        self.plugin.setDeviceState(indigoDevice, k_CLEAR)
+                        self.plugin.setDeviceState(indigoDevice, AD2USB_Constants.k_CLEAR)
 
                         # Maintain the zone fault state
                         try:
@@ -394,8 +393,9 @@ class ad2usb(object):
         panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
         self.logger.debug(u"got address:{}".format(panelKeypadAddress))
 
-        if zoneState == k_FAULT:
+        if zoneState == AD2USB_Constants.k_FAULT:
             self.zoneStateDict[panelKeypadAddress].append(int(zoneIndex))
+            self.zoneStateDict[panelKeypadAddress] = self.__uniqList(self.zoneStateDict[panelKeypadAddress])
             self.zoneStateDict[panelKeypadAddress].sort()
             self.logger.debug(u"faulted... state list:{}".format(self.zoneStateDict))
         else:
@@ -461,7 +461,7 @@ class ad2usb(object):
 
                 zoneIndex = msgZoneNum
 
-                self.updateIndigoBasicMode(zoneIndex, k_FAULT, panelDevice)
+                self.updateIndigoBasicMode(zoneIndex, AD2USB_Constants.k_FAULT, panelDevice)
 
                 self.logger.debug(u"Created new in the list, zone:{} at pos:{}".format(msgZoneNum, newZonePos))
 
@@ -505,7 +505,7 @@ class ad2usb(object):
 
                 zoneIndex = self.plugin.faultList[remZonePos]
 
-                self.updateIndigoBasicMode(zoneIndex, k_CLEAR, panelDevice)
+                self.updateIndigoBasicMode(zoneIndex, AD2USB_Constants.k_CLEAR, panelDevice)
 
                 del self.plugin.faultList[remZonePos]
 
@@ -523,7 +523,7 @@ class ad2usb(object):
 
                 zoneIndex = self.plugin.faultList[remZonePos]
 
-                self.updateIndigoBasicMode(zoneIndex, k_CLEAR, panelDevice)
+                self.updateIndigoBasicMode(zoneIndex, AD2USB_Constants.k_CLEAR, panelDevice)
 
                 del self.plugin.faultList[remZonePos]
 
@@ -594,12 +594,21 @@ class ad2usb(object):
                     self.processAlarmDecoderConfigString(
                         newMessageObject.getMessageAttribute('configMessageString'))
                     self.plugin.hasAlarmDecoderConfigBeenRead = True
+                    skipOldMesssageProcessing = True
 
                 elif (newMessageObject.messageType == 'VER') and newMessageObject.needsProcessing:
                     self.setFirmware(newMessageObject.firmwareVersion)
+                    skipOldMesssageProcessing = True
+
+                elif (newMessageObject.messageType == 'KPM') and newMessageObject.needsProcessing:
+                    self.logger.debug('KPM message seen:{}'.format(newMessageObject))
+                    # for now we process these messages using legacy code
+                    skipOldMesssageProcessing = False
 
                 elif (newMessageObject.messageType == 'AUI') and newMessageObject.needsProcessing:
                     self.logger.debug('AUI message seen')
+                    # for now we don't do anything with AUI messages
+                    skipOldMesssageProcessing = True
 
                 elif (newMessageObject.messageType == 'LRR') and newMessageObject.needsProcessing:
                     # attempt to send VER command if VER not known
@@ -611,9 +620,9 @@ class ad2usb(object):
 
                     # check if we should process it
                     if newMessageObject.isValidMessage:
-                        skipOldMesssageProcessing = True
                         self.process_LRR_Message(newMessageObject)
 
+                    skipOldMesssageProcessing = True
                     self.logger.debug('LRR message seen')
 
                 else:
@@ -764,28 +773,21 @@ class ad2usb(object):
 
                             self.logger.debug(u"Panel message:{}".format(panelFlags))
 
-                            # self.ALARM_STATUS = {'000': 'Fault', '001': 'armedStay', '010': 'armedAway', '100': 'ready'}
-                            panelTxtStatus = self.plugin.ALARM_STATUS[panelBitStatus]
-                            if panelTxtStatus == 'ready':
-                                displayState = 'enabled'
-                                displayStateUi = 'Ready'
-                            elif panelTxtStatus == 'Fault':
-                                displayState = 'faulted'
-                                displayStateUi = 'Fault'
+                            # TO DO: replace with a function that looks at MAX/INSTANT
+                            if panelBitStatus in self.plugin.ALARM_STATUS:
+                                panelState = self.plugin.ALARM_STATUS[panelBitStatus]
                             else:
-                                displayState = panelTxtStatus
-                                displayStateUi = panelTxtStatus
+                                self.logger.error("Unknown Keypad Panel State:{}".format(panelBitStatus))
+                                panelState = 'error'
 
                             lastPanelMsg = rawData
                             panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
                             self.logger.debug(u"Found dev:{}, id:{}".format(panelDevice.name, panelDevice.id))
 
                             # panelDevice = indigo.devices[self.plugin.alarmDevId]
+                            self.plugin.setKeypadDeviceState(panelDevice, panelState)
                             panelDevice.updateStateOnServer(key='LCDLine1', value=rawData[61:77])
                             panelDevice.updateStateOnServer(key='LCDLine2', value=rawData[77:93])
-                            panelDevice.updateStateOnServer(key='panelState', value=panelTxtStatus)
-                            panelDevice.updateStateOnServer(
-                                key='displayState', value=displayState, uiValue=displayStateUi)
                             panelDevice.updateStateOnServer(key='programMode', value=apProgramMode)
                             panelDevice.updateStateOnServer(key='zonesBypassed', value=apZonesBypassed)
                             panelDevice.updateStateOnServer(key='acPower', value=apACPower)
@@ -867,14 +869,14 @@ class ad2usb(object):
                                 self.logger.debug(u"zones bypassed is now zero")
                                 self.lastApZonesBypassed = apZonesBypassed
                                 # Clear the bypass state of all zones
-                                for zone in self.zoneBypassDict.keys():
+                                for zone in self.listOfZonesBypassed.keys():
                                     bZoneData = self.plugin.zonesDict[int(zone)]
                                     bZDevid = bZoneData['devId']
                                     bIndigoDevice = indigo.devices[bZDevid]
                                     bIndigoDevice.updateStateOnServer(key='bypassState', value=False)
 
                                     # after setting bypass set the device state to itself (no change)
-                                    # to for force display to account for bypass state change
+                                    # to force display to change from the Bypass state
                                     self.plugin.setDeviceState(bIndigoDevice, bIndigoDevice.displayStateValRaw)
 
                                     self.logger.debug(
@@ -882,22 +884,22 @@ class ad2usb(object):
                                     self.logger.debug(u"zone:{}, data:{}".format(zone, self.plugin.zonesDict[zone]))
 
                                 # and now clear the list of bypassed zones
-                                self.zoneBypassDict.clear()
+                                self.listOfZonesBypassed.clear()
 
                         if apZonesBypassed == "1" and msgKey == "BYPAS" and realZone is True:
                             # A zone has been bypassed.
-                            if bMsgZoneNum in self.zoneBypassDict:
+                            if bMsgZoneNum in self.listOfZonesBypassed:
                                 self.logger.debug(
                                     u"zone bypass state zone:{}, name:{} already recorded".format(bMsgZoneNum, zName))
                             else:
-                                self.zoneBypassDict[bMsgZoneNum] = True
+                                self.listOfZonesBypassed[bMsgZoneNum] = True
                                 self.logger.info(
                                     u"Alarm zone number:{}, name:{} has been bypassed".format(bMsgZoneNum, zName))
                                 self.lastApZonesBypassed = apZonesBypassed
                                 indigoDevice.updateStateOnServer(key='bypassState', value=True)
 
                                 # after setting bypass set the device state to itself (no change)
-                                # to for force display to account for bypass state change
+                                # to force display to change from the Bypass state
                                 self.plugin.setDeviceState(indigoDevice, indigoDevice.displayStateValRaw)
 
                         # OK, Now let's see if we have a zone event
@@ -960,7 +962,6 @@ class ad2usb(object):
             configSendSuccess = False
 
             # try to open the serial connection
-            # TO DO: put send and read of V and CONFIG into 2 methods
             if self.setSerialConnection():
                 self.logger.info(u"AlarmDecoder communication started...")
 
@@ -1238,6 +1239,12 @@ class ad2usb(object):
 
                         # skip the line if its a comment
                         if line.startswith('#'):
+                            pass
+                            # we don't break here so we just read the next comment
+
+                        # lines that start with ~ are test comments to log to Indigo Log Window
+                        elif line.startswith('~'):
+                            self.logger.info(line.strip())
                             pass
                             # we don't break here so we just read the next comment
 
@@ -1555,3 +1562,18 @@ class ad2usb(object):
             return True
         else:
             return False
+
+    def __uniqList(self, originalList=[]):
+        """
+        Returns a unique list from a list.
+        """
+        # initialize a null list
+        unique_list = []
+
+        # traverse for all elements
+        for x in originalList:
+            # check if exists in unique_list or not
+            if x not in unique_list:
+                unique_list.append(x)
+
+        return unique_list
