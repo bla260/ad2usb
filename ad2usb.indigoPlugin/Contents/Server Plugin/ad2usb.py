@@ -130,6 +130,15 @@ class ad2usb(object):
     ########################################
     # Write arbitrary messages to the panel
     def panelMsgWrite(self, panelMsg, address=''):
+        """
+        Sends (writes) a message to the AlarmDecoder to be sent to the alarm panel. Messages can be
+        prefixed by a keypad address to make the message come from another keypad address other than the
+        AlarmDecoder. If no address is provided the message is sent from the AlarmDecoder's keypad
+        ADDRESS settings.
+
+        **parameter:**
+        address - zero-padded two digit string representing keypad address
+        """
         self.logger.debug(u"called with msg:{} for address:{}".format(panelMsg, address))
 
         try:
@@ -142,6 +151,7 @@ class ad2usb(object):
                 panelMsg = 'K' + address + str(panelMsg)
                 self.panelWriteWrapper(self.serialConnection, panelMsg)
                 self.logger.info(u"sent panel message:{}".format(panelMsg))
+
         except Exception as err:
             self.logger.error(u"unable to write panel message:{}".format(panelMsg))
             self.logger.error(u"error message:{}, {}".format(str(err), sys.exc_info()[0]))
@@ -197,7 +207,7 @@ class ad2usb(object):
         supervisionMessage = False
 
         if not self.zoneListInit:
-            for address in self.plugin.panelsDict:
+            for address in self.plugin.getAllKeypadAddresses():
                 self.zoneStateDict[address] = []
             self.zoneListInit = True
 
@@ -244,18 +254,19 @@ class ad2usb(object):
 
                 indigoDevice = indigo.devices[zDevId]
 
-                # Now we get some information about the partition, like the keypad address and the panel device
-                panelDevId = self.plugin.partition2address[zPartition]['devId']
-                panelDevice = indigo.devices[panelDevId]
-                panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
+                # get the panel device and keypad address
+                panelDevice = self.plugin.getKeypadDeviceForPartition(zPartition)
+                if panelDevice is None:
+                    self.logger.error("No keypad device found for partition:{} of device:{}".format(zPartition, zName))
+                else:
+                    panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
 
-                self.logger.debug(u"found zone info: zType={}, zDevId={}, zBoard={}, zDevice={}, zNumber={}, zLastState={}, zName={}, zPartition={}".format(
-                    zType, zDevId, zBoard, zDevice, zNumber, zLastState, zName, zPartition))
-                self.logger.debug(u"found panel info: DB:{}, dev={}".format(
-                    self.plugin.partition2address[zPartition], panelDevice))
+                    self.logger.debug(u"found zone info: zType={}, zDevId={}, zBoard={}, zDevice={}, zNumber={}, zLastState={}, zName={}, zPartition={}".format(
+                        zType, zDevId, zBoard, zDevice, zNumber, zLastState, zName, zPartition))
+                    self.logger.debug(u"found keypad:{}".format(panelDevice))
 
-                self.logger.debug(u"Indigo Device found:{}".format(zName))
-                validDev = True
+                    self.logger.debug(u"Indigo Device found:{}".format(zName))
+                    validDev = True
 
             except Exception as err:  # An unrecognized device
                 if self.plugin.logUnknownDevices:
@@ -271,9 +282,7 @@ class ad2usb(object):
                         self.plugin.setDeviceState(indigoDevice, AD2USB_Constants.k_FAULT)
 
                         # Maintain the zone fault state
-                        self.zoneStateDict[panelKeypadAddress].append(int(zNumber))
-                        self.zoneStateDict[panelKeypadAddress] = self.__uniqList(self.zoneStateDict[panelKeypadAddress])
-                        self.zoneStateDict[panelKeypadAddress].sort()
+                        self.updateZoneState(keypad=panelKeypadAddress, addZone=int(zNumber))
                         panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                             self.zoneStateDict[panelKeypadAddress]))
 
@@ -285,7 +294,8 @@ class ad2usb(object):
 
                         # Maintain the zone fault state
                         try:
-                            self.zoneStateDict[panelKeypadAddress].remove(int(zNumber))
+                            self.updateZoneState(keypad=panelKeypadAddress, removeZone=int(zNumber))
+
                         except:
                             self.logger.error(u"Unable to update state table for zone:{}, address:{}".format(
                                 zNumber, panelKeypadAddress))
@@ -302,41 +312,39 @@ class ad2usb(object):
                     self.logger.debug(u"ready to update Indigo RFX (Wireless)")
 
                     wirelessLoop = 'loop' + str(int(zDevice))  # remove any leading zeros
-                    zoneStateDict = self.decodeState(zoneState)
+                    RFXDataBits = self.decodeState(zoneState)
                     if indigoDevice.pluginProps['zoneInvertSense']:
-                        if zoneStateDict[wirelessLoop]:
-                            zoneStateDict[wirelessLoop] = False
-                        elif not zoneStateDict[wirelessLoop]:
-                            zoneStateDict[wirelessLoop] = True
+                        if RFXDataBits[wirelessLoop]:
+                            RFXDataBits[wirelessLoop] = False
+                        elif not RFXDataBits[wirelessLoop]:
+                            RFXDataBits[wirelessLoop] = True
                         else:
                             self.logger.error(u"State:{} not found in:{}".format(
-                                zoneState, self.plugin.advZonesDict[zoneIndex]))
+                                RFXDataBits, self.plugin.advZonesDict[zoneIndex]))
 
-                    if zoneStateDict[wirelessLoop]:
+                    if RFXDataBits[wirelessLoop]:
                         self.logger.debug(u"zoneOn zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
                         self.plugin.setDeviceState(indigoDevice, AD2USB_Constants.k_FAULT)
 
                         # Maintain the zone fault state
                         try:
-                            self.zoneStateDict[panelKeypadAddress].append(int(zNumber))
-                            self.zoneStateDict[panelKeypadAddress] = self.__uniqList(
-                                self.zoneStateDict[panelKeypadAddress])
-                            self.zoneStateDict[panelKeypadAddress].sort()
+                            self.updateZoneState(keypad=panelKeypadAddress, addZone=int(zNumber))
                             panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                                 self.zoneStateDict[panelKeypadAddress]))
                         except:
                             pass  # probably a non-numeric zone
 
                         stateMsg = 'Faulted'
-                    elif not zoneStateDict[wirelessLoop]:
+                    elif not RFXDataBits[wirelessLoop]:
                         self.logger.debug(u"zoneOff zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
                         self.plugin.setDeviceState(indigoDevice, AD2USB_Constants.k_CLEAR)
 
                         # Maintain the zone fault state
                         try:
-                            self.zoneStateDict[panelKeypadAddress].remove(int(zNumber))
+                            self.updateZoneState(keypad=panelKeypadAddress, removeZone=int(zNumber))
+
                             panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                                 self.zoneStateDict[panelKeypadAddress]))
                         except:
@@ -347,7 +355,7 @@ class ad2usb(object):
                         self.logger.error(u"State:{} not found in:{}".format(
                             zoneState, self.plugin.advZonesDict[zoneIndex]))
 
-                    if zoneStateDict['sup']:
+                    if RFXDataBits['sup']:
                         supervisionMessage = True
                         if zLogSupervision:  # make sure we want this logged
                             self.logger.info(u"Zone:{} supervision received. ({})".format(zName, rawData.strip()))
@@ -380,7 +388,7 @@ class ad2usb(object):
         self.logger.debug(u"called with index:{}, state:{}, panel:{}".format(zoneIndex, zoneState, panelDevice))
 
         if not self.zoneListInit:
-            for address in self.plugin.panelsDict:
+            for address in self.plugin.getAllKeypadAddresses():
                 self.zoneStateDict[address] = []
             self.zoneListInit = True
 
@@ -394,12 +402,10 @@ class ad2usb(object):
         self.logger.debug(u"got address:{}".format(panelKeypadAddress))
 
         if zoneState == AD2USB_Constants.k_FAULT:
-            self.zoneStateDict[panelKeypadAddress].append(int(zoneIndex))
-            self.zoneStateDict[panelKeypadAddress] = self.__uniqList(self.zoneStateDict[panelKeypadAddress])
-            self.zoneStateDict[panelKeypadAddress].sort()
+            self.updateZoneState(keypad=panelKeypadAddress, addZone=int(zoneIndex))
             self.logger.debug(u"faulted... state list:{}".format(self.zoneStateDict))
         else:
-            self.zoneStateDict[panelKeypadAddress].remove(int(zoneIndex))
+            self.updateZoneState(keypad=panelKeypadAddress, removeZone=int(zoneIndex))
             self.logger.debug(u"clear... State list:{}".format(self.zoneStateDict))
 
         # update the device state
@@ -591,9 +597,9 @@ class ad2usb(object):
                 messageType = newMessageObject.messageType
 
                 if (newMessageObject.messageType == 'CONFIG') and newMessageObject.needsProcessing:
-                    self.processAlarmDecoderConfigString(
-                        newMessageObject.getMessageAttribute('configMessageString'))
-                    self.plugin.hasAlarmDecoderConfigBeenRead = True
+
+                    # store the current setting in the properties
+                    self.processAlarmDecoderConfigMessage(newMessageObject)
                     skipOldMesssageProcessing = True
 
                 elif (newMessageObject.messageType == 'VER') and newMessageObject.needsProcessing:
@@ -701,7 +707,7 @@ class ad2usb(object):
                             # Convert the address field to a binary string
                             addrHex = self.hex2bin(keypadAddressField)
                             self.logger.debug(u"addrHex:{}".format(addrHex))
-                            for panelKeypadAddress in self.plugin.panelsDict:       # loop through the keypad device dict
+                            for panelKeypadAddress in self.plugin.getAllKeypadAddresses():       # loop through the keypad device dict
                                 bitPosition = -1  # reset this each pass through the loop
                                 panelAddress = -1  # reset this each pass through the loop
                                 panelAddress = int(panelKeypadAddress)
@@ -781,7 +787,8 @@ class ad2usb(object):
                                 panelState = 'error'
 
                             lastPanelMsg = rawData
-                            panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
+                            # panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
+                            panelDevice = self.plugin.getKeypadDeviceForAddress(foundKeypadAddress)
                             self.logger.debug(u"Found dev:{}, id:{}".format(panelDevice.name, panelDevice.id))
 
                             # panelDevice = indigo.devices[self.plugin.alarmDevId]
@@ -838,6 +845,7 @@ class ad2usb(object):
 
                         # Setup some variables for the next few steps
                         msgBitMap = splitMsg[1]
+                        # TO DO: Known bug when not a number - this is a quick fix - is addressed in KPM Message Object
                         msgZoneNum = int(splitMsg[3])
                         realZone = False
                         try:
@@ -849,7 +857,8 @@ class ad2usb(object):
                             # self.logError("%s: Panel reports: %s" % (funcName, msgText), self.logName)
 
                         msgKey = msgText[1:6]
-                        self.logger.debug(u"msgKey is:{}, msgTxt is:{}".format(msgKey, msgText))
+                        self.logger.debug(u"msgKey is:{}, msgTxt is:{}, msgBitMap:{}, msgZoneNum:{}, bMsgZoneNum:{}, realZone:{}".format(
+                            msgKey, msgText, msgBitMap, msgZoneNum, bMsgZoneNum, realZone))
                         if msgZoneNum in self.plugin.zonesDict:  # avoid issues with count down timers on arm
                             zoneData = self.plugin.zonesDict[int(msgZoneNum)]
                             zDevId = zoneData['devId']
@@ -1121,8 +1130,8 @@ class ad2usb(object):
                             u'attempting to update CONFIG settings:{} to AlarmDecoder'.format(configString))
 
                         if self.panelWriteWrapper(self.serialConnection, configString):
-                            self.logger.debug(u'AlarmDecoder CONFIG written successfully')
-                            self.logger.debug('resetting timeout...')
+                            self.plugin.hasAlarmDecoderConfigBeenRead = False
+                            self.logger.debug('AlarmDecoder CONFIG written successfully')
                             return True
                         else:
                             self.logger.error(u'AlarmDecoder CONFIG write failed')
@@ -1135,6 +1144,17 @@ class ad2usb(object):
                     self.logger.error(u'Unable to get serial connection to write AlarmDecoder CONFIG')
                     return False
 
+            elif self.plugin.ad2usbCommType == 'messageFile':
+                # set this to test success and fail
+                if True:
+                    self.logger.debug(
+                        'message Playback mode - simulate returning True'.format(self.plugin.ad2usbCommType))
+                    return True
+                else:
+                    self.logger.debug(
+                        'message Playback mode - simulate returning False'.format(self.plugin.ad2usbCommType))
+                    return False
+
             else:
                 self.logger.debug(
                     u'commType is not IP or USB:{} - cannot write to AlarmDecoder - returning False'.format(self.plugin.ad2usbCommType))
@@ -1145,42 +1165,79 @@ class ad2usb(object):
                 u"reading AlarmDecoder configuration failed: URL:{}, CONFIG string:{}, error:{}".format(self.getURL(), configString, str(err)))
             return False
 
-    def processAlarmDecoderConfigString(self, configString):
+    def processAlarmDecoderConfigMessage(self, configMessage=None):
         """
-        parses a valid AlarmDecoder CONFIG string (from the device) and sets the keys and values
-        of the plugin property 'configSettings' to the CONFIG string keys and values
+        Parses a valid AlarmDecoder CONFIG message object (presumably read from the device) and sets the
+        keys and values of the plugin property 'configSettings' to the CONFIG string keys and values.
+        If the address has changed, it sets the legacy plugin property 'ad2usbKeyPadAddress', the keypad address
+        preferences, and calls updateKeypadDevice with the old and new keypad address to automatically update
+        applicable keypad devices.
 
         **parameter:**
-        configString -- the CONFIG string from the AlarmDecoder
+        configMessage -- an AlarmDecoder.Message object
         """
 
-        self.logger.debug(u"called with:{}".format(configString))
+        self.logger.debug(u"called with:{}".format(configMessage))
 
         try:
             # log the old settings
             self.logger.debug(u"prior configSettings were:{}".format(self.plugin.configSettings))
 
-            # we only set new settings at end in case there is an error
-            newConfigSettings = {}
+            # we loop thru settings vs. replace configSettings since a CONFIG message could
+            # contain only a subset of parameters
+            for newSetting in configMessage.attr('flags'):
+                self.plugin.configSettings[newSetting] = configMessage.attr('flags')[newSetting]
 
-            configItems = re.split('&', configString)
-
-            for oneConfig in configItems:
-                configParam = re.split('=', oneConfig)
-
-                # skip parameters we don't manage
-                if (configParam[0] == 'CONFIGBITS') or (configParam[0] == 'MASK') or (configParam[0] == 'MASK'):
-                    pass
-                else:
-                    newConfigSettings[configParam[0]] = configParam[1]
-
-            self.plugin.configSettings = {}
-            self.plugin.configSettings = newConfigSettings.copy()
             self.logger.debug(u"updated configSettings are:{}".format(self.plugin.configSettings))
+
+            # check the new address is valid and the new address has changed
+            if self.plugin.isValidKeypadAddress(self.plugin.configSettings['ADDRESS']):
+
+                # did the address change outside of the plugin ?
+                if self.plugin.configSettings['ADDRESS'] != self.plugin.ad2usbKeyPadAddress:
+                    newAddress = self.plugin.configSettings['ADDRESS']
+                    oldAddress = self.plugin.ad2usbKeyPadAddress
+                    self.logger.info(u"AlarmDecoder reports a new keypad address:{}".format(newAddress))
+
+                    # update the plugin property
+                    self.plugin.ad2usbKeyPadAddress = newAddress
+
+                    # update the prefrences
+                    self.plugin.pluginPrefs['ad2usbKeyPadAddress'] = newAddress
+
+                    # update the keypad device
+                    self.plugin.updateKeypadDevice(newAddress=newAddress, oldAddress=oldAddress)
+
+            else:
+                self.logger.warning("Invalid ADDRESS:{} on AlarmDecoder".format(self.plugin.configSettings['ADDRESS']))
+
+            # if we need to info log the CONFIG to the console do it
+
+            # we log if we flagged that we should
+            newSettingsString = self.plugin.generateAlarmDecoderConfigString()
+            newSettingsString = newSettingsString[1:]  # remove the leading C
+            newSettingsStringSorted = self.plugin.generateAlarmDecoderConfigString(True)  # sorted
+
+            # log if we detect a change and we're not loggind due to flag: hasAlarmDecoderConfigBeenRead
+            if self.plugin.hasAlarmDecoderConfigBeenRead:
+
+                if newSettingsStringSorted != self.plugin.previousCONFIGString:
+                    self.logger.info("AlarmDecoder CONFIG setting are now:{}".format(newSettingsString))
+
+            # or log if the read flag is not set
+            else:
+                self.logger.info("AlarmDecoder CONFIG message read:{}".format(
+                    configMessage.attr('configMessageString')))
+
+                self.logger.info("AlarmDecoder CONFIG setting are now:{}".format(newSettingsString))
+                self.plugin.hasAlarmDecoderConfigBeenRead = True
+
+            # reset the previous CONFIG string to detect changes
+            self.plugin.previousCONFIGString = newSettingsStringSorted
 
         except Exception as err:
             # no changes are made to configSettings dictionary
-            self.logger.error('Error processing CONFIG string:{} - error:{}'.format(configString, str(err)))
+            self.logger.error('Error processing CONFIG message:{} - error:{}'.format(configMessage, str(err)))
             self.logger.debug(u"configSettings are:{}".format(self.plugin.configSettings))
 
     def readConfigSettingsFromPrefs(self):
@@ -1521,7 +1578,7 @@ class ad2usb(object):
             if messageObject.getMessageAttribute('isAllPartitions'):
                 keypadsToUpdate = self.plugin.getAllKeypadDevices()
             else:
-                oneKeypad = self.plugin.getKeypadDevice(partition)
+                oneKeypad = self.plugin.getKeypadDeviceForPartition(partition)
                 if oneKeypad is not None:
                     keypadsToUpdate.append(oneKeypad)
 
@@ -1563,17 +1620,75 @@ class ad2usb(object):
         else:
             return False
 
-    def __uniqList(self, originalList=[]):
+    def updateZoneState(self, keypad=None, addZone=None, removeZone=None):
         """
-        Returns a unique list from a list.
+        Adds or removes an element to the zoneStatDict property for a given keypad.
+        Ensure the property is an array of integers that is sorted and unique.
         """
+        # initialize the list for the keypad if needed
+        if keypad not in self.zoneStateDict:
+            self.zoneStateDict[keypad] = []
+
+        # lets try to add first
+        try:
+            # skip if None
+            if addZone is not None:
+                # convert to an Int
+                addAsInt = int(addZone)
+                # don't add a zero or negative
+                if addAsInt > 0:
+                    self.zoneStateDict[keypad].append(addAsInt)
+
+        except Exception as err:
+            self.logger.warning("Unable to add zone to fault list:{}, msg:{}".format(addZone, str(err)))
+
+        # next we we unique the list
         # initialize a null list
         unique_list = []
 
         # traverse for all elements
-        for x in originalList:
+        for x in self.zoneStateDict[keypad]:
             # check if exists in unique_list or not
             if x not in unique_list:
                 unique_list.append(x)
 
-        return unique_list
+        # next lets try to remove
+        try:
+            # skip if None
+            if removeZone is not None:
+                # convert to an Int
+                removeAsInt = int(removeZone)
+                # only remove if it exists
+                if removeAsInt in unique_list:
+                    unique_list.remove(removeAsInt)
+
+        except Exception as err:
+            self.logger.warning("Unable to remove zone from fault list:{}, msg:{}".format(removeZone, str(err)))
+
+        # replace the property with the sorted uniq list
+        unique_list.sort()
+        self.zoneStateDict[keypad] = unique_list.copy()
+
+    def __convertToPaddedKeypadAddress(self, keypadAddressString=''):
+        """
+        Takes a string and returns a valid two-digit keypad address as a string. Will be
+        zero-padded if < 10. Returns blank if not a valid number. Valid numbers are 1-99.
+        """
+        try:
+            # test the empty string
+            if keypadAddressString == '':
+                return ''
+
+            # attempt to convert to an integer
+            keypadAsInt = int(keypadAddressString)
+
+            if keypadAsInt > 0 and keypadAsInt < 10:
+                return '0' + str(keypadAsInt)
+            elif keypadAsInt < 100:
+                return str(keypadAsInt)
+            else:
+                return ''
+
+        except Exception as err:
+            self.logger.debug("error converting keypad to zero-padded string:{}".format(str(err)))
+            return ''

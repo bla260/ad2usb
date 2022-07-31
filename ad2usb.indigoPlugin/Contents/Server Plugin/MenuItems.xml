@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+<MenuItems>
+    <MenuItem id="configureAlarmDecoder">
+        <Name>AlarmDecoder Configuration</Name>
+        <CallbackMethod>updateAlarmDecoderConfig</CallbackMethod>
+        <ConfigUI>
+
+          <Field id="step1label" type="label">
+            <Label>Step 1 - Retrieve the current AlarmDecoder configuration from the device.</Label>
+        	</Field>
+
+        	<Field id="ad2usbConfigRead" type="button" tooltip="Will attempt to send a CONFIG message to the AlarmDecoder">
+        		<Label>Use Button to read AlarmDecoder configuration:</Label>
+        		<Title>Read Config</Title>
+        		<CallbackMethod>NewConfigButtonPressed</CallbackMethod>
+        	</Field>
+
+        	<Field id="makeSpace3" type="label">
+        		<Label/>
+        	</Field>
+
+        	<Field id="ADButtonMsgControl" type="textfield" defaultValue="0" hidden="true">
+        		<Label/>
+        	</Field>
+
+          <Field id="ADSettingMsgControl" type="textfield" defaultValue="1" hidden="true">
+        		<Label/>
+        	</Field>
+
+          <Field id="msgCONFIGSent" type="label" visibleBindingId="ADButtonMsgControl" visibleBindingValue="1">
+        		<Label>The AlarmDecoder CONFIG command has been sent to the device...</Label>
+        	</Field>
+
+        	<Field id="msgCONFIGRead" type="label" visibleBindingId="ADButtonMsgControl" visibleBindingValue="2">
+        		<Label>The ad2usb configuration was sucessfully read. Make any changes click Update.</Label>
+        	</Field>
+
+        	<Field id="msgCONFIGFail" type="label" visibleBindingId="ADButtonMsgControl" visibleBindingValue="3">
+        		<Label>Unable to connect to the ad2usb. Verify the connection settings in the Plugin Config.</Label>
+        	</Field>
+
+        	<Field id="msgCONFIGInvalid" type="label" visibleBindingId="ADButtonMsgControl" visibleBindingValue="4">
+        		<Label>This ad2usb board or firmware version does not support automatic configuration.</Label>
+        	</Field>
+
+          <Field id="msgCONFIGInvalidComm" type="label" visibleBindingId="ADButtonMsgControl" visibleBindingValue="5">
+        		<Label>The AlarmDecoder communication method is not defined in Plugin config (IP or USB). Configure this setting first via the Plugin Configure menu.</Label>
+        	</Field>
+
+          <Field id="msgCONFIGReadError" type="label" visibleBindingId="ADButtonMsgControl" visibleBindingValue="6">
+        		<Label>Error encountered while attempting to read the configuration. See the Error Log for more information.</Label>
+        	</Field>
+
+          <Field id="simpleSeparator1" type="separator" />
+
+          <Field id="step2" type="label">
+            <Label>Step 2 - Update the AlarmDecoder configuration.</Label>
+          </Field>
+          <Field id="step2a" type="label">
+            <Label>(ADDRESS, DEDUPLICATE, EXP, REL, and LRR AlarmDecoder settings can be changed.)</Label>
+          </Field>
+
+          <Field id="makeSpace2a" type="label">
+        		<Label/>
+        	</Field>
+
+        	<Field id="ad2usbKeyPadAddress" type="textfield" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>AlarmDecoder Keypad Address (ADDRESS):</Label>
+        	</Field>
+
+        	<Field id="ad2usbDeduplicate" type="checkbox" defaultValue="true"  visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>Remove duplicate messages (DEDUPLICATE):</Label>
+        		<Description>(Improves plugin efficiency)</Description>
+        	</Field>
+
+        	<Field id="ad2usbEmulationSpace" type="label" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1" >
+        		<Label> </Label>
+        	</Field>
+
+        	<Field id="ad2usbZxpLabel" type="label" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>Virtual Zone Expanders(s) (Max 2) (EXP):</Label>
+        	</Field>
+        	<Field id="ad2usbExpander_1" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Zone Expander #1:</Label>
+        		<Description>(Addr 7, Zones 9-16)</Description>
+        	</Field>
+        	<Field id="ad2usbExpander_2" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Zone Expander #2:</Label>
+        		<Description>(Addr 8, Zones 17-24)</Description>
+        	</Field>
+        	<Field id="ad2usbExpander_3" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Zone Expander #3:</Label>
+        		<Description>(Addr 9, Zones 25-32)</Description>
+        	</Field>
+        	<Field id="ad2usbExpander_4" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Zone Expander #4:</Label>
+        		<Description>(Addr 10, Zones 33-40)</Description>
+        	</Field>
+        	<Field id="ad2usbExpander_5" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Zone Expander #5:</Label>
+        		<Description>(Addr 11, Zones 41-48)</Description>
+        	</Field>
+
+          <Field id="virtualRelaySpace1" type="label" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1" >
+        		<Label> </Label>
+        	</Field>
+
+        	<Field id="ad2usbRelLabel" type="label" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1" >
+        		<Label>Virtual Relay Module(s) (REL):</Label>
+        	</Field>
+        	<Field id="ad2usbVirtRelay_1" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Relay #1:</Label>
+        		<Description>(Addr 12)</Description>
+        	</Field>
+        	<Field id="ad2usbVirtRelay_2" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Relay #2:</Label>
+        		<Description>(Addr 13)</Description>
+        	</Field>
+        	<Field id="ad2usbVirtRelay_3" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Relay #3:</Label>
+        		<Description>(Addr 14)</Description>
+        	</Field>
+        	<Field id="ad2usbVirtRelay_4" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>    Relay #4:</Label>
+        		<Description>(Addr 15)</Description>
+        	</Field>
+
+          <Field id="LRRSpace1" type="label" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1" >
+        		<Label> </Label>
+        	</Field>
+
+        	<Field id="ad2usbLrr" type="checkbox" visibleBindingId="ADSettingMsgControl" visibleBindingValue="1">
+        		<Label>Virtual Long Range Radio (LRR):</Label>
+            <Description>(Requires LRR to be enabled on alarm panel)  </Description>
+        	</Field>
+
+          <SupportURL>https://www.alarmdecoder.com/wiki/index.php/Protocol#Device_Configuration</SupportURL>
+
+        </ConfigUI>
+        <ButtonTitle>Update</ButtonTitle>
+
+    </MenuItem>
+
+    <MenuItem id="sendCONFIGCommand">
+        <Name>Get AlarmDecoder Settings</Name>
+        <CallbackMethod>sendAlarmDecoderConfigCommand</CallbackMethod>
+    </MenuItem>
+    <MenuItem id="sendVERCommand">
+        <Name>Get AlarmDecoder Firmware Version</Name>
+        <CallbackMethod>sendAlarmDecoderConfigCommand</CallbackMethod>
+    </MenuItem>
+
+    <!-- Comment these out prior to release
+    <MenuItem id="logPluginProps">
+        <Name>Write Plugin Properties to Event Log</Name>
+        <CallbackMethod>logPluginProps</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="logDeviceProps">
+        <Name>Write All Devices Properties to Event Log</Name>
+        <CallbackMethod>logDeviceProps</CallbackMethod>
+    </MenuItem>
+    -->
+
+</MenuItems>

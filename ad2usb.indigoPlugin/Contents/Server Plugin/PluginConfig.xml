@@ -1,14 +1,10 @@
 <?xml version="1.0"?>
 <PluginConfig>
 
-	<Field id="infoLabel" type="label">
-		<Label>AD2USB Alarm Interface</Label>
-	</Field>
-
-    <Field id="simpleSeparator1" type="separator"/>
+	<!-- Section 1 - Connection Settings -->
 
 	<Field id="sectionLabel1" type="label">
-		<Label>AD2USB connection settings</Label>
+		<Label>AD2USB/AD2PI connection settings</Label>
 	</Field>
 
 	<Field id="ad2usbCommType" type="menu" defaultValue="IP">
@@ -16,7 +12,7 @@
 		<List>
 			<Option value="IP">IP Network</Option>
 			<Option value="USB">Local USB Port</Option>
-			<!-- comment this option out -->
+			<!-- comment this option out before making zip file -->
 			<Option value="messageFile">Panel Message File</Option>
 		</List>
 	</Field>
@@ -37,7 +33,19 @@
 		<Label/>
 	</Field>
 
+	<!-- Read only field to keep AlarmDecoder Keypad Address as part of saved preferences and show it to user -->
+	<Field id="ad2usbKeyPadAddress" type="textfield" readonly="true" tooltip="Use AlarmDecoder Configuration menu to change.">
+		<Label>AlarmDecoder Keypad Address (ADDRESS):</Label>
+	</Field>
+
+
+	<!-- Section 2 - Operating Parameters -->
+
 	<Field id="simpleSeparator2" type="separator" />
+
+	<Field id="makeSpace3" type="label">
+		<Label/>
+	</Field>
 
 	<Field id="sectionLabel2" type="label">
 		<Label>Operating parameters</Label>
@@ -80,117 +88,9 @@
 		</List>
 	</Field>
 
-<!-- Start of ad2usb configuration section -->
-	<Field id="makeSpace2" type="label">
-		<Label/>
-	</Field>
+	<!-- Section 3 - Logging -->
 
 	<Field id="simpleSeparator3" type="separator" />
-
-	<Field id="sectionLabel3" type="label">
-		<Label>AD2USB Device Configuration</Label>
-	</Field>
-
-	<Field id="ad2usbConfigRead" type="button" >
-		<Label/>
-		<Title>Retrieve ad2usb Config</Title>
-		<CallbackMethod>ConfigButtonPressed</CallbackMethod>
-	</Field>
-	<Field id="makeSpace3" type="label">
-		<Label/>
-	</Field>
-
-	<Field id="msgControl" type="textfield" defaultValue="0"  hidden="true">
-		<Label/>
-	</Field>
-
-	<Field id="msgTestSuccess" type="label" visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>	  	The ad2usb configuration was sucessfully read.
-		Make any changes you wish and click Save.</Label>
-	</Field>
-
-	<Field id="msgTestFail1" type="label" visibleBindingId="msgControl" visibleBindingValue="2">
-		<Label>	  	Unable to connect to the ad2usb.
-		Verify the connection settings and try-again.</Label>
-	</Field>
-
-	<Field id="msgTestFail2" type="label" visibleBindingId="msgControl" visibleBindingValue="3">
-		<Label>	  	Either this ad2usb board or firmware version
-		does not support automatic configuration, or your ad2usb
-		is connected by USB. You will need to use the MonoGUI or a
-		Terminal session to configuration the board.</Label>
-	</Field>
-
-	<Field id="msgTestFail4" type="label" visibleBindingId="msgControl" visibleBindingValue="4" defaultValue="">
-		<Label>Reading AlarmDecoder CONFIG considered success in Panel Playback Debug mode.</Label>
-	</Field>
-
-	<Field id="ad2usbKeyPadAddress" type="textfield"  visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>Keypad Address:</Label>
-	</Field>
-
-	<Field id="ad2usbDeduplicate" type="checkbox" defaultValue="true"  visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>Remove duplicate messages:</Label>
-		<Description>(Improves plugin efficiency)</Description>
-	</Field>
-
-	<Field id="ad2usbEmulationSpace" type="label" visibleBindingId="msgControl" visibleBindingValue="1" >
-		<Label> </Label>
-	</Field>
-
-	<Field id="ad2usbEmulationLabel" type="label" visibleBindingId="msgControl" visibleBindingValue="1" >
-		<Label>                                           AD2USB Emulation options</Label>
-	</Field>
-
-	<Field id="ad2usbZxpLabel" type="label"   visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Virtual Zone Expanders(s) (Max 2)</Label>
-	</Field>
-	<Field id="ad2usbExpander_1" type="checkbox"   visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Zone Expander #1:</Label>
-		<Description>(Addr 7, Zones 9-16)</Description>
-	</Field>
-	<Field id="ad2usbExpander_2" type="checkbox"    visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Zone Expander #2:</Label>
-		<Description>(Addr 8, Zones 17-24)</Description>
-	</Field>
-	<Field id="ad2usbExpander_3" type="checkbox"   visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Zone Expander #3:</Label>
-		<Description>(Addr 9, Zones 25-32)</Description>
-	</Field>
-	<Field id="ad2usbExpander_4" type="checkbox"    visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Zone Expander #4:</Label>
-		<Description>(Addr 10, Zones 33-40)</Description>
-	</Field>
-	<Field id="ad2usbExpander_5" type="checkbox"    visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Zone Expander #5:</Label>
-		<Description>(Addr 11, Zones 41-48)</Description>
-	</Field>
-
-	<Field id="ad2usbRelLabel" type="label"  visibleBindingId="msgControl" visibleBindingValue="1" >
-		<Label>    Virtual Relay Module(s)</Label>
-	</Field>
-	<Field id="ad2usbVirtRelay_1" type="checkbox"   visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Relay #1:</Label>
-		<Description>(Addr 12)</Description>
-	</Field>
-	<Field id="ad2usbVirtRelay_2" type="checkbox"    visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Relay #2:</Label>
-		<Description>(Addr 13)</Description>
-	</Field>
-	<Field id="ad2usbVirtRelay_3" type="checkbox"   visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Relay #3:</Label>
-		<Description>(Addr 14)</Description>
-	</Field>
-	<Field id="ad2usbVirtRelay_4" type="checkbox"    visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>    Relay #4:</Label>
-		<Description>(Addr 15)</Description>
-	</Field>
-
-	<Field id="ad2usbLrr" type="checkbox"    visibleBindingId="msgControl" visibleBindingValue="1">
-		<Label>Virtual Long Range Radio:</Label>
-	</Field>
-
-	<Field id="pcSep1" type="separator" />
 
 	<Field id="sectionLabel4" type="label">
 		<Label>Log Configuration</Label>
@@ -222,56 +122,5 @@
 		<Label>Log Panel Messages:</Label>
 		<Description>(logs panel messages to a seperate file)</Description>
 	</Field>
-
-<!--
-
-	<Field id="showDebugInfo1" type="menu" defaultValue="1">
-		<Label>Logging level:</Label>
-		<List>
-			<Option value="0">(0) None</Option>
-			<Option value="1">(1) Normal</Option>
-			<Option value="2">(2) Verbose</Option>
-			<Option value="3">(3) Debug</Option>
-			<Option value="4">(4) Intense Debug</Option>
-		</List>
-	</Field>
-
-	<Field id="v0" type="label" visibleBindingId="showDebugInfo1" visibleBindingValue="0" alignText="right" >
-		<Label>		No logging at all (not suggested)</Label>
-	</Field>
-	<Field id="v1" type="label" visibleBindingId="showDebugInfo1" visibleBindingValue="1" alignText="right">
-		<Label>		Normal operating events</Label>
-	</Field>
-	<Field id="v2" type="label" visibleBindingId="showDebugInfo1" visibleBindingValue="2" alignText="right">
-		<Label>		Detailed information</Label>
-	</Field>
-	<Field id="v3" type="label" visibleBindingId="showDebugInfo1" visibleBindingValue="3,4" alignText="right">
-		<Label>If you are having problems with the plugin (or you are instructed by support), you can enable debugging Use with icaution. This level is not suggested for regular operation.</Label>
-	</Field>
-
--->
-
-<!-- 	<Field type="checkbox" id="showDebugInfo">
-		<Label>Enable debuging:</Label>
-		<Description>(not recommended)</Description>
-	</Field> -->
-
-	<!-- Removing email subscription in 1.6.2
-
-	<Field id="pcSep2" type="separator" />
-
-	<Field id="updaterEmailsEnabled" type="checkbox" defaultValue="true">
-		<Label>Subscribe to plugin Update Notifications:</Label>
-	</Field>
-
-	<Field id="updaterEmail" type="textfield" visibleBindingId="updaterEmailsEnabled" visibleBindingValue="true">
-		<Label>Emal address:</Label>
-	</Field>
-
-	<Field id="updaterEmailSubject" type="textfield" defaultValue="apcupsd plugn update available"  visibleBindingId="updaterEmailsEnabled" visibleBindingValue="true">
-		<Label>Email Subject:</Label>
-	</Field>
-
--->
 
 </PluginConfig>

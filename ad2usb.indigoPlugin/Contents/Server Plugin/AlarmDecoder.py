@@ -14,6 +14,9 @@ kVALIDMESSAGETYPES = ['PROMPT', 'CONFIG', 'AUI', 'CRC', 'EXP',
 kCAPABILITIES = ['TX', 'RX', 'SM', 'VZ', 'RF', 'ZX', 'RE', 'AU', '3X', 'CG', 'DD',
                  'MF', 'LR', 'L2', 'KE', 'MK', 'CB', 'DS', 'ER', 'CR']
 
+# define valid CONFIG setting we will store
+kVALID_CONFIG_ITEMS = ['ADDRESS', 'EXP', 'REL', 'LRR', 'DEDUPLICATE']
+
 
 class Message(object):
     """
@@ -433,6 +436,7 @@ class Message(object):
 
         **properties created:**
         configMessageString - the part of the message after '!CONFIG>'
+        keypadAddress - same as flag['ADDRESS']
         flags (dictionary) - with key values of: MODE, ADDRESS, CONFIGBITS, MASK, EXP, REL, LRR, DEDUPLICATE
         """
         # return if not a VER message
@@ -443,6 +447,7 @@ class Message(object):
         try:
             self.messageDetails['CONFIG'] = {}
             self.messageDetails['CONFIG']['flags'] = {}
+            self.messageDetails['CONFIG']['keypadAddress'] = ''
 
             # strip first 8 chars from the message - !CONFIG>
             configMessage = self.messageString[8:]
@@ -452,7 +457,18 @@ class Message(object):
 
             for oneConfig in configItems:
                 configParam = re.split('=', oneConfig)
-                self.messageDetails['CONFIG']['flags'][configParam[0]] = configParam[1]
+
+                # only process parameters we manage so we never change them
+                # see the constant kVALID_CONFIG_ITEMS at the top of this file
+                if (configParam[0] in kVALID_CONFIG_ITEMS):
+                    self.messageDetails['CONFIG']['flags'][configParam[0]] = configParam[1]
+                # skip parameters we don't manage
+                else:
+                    pass
+
+            # update keypad address property of the message object
+            if 'ADDRESS' in self.messageDetails['CONFIG']['flags'].keys():
+                self.messageDetails['CONFIG']['keypadAddress'] = self.messageDetails['CONFIG']['flags']['ADDRESS']
 
             self.needsProcessing = True
             self.logger.debug('CONFIG message parsed:{}'.format(self.messageDetails['CONFIG']))
@@ -901,9 +917,15 @@ class Message(object):
         **parameters:**
         attributeName - name of the property you want to get
         """
-        if attributeName in self.messageDetails[self.messageType]:
-            return self.messageDetails[self.messageType][attributeName]
-        else:
+        try:
+            if attributeName in self.messageDetails[self.messageType]:
+                return self.messageDetails[self.messageType][attributeName]
+            else:
+                return None
+
+        except Exception as err:
+            self.logger.error("Unable to retrieve panel message attribute:{}, error msg:{}".format(
+                attributeName, str(err)))
             return None
 
     def getKPMattr(self, flag=''):
