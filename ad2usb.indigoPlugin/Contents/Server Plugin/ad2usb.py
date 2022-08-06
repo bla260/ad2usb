@@ -613,7 +613,8 @@ class ad2usb(object):
 
                 elif (newMessageObject.messageType == 'EXP') and newMessageObject.needsProcessing:
                     self.logger.debug('EXP message seen')
-                    self.process_EXP_Message(newMessageObject)
+                    if ad2usbIsAdvanced:
+                        self.process_EXP_Message(newMessageObject)
                     skipOldMesssageProcessing = True
 
                 elif (newMessageObject.messageType == 'RFX') and newMessageObject.needsProcessing:
