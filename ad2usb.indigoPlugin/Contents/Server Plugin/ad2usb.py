@@ -57,7 +57,7 @@ class ad2usb(object):
 
         self.zoneListInit = False
         self.zoneStateDict = {}
-        self.listOfZonesBypassed = {}  # dict with key of zone number as int, values are True
+        self.listOfZonesBypassed = []  # array with values of zone number as int
         self.lastApZonesBypassed = 0
 
         self.stopReadingMessages = False
@@ -211,7 +211,8 @@ class ad2usb(object):
                 self.zoneStateDict[address] = []
             self.zoneListInit = True
 
-        if rawData[1:4] == 'REL' or rawData[1:4] == 'EXP' or rawData[1:4] == 'RFX':   # a relay, expander module or RF zone event
+        # version 3.1 - removed EXP messages - these are now processed using new methods
+        if rawData[1:4] == 'REL' or rawData[1:4] == 'RFX':   # a relay, expander module or RF zone event
             splitMsg = re.split('[!:,]', rawData)
             zoneDevType = splitMsg[1]
             self.logger.debug(u"zone type is:{}".format(zoneDevType))
@@ -282,7 +283,7 @@ class ad2usb(object):
                         self.plugin.setDeviceState(indigoDevice, AD2USB_Constants.k_FAULT)
 
                         # Maintain the zone fault state
-                        self.updateZoneState(keypad=panelKeypadAddress, addZone=int(zNumber))
+                        self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, addZone=int(zNumber))
                         panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                             self.zoneStateDict[panelKeypadAddress]))
 
@@ -294,7 +295,7 @@ class ad2usb(object):
 
                         # Maintain the zone fault state
                         try:
-                            self.updateZoneState(keypad=panelKeypadAddress, removeZone=int(zNumber))
+                            self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, removeZone=int(zNumber))
 
                         except:
                             self.logger.error(u"Unable to update state table for zone:{}, address:{}".format(
@@ -329,7 +330,7 @@ class ad2usb(object):
 
                         # Maintain the zone fault state
                         try:
-                            self.updateZoneState(keypad=panelKeypadAddress, addZone=int(zNumber))
+                            self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, addZone=int(zNumber))
                             panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                                 self.zoneStateDict[panelKeypadAddress]))
                         except:
@@ -343,7 +344,7 @@ class ad2usb(object):
 
                         # Maintain the zone fault state
                         try:
-                            self.updateZoneState(keypad=panelKeypadAddress, removeZone=int(zNumber))
+                            self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, removeZone=int(zNumber))
 
                             panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                                 self.zoneStateDict[panelKeypadAddress]))
@@ -402,10 +403,10 @@ class ad2usb(object):
         self.logger.debug(u"got address:{}".format(panelKeypadAddress))
 
         if zoneState == AD2USB_Constants.k_FAULT:
-            self.updateZoneState(keypad=panelKeypadAddress, addZone=int(zoneIndex))
+            self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, addZone=int(zoneIndex))
             self.logger.debug(u"faulted... state list:{}".format(self.zoneStateDict))
         else:
-            self.updateZoneState(keypad=panelKeypadAddress, removeZone=int(zoneIndex))
+            self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, removeZone=int(zoneIndex))
             self.logger.debug(u"clear... State list:{}".format(self.zoneStateDict))
 
         # update the device state
@@ -597,7 +598,6 @@ class ad2usb(object):
                 messageType = newMessageObject.messageType
 
                 if (newMessageObject.messageType == 'CONFIG') and newMessageObject.needsProcessing:
-
                     # store the current setting in the properties
                     self.processAlarmDecoderConfigMessage(newMessageObject)
                     skipOldMesssageProcessing = True
@@ -609,6 +609,21 @@ class ad2usb(object):
                 elif (newMessageObject.messageType == 'KPM') and newMessageObject.needsProcessing:
                     self.logger.debug('KPM message seen:{}'.format(newMessageObject))
                     # for now we process these messages using legacy code
+                    skipOldMesssageProcessing = False
+
+                elif (newMessageObject.messageType == 'EXP') and newMessageObject.needsProcessing:
+                    self.logger.debug('EXP message seen')
+                    self.process_EXP_Message(newMessageObject)
+                    skipOldMesssageProcessing = True
+
+                elif (newMessageObject.messageType == 'RFX') and newMessageObject.needsProcessing:
+                    self.logger.debug('RFX message seen')
+                    # for now we don't do anything with RFX messages
+                    skipOldMesssageProcessing = False
+
+                elif (newMessageObject.messageType == 'REL') and newMessageObject.needsProcessing:
+                    self.logger.debug('REL message seen')
+                    # for now we don't do anything with REL messages
                     skipOldMesssageProcessing = False
 
                 elif (newMessageObject.messageType == 'AUI') and newMessageObject.needsProcessing:
@@ -780,11 +795,11 @@ class ad2usb(object):
                             self.logger.debug(u"Panel message:{}".format(panelFlags))
 
                             # TO DO: replace with a function that looks at MAX/INSTANT
-                            if panelBitStatus in self.plugin.ALARM_STATUS:
-                                panelState = self.plugin.ALARM_STATUS[panelBitStatus]
-                            else:
-                                self.logger.error("Unknown Keypad Panel State:{}".format(panelBitStatus))
-                                panelState = 'error'
+                            # if panelBitStatus in self.plugin.ALARM_STATUS:
+                            #    panelState = self.plugin.ALARM_STATUS[panelBitStatus]
+                            # else:
+                            #    self.logger.error("Unknown Keypad Panel State:{}".format(panelBitStatus))
+                            #    panelState = 'error'
 
                             lastPanelMsg = rawData
                             # panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
@@ -792,7 +807,10 @@ class ad2usb(object):
                             self.logger.debug(u"Found dev:{}, id:{}".format(panelDevice.name, panelDevice.id))
 
                             # panelDevice = indigo.devices[self.plugin.alarmDevId]
-                            self.plugin.setKeypadDeviceState(panelDevice, panelState)
+                            # self.plugin.setKeypadDeviceState(panelDevice, panelState)
+
+                            self.plugin.setKeypadDeviceState(panelDevice, newMessageObject.attr('panelState'))
+
                             panelDevice.updateStateOnServer(key='LCDLine1', value=rawData[61:77])
                             panelDevice.updateStateOnServer(key='LCDLine2', value=rawData[77:93])
                             panelDevice.updateStateOnServer(key='programMode', value=apProgramMode)
@@ -845,24 +863,31 @@ class ad2usb(object):
 
                         # Setup some variables for the next few steps
                         msgBitMap = splitMsg[1]
-                        # TO DO: Known bug when not a number - this is a quick fix - is addressed in KPM Message Object
-                        msgZoneNum = int(splitMsg[3])
-                        realZone = False
+
+                        # Use the new KPM Message Object to avoid processing invalid numerics
+                        if newMessageObject.attr('isValidNumericCode'):
+                            msgZoneNum = int(splitMsg[3])
+                        else:
+                            msgZoneNum = 0
+
+                        # see if message text contains a zone
+                        validBypassZone = False
+                        bMsgZoneNum = 0  # set to zero to reflect invalid bypass zone
                         try:
                             bMsgZoneNum = int(msgText[7:9])
-                            realZone = True
+                            validBypassZone = True
                         except:
-                            pass
+                            bMsgZoneNum = 0  # set to zero to reflect invalid bypass zone
+                            validBypassZone = False
                             # 0fc = comm failure; 0f* = Field?
                             # self.logError("%s: Panel reports: %s" % (funcName, msgText), self.logName)
 
                         msgKey = msgText[1:6]
-                        self.logger.debug(u"msgKey is:{}, msgTxt is:{}, msgBitMap:{}, msgZoneNum:{}, bMsgZoneNum:{}, realZone:{}".format(
-                            msgKey, msgText, msgBitMap, msgZoneNum, bMsgZoneNum, realZone))
+                        self.logger.debug(u"msgKey is:{}, msgTxt is:{}, msgBitMap:{}, msgZoneNum:{}, bMsgZoneNum:{}, validBypassZone:{}".format(
+                            msgKey, msgText, msgBitMap, msgZoneNum, bMsgZoneNum, validBypassZone))
                         if msgZoneNum in self.plugin.zonesDict:  # avoid issues with count down timers on arm
                             zoneData = self.plugin.zonesDict[int(msgZoneNum)]
                             zDevId = zoneData['devId']
-                            #zLogChanges = zoneData['logChanges']
                             zName = zoneData['name']
                             indigoDevice = indigo.devices[zDevId]
 
@@ -878,7 +903,7 @@ class ad2usb(object):
                                 self.logger.debug(u"zones bypassed is now zero")
                                 self.lastApZonesBypassed = apZonesBypassed
                                 # Clear the bypass state of all zones
-                                for zone in self.listOfZonesBypassed.keys():
+                                for zone in self.listOfZonesBypassed:
                                     bZoneData = self.plugin.zonesDict[int(zone)]
                                     bZDevid = bZoneData['devId']
                                     bIndigoDevice = indigo.devices[bZDevid]
@@ -895,13 +920,13 @@ class ad2usb(object):
                                 # and now clear the list of bypassed zones
                                 self.listOfZonesBypassed.clear()
 
-                        if apZonesBypassed == "1" and msgKey == "BYPAS" and realZone is True:
+                        if apZonesBypassed == "1" and msgKey == "BYPAS" and validBypassZone is True:
                             # A zone has been bypassed.
                             if bMsgZoneNum in self.listOfZonesBypassed:
                                 self.logger.debug(
                                     u"zone bypass state zone:{}, name:{} already recorded".format(bMsgZoneNum, zName))
                             else:
-                                self.listOfZonesBypassed[bMsgZoneNum] = True
+                                self.listOfZonesBypassed.append(bMsgZoneNum)
                                 self.logger.info(
                                     u"Alarm zone number:{}, name:{} has been bypassed".format(bMsgZoneNum, zName))
                                 self.lastApZonesBypassed = apZonesBypassed
@@ -917,9 +942,10 @@ class ad2usb(object):
                             self.logger.debug(u'Zone:{}, Key:{}'.format(msgZoneNum, msgKey))
 
                             if msgKey == "FAULT" or apReadyMode == '1':
-                                self.logger.debug(u"ready to call basic msg handler")
-                                self.basicReadZoneMessage(rawData, msgBitMap, msgZoneNum,
-                                                          msgText, msgKey, panelDevice)
+                                if msgZoneNum != 0:
+                                    self.logger.debug(u"ready to call basic msg handler")
+                                    self.basicReadZoneMessage(rawData, msgBitMap, msgZoneNum,
+                                                              msgText, msgKey, panelDevice)
 
             elif rawData[1:9] == u'SER2SOCK' or len(rawData) == 0:
                 # ignore system messages
@@ -1396,6 +1422,14 @@ class ad2usb(object):
         except Exception as err:
             self.logger.error(
                 u"Error reading from AlarmPanel:{} - error:{}".format(myErrorMessage, str(err)))
+
+            # attempt to restart communication
+            if self.setSerialConnection(forceReset=True):
+                self.logger.info("AlarmDecoder communication reset...")
+            else:
+                self.logger.error("Failed to reset AlarmDecoder communication. Check connection...")
+
+            # return a blank message that will be skipped
             return ''
 
     def panelWriteWrapper(self, serialObject, message=''):
@@ -1547,6 +1581,123 @@ class ad2usb(object):
         else:
             return False  # no change
 
+    def process_KPM_BYPAS(self, kpmMsg):
+        """
+        Process KPM BYPAS messages we have to do the most processing. We look at both
+        Process BYPAS bit: 0 = clear all BYPAS zones.
+        Process BYPAS message string to add zones to BYPAS list.
+        """
+        self.logger.debug("called with:{}".format(kpmMsg.getMessageProperties()))
+
+        try:
+            # clear bypass zones if flag changed from 1 to 0
+            if (kpmMsg.getKPMattr('ZONES_BYPASSED') == 0) and (self.lastApZonesBypassed == 1):
+                self.logger.debug("zones bypassed keypad flag is now zero")
+                self.lastApZonesBypassed = 0
+                # Clear the bypass state of all zones
+                for zone in self.listOfZonesBypassed:
+                    myDevice = self.plugin.getDeviceForZoneNumber(zone)
+                    myDevice.updateStateOnServer(key='bypassState', value=False)
+
+                    # after setting bypass set the device state to itself (no change)
+                    # to force display to change from the Bypass state
+                    self.plugin.setDeviceState(myDevice, myDevice.displayStateValRaw)
+
+                    self.logger.debug(
+                        u"clearing bypass state for zone:{}, devid:{}".format(zone, myDevice.id))
+                    self.logger.debug(u"zone:{}, data:{}".format(zone, self.plugin.zonesDict[zone]))
+
+                # and now clear the list of bypassed zones
+                self.listOfZonesBypassed.clear()
+
+            # see if BYPAS was part of the message text and add it if it does not exist
+            if (kpmMsg.getKPMattr('ZONES_BYPASSED') == 1) and kpmMsg.attr('isBypassZone'):
+                # ensure its a valid zone code on the keypad message
+                if kpmMsg.attr('isValidNumericCode'):
+
+                    # ensure its a zone we know about in our Indigo devices
+                    zone = kpmMsg.attr('zoneNumberAsInt')
+                    myDevice = self.plugin.getDeviceForZoneNumberAsInt(zone)
+
+                    if myDevice is not None:
+                        # skip if we already know this zone is bypassed
+                        if zone in self.listOfZonesBypassed:
+                            pass
+                        else:
+                            self.listOfZonesBypassed.append(zone)
+                            myDevice.updateStateOnServer(key='bypassState', value=True)
+
+                            # after setting bypass set the device state to itself (no change)
+                            # to force display to change from the Bypass state
+                            self.plugin.setDeviceState(myDevice, myDevice.displayStateValRaw)
+                    else:
+                        self.logger.warning("Indigo device does not exist for zone:{}".format(zone))
+
+        except Exception as err:
+            self.logger.error("Error processing BYPASS message:{}".format(str(err)))
+
+    def process_EXP_Message(self, messageObject):
+        """
+        For EXP messages we find the zone device and the keypad devices based on the parition of the
+        zone device. Returns True is device was updated, False if it was not.
+        """
+        self.logger.debug("called with:{}".format(messageObject.getMessageProperties()))
+
+        try:
+            myDevice = self.plugin.getZoneDeviceForEXP(address=messageObject.attr(
+                'zoneExpanderAddress'), channel=messageObject.attr('expanderChannel'))
+
+            # make sure we have a good device
+            if myDevice is None:
+                return False
+
+            # log some debug info about the device
+            self.logger.debug("found EXP device id:{} name:{}".format(myDevice.id, myDevice.name))
+
+            # get the zone number as a an int
+            zoneNumber = self.plugin.getZoneNumberForDevice(myDevice)
+            if zoneNumber is None:
+                self.logger.warning("No device zone number found for EXP device name:{}".format(myDevice.name))
+                return False
+
+            # update the device if the message was valid
+            if messageObject.attr('isFaulted') is None:
+                self.logger.debug("fault setting not correct for EXP device")
+                return False
+
+            # update device state
+            if messageObject.attr('isFaulted'):
+                self.plugin.setDeviceState(myDevice, AD2USB_Constants.k_FAULT)
+            else:
+                self.plugin.setDeviceState(myDevice, AD2USB_Constants.k_CLEAR)
+
+            # update the keypad?
+            keypadDevice = self.plugin.getKeypadDeviceForDevice(myDevice)
+            if keypadDevice is None:
+                return False
+
+            # get valid address from device
+            keypadAddress = self.plugin.getKeypadAddressFromDevice(keypadDevice=keypadDevice)
+
+            # if valid
+            if keypadAddress is not None:
+
+                # update the Zone Fault List on the keypad device
+                if messageObject.attr('isFaulted'):
+                    self.updateZoneFaultListForKeypad(keypad=keypadAddress, addZone=zoneNumber)
+                    keypadDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[keypadAddress]))
+                    # we do not update the keypad state
+                    # self.plugin.setKeypadDeviceState(keypadDevice, AD2USB_Constants.k_PANEL_FAULT)
+                else:
+                    self.updateZoneFaultListForKeypad(keypad=keypadAddress, removeZone=zoneNumber)
+                    keypadDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[keypadAddress]))
+                    # we do not update the keypad state
+                    # if len(self.zoneStateDict[keypadAddress]) == 0:
+                    #   self.plugin.setKeypadDeviceState(keypadDevice, AD2USB_Constants.k_PANEL_READY)
+
+        except Exception as err:
+            self.logger.error("Error processing EXP message:{}".format(str(err)))
+
     def process_LRR_Message(self, messageObject):
         """
         For LRR messages we update all the possible keypad devices based on the parition provided
@@ -1620,7 +1771,7 @@ class ad2usb(object):
         else:
             return False
 
-    def updateZoneState(self, keypad=None, addZone=None, removeZone=None):
+    def updateZoneFaultListForKeypad(self, keypad=None, addZone=None, removeZone=None):
         """
         Adds or removes an element to the zoneStatDict property for a given keypad.
         Ensure the property is an array of integers that is sorted and unique.

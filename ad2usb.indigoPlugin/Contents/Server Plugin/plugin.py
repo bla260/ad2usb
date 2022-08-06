@@ -410,20 +410,20 @@ class Plugin(indigo.PluginBase):
                 # set default newState
                 if newZoneState == AD2USB_Constants.k_CLEAR:   # Clear
                     try:   # In case someone tries to set a clear zone to clear
-                        self.ad2usb.updateZoneState(keypad=myKeypadAddress, removeZone=int(virtZoneNumber))
+                        self.ad2usb.updateZoneFaultListForKeypad(keypad=myKeypadAddress, removeZone=int(virtZoneNumber))
                     except Exception as err:
                         pass
                     self.logger.debug(u"Clear - state list: {}".format(self.ad2usb.zoneStateDict))
 
                 elif newZoneState == AD2USB_Constants.k_FAULT:   # Fault
-                    self.ad2usb.updateZoneState(keypad=myKeypadAddress, addZone=int(virtZoneNumber))
+                    self.ad2usb.updateZoneFaultListForKeypad(keypad=myKeypadAddress, addZone=int(virtZoneNumber))
                     self.logger.debug(u"Fault - state list: {}".format(self.ad2usb.zoneStateDict))
 
                 elif newZoneState == AD2USB_Constants.k_ERROR:   # Trouble
                     # TO DO: this used to be string of Trouble - it is not Error
                     # uiValue = 'Trouble' / displayStateValue = 'trouble'
                     # should it be in state list?
-                    self.ad2usb.updateZoneState(keypad=myKeypadAddress, addZone=int(virtZoneNumber))
+                    self.ad2usb.updateZoneFaultListForKeypad(keypad=myKeypadAddress, addZone=int(virtZoneNumber))
                     self.logger.debug(u"Trouble - state list: {}".format(self.ad2usb.zoneStateDict))
                 else:
                     # ERROR
@@ -1299,6 +1299,7 @@ class Plugin(indigo.PluginBase):
                 u"error retrieving Zone Groups for Zone Address:{} - error:{}".format(forZoneNumber, str(err)))
             return []
 
+    # TO DO: simplify and leverage getDeviceForZoneNumber()
     def getDeviceIdForZoneNumber(self, forZoneNumber=''):
         """
         Returns the device.id (integer) for the Zone Number (Address) provided or 0 if not found.
@@ -1311,14 +1312,22 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"called with zone number:{}".format(forZoneNumber))
 
         try:
+            # convert zone to a string if needed
+            zoneNumberAsString = ''
+            if isinstance(forZoneNumber, str):
+                zoneNumberAsString = forZoneNumber
+            else:
+                zoneNumberAsString = str(forZoneNumber)
+
             for device in indigo.devices.iter("self"):
                 # TO DO: do I need this restriction?
                 if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
                     deviceProperties = device.pluginProps.to_dict()
                     self.logger.debug(u"device properties are:{}".format(deviceProperties))
                     zoneNumber = deviceProperties.get('zoneNumber', "NONE")
-                    if zoneNumber == forZoneNumber:
-                        self.logger.debug(u"found device id:{} for zone number:{}".format(device.id, forZoneNumber))
+                    if zoneNumber == zoneNumberAsString:
+                        self.logger.debug(u"found device id:{} for zone number:{}".format(
+                            device.id, zoneNumberAsString))
                         return device.id
 
             # did not find device
@@ -1329,6 +1338,88 @@ class Plugin(indigo.PluginBase):
             self.logger.error("Error trying to get device id for zone number:{}, error:{}".format(
                 forZoneNumber, str(err)))
             return 0
+
+    def getDeviceForZoneNumber(self, forZoneNumber=''):
+        """
+        Returns the Indigo device objcet for the Zone Number (Address) provided or None if not found.
+        This only looks at Alarm Zone and Virtual Zone devices. Keypad devices are not included.
+
+        **parameters**:
+        forZoneNumber -- an string that is the Zone Number (Address)
+        """
+
+        self.logger.debug(u"called with zone number:{}".format(forZoneNumber))
+
+        try:
+            # convert zone to a string if needed
+            zoneNumberAsString = ''
+            if isinstance(forZoneNumber, str):
+                zoneNumberAsString = forZoneNumber
+            else:
+                zoneNumberAsString = str(forZoneNumber)
+
+            for device in indigo.devices.iter("self"):
+                # TO DO: do I need this restriction?
+                if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
+                    deviceProperties = device.pluginProps.to_dict()
+                    self.logger.debug(u"device properties are:{}".format(deviceProperties))
+                    zoneNumber = deviceProperties.get('zoneNumber', "NONE")
+                    if zoneNumber == zoneNumberAsString:
+                        self.logger.debug(u"found device id:{} for zone number:{}".format(
+                            device.id, zoneNumberAsString))
+                        return device
+
+            # did not find device
+            self.logger.error(u"Unable to find device id for zone number:{}".format(forZoneNumber))
+            return None
+
+        except Exception as err:
+            self.logger.error("Error trying to get device id for zone number:{}, error:{}".format(
+                forZoneNumber, str(err)))
+            return None
+
+    def getDeviceForZoneNumberAsInt(self, forZoneNumber=0):
+        """
+        Returns the Indigo device object for the Zone Number (integer) provided or None if not found.
+        This only looks at Alarm Zone and Virtual Zone devices. Keypad devices are not included.
+
+        **parameters**:
+        forZoneNumber -- an integer that is the Zone Number (Address)
+        """
+
+        self.logger.debug(u"called with zone number:{}".format(forZoneNumber))
+
+        try:
+            # convert zone to a string if needed
+            zoneNumberAsInt = 0
+            if isinstance(forZoneNumber, int):
+                zoneNumberAsInt = forZoneNumber
+            else:
+                zoneNumberAsInt = int(forZoneNumber)
+
+            for device in indigo.devices.iter("self"):
+                # TO DO: do I need this restriction?
+                if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
+                    deviceProperties = device.pluginProps.to_dict()
+                    self.logger.debug(u"device properties are:{}".format(deviceProperties))
+                    zoneNumberAsString = deviceProperties.get('zoneNumber', '0')
+
+                    # convert the property to an int for comparison
+                    zoneNumberProperty = int(zoneNumberAsString)
+
+                    if zoneNumberProperty == zoneNumberAsInt:
+                        self.logger.debug(u"found device id:{} for zone number:{}".format(
+                            device.id, zoneNumberAsString))
+                        return device
+
+            # did not find device
+            self.logger.error(u"Unable to find device id for zone number:{}".format(forZoneNumber))
+            return None
+
+        except Exception as err:
+            self.logger.error("Error trying to get device id for zone number:{}, error:{}".format(
+                forZoneNumber, str(err)))
+            return None
 
     def getZoneNumberForDevice(self, forDevice):
         """
@@ -1454,11 +1545,11 @@ class Plugin(indigo.PluginBase):
 
     def setDeviceState(self, forDevice, newState='NONE', ignoreBypass=False):
         """
-        updates the indio.device for a given device object (indigo.device) and new state (string)
+        Updates the indio.device for a given device object (indigo.device) and new state (string)
         the state is the key - not the value in the Devices.xml. The default logic for Bypassed
         devices is to update the text display and internal state but not the icon. If ignoreBypass
-        is set to True, devices will CLEAR and FAULT normally and ignore the Bypass state. This is
-        used internally to reset all devices.
+        is set to True, devices will CLEAR and FAULT normally and ignore the Bypass state. This
+        feature is used internally to reset all devices.
 
         **parameters**:
         forDevice -- a valid indigo.device object
@@ -1533,7 +1624,7 @@ class Plugin(indigo.PluginBase):
                                               uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
 
-            elif newState == AD2USB_Constants.k_ERROR:
+            elif (newState == AD2USB_Constants.k_ERROR) or (newState == AD2USB_Constants.k_PANEL_UNK):
                 forDevice.updateStateOnServer(key='panelState', value=newState,
                                               uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.Error)
@@ -1956,6 +2047,42 @@ class Plugin(indigo.PluginBase):
         # we should never get here but just in case
         return string
 
+    def getZoneDeviceForEXP(self, address=None, channel=None, includeDisabled=False):
+        """
+        Returns an Indigo EXP Zone device object for the address and channel provided. By default disabled devices
+        will not be included. Optionally pass parameter 'includeDisabled' with a value of True to include disable
+        devices too. Return a device object if found, None if not.
+        """
+        try:
+            if (address is None) or (channel is None):
+                return None
+
+            for device in indigo.devices.iter("self"):
+                # just the Zone Devices
+                if device.deviceTypeId == 'alarmZone':
+                    # just the EXP devices
+                    if device.pluginProps['ad2usbZoneType'] == 'zoneTypeEXP':
+                        self.logger.debug("looking for address:{}, channel:{} in:{}".format(
+                            address, channel, device.pluginProps))
+                        # just the match of the address and channel
+                        # ad2usbZoneTypeEXP_Board, ad2usbZoneTypeEXP_Device
+                        if (int(device.pluginProps['ad2usbZoneTypeEXP_Board']) == int(address)) and (int(device.pluginProps['ad2usbZoneTypeEXP_Device']) == int(channel)):
+                            # only if enabled of the includeDisabled flag is True
+                            if device.enabled or (includeDisabled is True):
+                                return device
+
+            # if we get here device was not found
+            if includeDisabled:
+                self.logger.warning("Indigo EXP Device for address:{}, channel:{} not found".format(address, channel))
+            else:
+                self.logger.warning(
+                    "Indigo EXP Device for address:{}, channel:{} not found or disabled.".format(address, channel))
+
+        except Exception as err:
+            self.logger.error("Error retrieving Indigo EXP Device for address:{}, channel:{} msg:{}".format(
+                address, channel, str(err)))
+            return None
+
     def getAllKeypadDevices(self, includeDisabled=False):
         """
         Returns an array of 'ad2usb Keypad' Indigo device objects. By default disabled
@@ -2012,6 +2139,39 @@ class Plugin(indigo.PluginBase):
             # return emptyArray
             emptyArray = []
             return emptyArray
+
+    def getKeypadAddressFromDevice(self, keypadDevice=None):
+        """
+        Returns a valid keypad address from an Indigo ad2us keypad device object. None is returned if address is
+        does not exist.
+
+        **parameters**
+        keypadDevice - a valid Indigo ad2usb keypad device object
+        """
+        try:
+            self.logger.debug("called with:{}".format(keypadDevice))
+
+            if keypadDevice is None:
+                return None
+
+            # get a Python dict from plugin properities
+            localProps = keypadDevice.pluginProps.to_dict()
+            if 'panelKeypadAddress' in localProps:
+                self.logger.debug("keypad address found:{}".format(localProps['panelKeypadAddress']))
+                # check if its all digits
+                if localProps['panelKeypadAddress'].isdigit():
+                    return localProps['panelKeypadAddress']
+                else:
+                    self.logger.debug("keypad address found but not valid:{}".format(localProps['panelKeypadAddress']))
+                    return None
+
+            # if we get this far it does not exist
+            self.logger.debug("did not find keypad adddress for keypad device")
+            return None
+
+        except Exception as err:
+            self.logger.error("error getting keypad address for ad2usb Keypad device, msg:{}".format(str(err)))
+            return None
 
     # TO DO: remove method no longer used
     def getKeypadDevice(self, partition=None):
@@ -2080,6 +2240,44 @@ class Plugin(indigo.PluginBase):
             self.logger.error(u"error retrieving ad2usb Keypad device from Indigo, msg:{}".format(str(err)))
 
             # return None
+            return None
+
+    def getKeypadDeviceForDevice(self, forDevice=None):
+        """
+        A keypad Indigo device object is returned if the partition number of the zone device
+        'forDevice' matches keypad's partition setting. Otherwise None is returned.
+
+        **parameters**
+        forDevice - an Indigo zone device
+        """
+        try:
+            # make sure we have device parameter
+            if forDevice is None:
+                return None
+
+            # set the default value for the keypad
+            keypadDevice = None
+
+            # get the partition from provided device
+            validPartition = forDevice.pluginProps['zonePartitionNumber']
+            if validPartition.isdigit():
+                self.logger.debug("looking for keypad device for partition:{}".format(validPartition))
+                keypadDevice = self.getKeypadDeviceForPartition(partition=validPartition)
+            else:
+                self.logger.warning(
+                    "Device:{} does not have a valid parition set. Cannot determine associated keypad.".format(forDevice.name))
+                return None
+
+            if keypadDevice is None:
+                self.logger.warning("Device:{} with parition:{} does not have an associated Indigo ad2usb Keypad device.".format(
+                    forDevice.name, validPartition))
+                return None
+            else:
+                self.logger.debug("found keypad device for partition:{}".format(validPartition))
+                return keypadDevice
+
+        except Exception as err:
+            self.logger.error("error searching for ad2usb Keypad device for device, msg:{}".format(str(err)))
             return None
 
     def getKeypadDeviceForPartition(self, partition=None):

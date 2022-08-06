@@ -20,6 +20,7 @@ k_PANEL_ARMED_NIGHT_STAY = 'armedNightStay'
 k_PANEL_ARMED_INSTANT = 'armedInstant'
 k_PANEL_ARMED_AWAY = 'armedAway'
 k_PANEL_ARMED_MAX = 'armedMax'
+k_PANEL_UNK = 'unknown'  # this is set before processing keypad message
 k_PANEL_ERROR = 'error'  # key: error, value: Error - also referred to as Trouble
 
 # these panel states all display the same icon
@@ -28,10 +29,11 @@ k_COMMON_STATES_DISPLAYS = [k_PANEL_READY, k_PANEL_ARMED_STAY, k_PANEL_ARMED_NIG
 
 kPanelStateUIValues = {k_PANEL_READY: 'Ready', k_PANEL_FAULT: 'Fault',
                        k_PANEL_ARMED_STAY: 'Armed Stay',
-                       k_PANEL_ARMED_NIGHT_STAY: 'ARMED NIGHT STAY',
-                       k_PANEL_ARMED_INSTANT: 'ARMED INSTANT',
+                       k_PANEL_ARMED_NIGHT_STAY: 'Armed Night Stay',
+                       k_PANEL_ARMED_INSTANT: 'Armed Instant',
                        k_PANEL_ARMED_AWAY: 'Armed Away',
-                       k_PANEL_ARMED_MAX: 'ARMED MAX',
+                       k_PANEL_ARMED_MAX: 'Armed Max',
+                       k_PANEL_UNK: 'Unknown',
                        k_PANEL_ERROR: 'Error'}
 
 # create a map of keypad bits to common keypad States
