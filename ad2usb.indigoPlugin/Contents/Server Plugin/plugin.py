@@ -32,8 +32,8 @@ class Plugin(indigo.PluginBase):
         try:
             self.pythonVersion = sys.version_info.major
         except Exception as err:
-            self.logger.warning(u"Unable to determine Python version 2 or 3; assuming 2. Error:{}".format(str(err)))
-            self.pythonVersion = 2
+            self.logger.warning(u"Unable to determine Python version 2 or 3; assuming 3. Error:{}".format(str(err)))
+            self.pythonVersion = 3
 
         # set the default debug playback file name and status
         self.panelMessagePlaybackFilename = indigo.server.getLogsFolderPath(
@@ -71,17 +71,17 @@ class Plugin(indigo.PluginBase):
         self.lastZoneFaulted = 0
         self.zonesDict = {}
         self.advZonesDict = {}
-        self.panelsDict = {}
         self.virtualDict = {}
         self.zoneGroup2zoneDict = {}
         self.zone2zoneGroupDevDict = {}
-        self.partition2address = {}
         self.triggerDict = {}
 
         self.pluginDisplayName = pluginDisplayName
         self.pluginPrefs = pluginPrefs
 
         self.isThisFirstStartup = True
+        self.hasAlarmDecoderConfigBeenRead = False
+        self.previousCONFIGString = ''
 
         # adding new logging object introduced in API 2.0
         self.logger.info(u"Plugin init completed")
@@ -242,7 +242,7 @@ class Plugin(indigo.PluginBase):
                     else:
                         # add code to ensure we have 1 keypad device before reading
                         # errors are generated in the method if no keypad exists
-                        if self.getKeypadDevice() is not None:
+                        if len(self.getAllKeypadDevices()) > 0:
                             self.ad2usb.panelMsgRead(self.ad2usbIsAdvanced)
 
                     # TO DO: FUTURE
@@ -347,7 +347,7 @@ class Plugin(indigo.PluginBase):
             # could get KeyError if it is first zone state to change
             # TO DO: remove this code block below to reference all current keypad devices
             if not self.ad2usb.zoneListInit:
-                for address in self.panelsDict:
+                for address in self.getAllKeypadAddresses():
                     self.ad2usb.zoneStateDict[address] = []
                 self.ad2usb.zoneListInit = True
 
@@ -390,7 +390,7 @@ class Plugin(indigo.PluginBase):
 
             # get keypad device for partition
             # but if that is not found then just get the first keypad
-            myKeypadDevice = self.getKeypadDevice(virtPartition)
+            myKeypadDevice = self.getKeypadDeviceForPartition(virtPartition)
 
             # if keypad does not exist for the specific partition do nothing
             if myKeypadDevice is None:
@@ -410,25 +410,20 @@ class Plugin(indigo.PluginBase):
                 # set default newState
                 if newZoneState == AD2USB_Constants.k_CLEAR:   # Clear
                     try:   # In case someone tries to set a clear zone to clear
-                        self.ad2usb.zoneStateDict[myKeypadAddress].remove(int(virtZoneNumber))
+                        self.ad2usb.updateZoneFaultListForKeypad(keypad=myKeypadAddress, removeZone=int(virtZoneNumber))
                     except Exception as err:
                         pass
                     self.logger.debug(u"Clear - state list: {}".format(self.ad2usb.zoneStateDict))
 
                 elif newZoneState == AD2USB_Constants.k_FAULT:   # Fault
-                    self.ad2usb.zoneStateDict[myKeypadAddress].append(int(virtZoneNumber))
-                    self.ad2usb.zoneStateDict[myKeypadAddress] = self.ad2usb.__uniqList(
-                        self.ad2usb.zoneStateDict[myKeypadAddress])
-                    self.ad2usb.zoneStateDict[myKeypadAddress].sort()
+                    self.ad2usb.updateZoneFaultListForKeypad(keypad=myKeypadAddress, addZone=int(virtZoneNumber))
                     self.logger.debug(u"Fault - state list: {}".format(self.ad2usb.zoneStateDict))
 
                 elif newZoneState == AD2USB_Constants.k_ERROR:   # Trouble
                     # TO DO: this used to be string of Trouble - it is not Error
                     # uiValue = 'Trouble' / displayStateValue = 'trouble'
-                    self.ad2usb.zoneStateDict[myKeypadAddress].append(int(virtZoneNumber))
-                    self.ad2usb.zoneStateDict[myKeypadAddress] = self.ad2usb.__uniqList(
-                        self.ad2usb.zoneStateDict[myKeypadAddress])
-                    self.ad2usb.zoneStateDict[myKeypadAddress].sort()
+                    # should it be in state list?
+                    self.ad2usb.updateZoneFaultListForKeypad(keypad=myKeypadAddress, addZone=int(virtZoneNumber))
                     self.logger.debug(u"Trouble - state list: {}".format(self.ad2usb.zoneStateDict))
                 else:
                     # ERROR
@@ -549,7 +544,7 @@ class Plugin(indigo.PluginBase):
         previousPort = self.ad2usbPort
         previousSerialPort = self.ad2usbSerialPort
 
-        # TO DO: need to address all parameters in this code - including AlarmDecoder
+        # TO DO: need to address all parameters in this code
         if UserCancelled is False:
 
             self.logger.info(u"Updated configuration values:{}".format(valuesDict))
@@ -565,20 +560,29 @@ class Plugin(indigo.PluginBase):
             elif self.ad2usbCommType == 'messageFile':
                 self.isPlaybackCommunicationModeSet = True
             else:
-                # TO DO: add some error logic here
+                self.logger.warning(
+                    "Unexpected AlarmDecoder communication type in preferences:{}".format(self.ad2usbCommType))
                 pass
+
+            # update the URL property
+            self.__setURLFromConfig()
 
             self.ad2usbIsAdvanced = valuesDict["isAdvanced"]
             self.logUnknownDevices = valuesDict["logUnknownDevices"]
-
-            # need to look at AlarmDecoder parameters
-
             self.logArmingEvents = valuesDict["logArmingEvents"]
             self.clearAllOnRestart = valuesDict["restartClear"]
             self.numPartitions = int(valuesDict.get("panelPartitionCount", '1'))
 
-            self.ad2usbKeyPadAddress = valuesDict.get("ad2usbKeyPadAddress")
+            # we have a hidden value in Prefs for ad2usbKeyPadAddress
+            # get the current address from the environment
+            currentAddress = self.getAlarmDecoderKeypadAddress()
+            if self.isValidKeypadAddress(currentAddress):
+                # only change/set the hidden parameter is the address is valid
+                valuesDict['ad2usbKeyPadAddress'] = currentAddress
+            else:
+                pass  # do not change if invalid
 
+            # logging parameters
             self.indigoLoggingLevel = valuesDict.get("indigoLoggingLevel", logging.INFO)
             self.pluginLoggingLevel = valuesDict.get("pluginLoggingLevel", logging.INFO)
             self.isPanelLoggingEnabled = valuesDict.get("isPanelLoggingEnabled", False)
@@ -588,25 +592,22 @@ class Plugin(indigo.PluginBase):
 
             # if the comms have changed then reset the serial connection
             if (previousCommType != self.ad2usbCommType):
-                self.logger.info(u"AlarmDecoder comm type changed - opening new serial connection")
+                self.logger.info(
+                    "AlarmDecoder type changed to {} - opening new serial connection".format(self.ad2usbCommType))
                 self.ad2usb.setSerialConnection(True)  # force a reset
             else:
                 # if the type is IP but IP or port changed then force a reset
                 if self.ad2usbCommType == 'IP':
                     if (previousAddress != self.ad2usbAddress) or (previousPort != self.ad2usbPort):
+                        self.logger.info(
+                            "AlarmDecoder IP changed to {}:{} - opening new serial connection".format(self.ad2usbAddress, self.ad2usbPort))
                         self.ad2usb.setSerialConnection(True)  # force a reset
 
                 # if the type is USB but IP or port changed then force a reset
                 elif self.ad2usbCommType == 'USB':
                     if previousSerialPort != self.ad2usbSerialPort:
+                        self.logger.info("AlarmDecoder USB changed - opening new serial connection")
                         self.ad2usb.setSerialConnection(True)  # force a reset
-
-            # now write the new config to the AlarmDecoder
-            configString = self.generateAlarmDecoderConfigString()
-            if self.ad2usb.writeAlarmDecoderConfig(configString):
-                self.logger.info(u"AlarmDecoder CONFIG has been updated to:{}".format(configString))
-            else:
-                self.logger.warning(u"AlarmDecoder CONFIG was not updated to:{}".format(configString))
 
             self.logger.info(u"Plugin preferences have been updated")
 
@@ -640,7 +641,7 @@ class Plugin(indigo.PluginBase):
                     try:
                         if valuesDict[u'panelPartitionNumber'] == dev.pluginProps[u'panelPartitionNumber'] and dev.id != devId:
                             errorMsgDict[u'panelPartitionNumber'] = 'Found an existing panel device for the same parttion.\nOnly one panel device per partition is allowed.'
-                            errorMsgDict[u'showAlertText'] = '-> Found an existing panel device for the same partition.\nOnly one panel device per partition is allowed.'
+                            errorMsgDict[u'showAlertText'] = 'Found an existing panel device for the same partition.\nOnly one panel device per partition is allowed.'
                             self.logger.error(u"Only one panel device per partition is allowed")
                             areErrors = True
                     except:
@@ -648,16 +649,16 @@ class Plugin(indigo.PluginBase):
 
                     try:
                         if valuesDict[u'panelKeypadAddress'] == dev.pluginProps[u'panelKeypadAddress'] and dev.id != devId:
-                            errorMsgDict[u'panelKeypadAddress'] = 'Found an existing panel device with the same keypad address.\nOnly one panel device per address is allowed.'
-                            errorMsgDict[u'showAlertText'] = '-> Found an existing panel device with the same keypad address.\nOnly one panel device per address is allowed.'
-                            self.logger.error(u"Only one panel device per address is allowed.")
+                            errorMsgDict[u'panelKeypadAddress'] = 'Found an existing panel device with the same keypad address.\nOnly one panel device per keypad address is allowed.'
+                            errorMsgDict[u'showAlertText'] = 'Found an existing panel device with the same keypad address.\nOnly one panel device per keypad address is allowed.'
+                            self.logger.error(u"Only one panel device per keypad address is allowed.")
                             areErrors = True
                     except:
                         valuesDict[u'panelKeypadAddress'] = self.ad2usbKeyPadAddress
 
                     if int(valuesDict['panelPartitionNumber']) > self.numPartitions:
                         errorMsgDict[u'panelPartitionNumber'] = 'Partition number selected greater than configured partitions.'
-                        errorMsgDict[u'showAlertText'] = '-> Partition number selected greater than configured partitions.'
+                        errorMsgDict[u'showAlertText'] = 'Partition number selected greater than configured partitions.'
 
                         # TO DO: add device name details to this log message
                         self.logger.error(u"Partition number selected greater than configured partitions")
@@ -695,39 +696,58 @@ class Plugin(indigo.PluginBase):
 
     ########################################################
     def validatePrefsConfigUi(self, valuesDict):
-        self.logger.debug(u"called with:{}".format(valuesDict))
+        """
+        Indigo's required method to validate Plugin Config Prefreences. See PluginConfig.xml.
+        """
 
-        # Build the ad2usb board configuration string
-        if valuesDict['msgControl'] == '1':
+        # init the error message object first since its used in Exception
+        errorMsgDict = indigo.Dict()
+
+        try:
+
+            self.logger.debug(u"called with:{}".format(valuesDict))
+
+            isPrefsValid = True
+            debugLogMessage = ''
 
             # validate the prefs
-            (isPrefsValid, valuesDict, errorMsgDict) = self.setAlarmDecoderConfigDictFromPrefs(valuesDict)
+
+            # verify and set the URL - as it may be new
+            try:
+                self.setURL(valuesDict['ad2usbCommType'], valuesDict['ad2usbAddress'],
+                            valuesDict['ad2usbPort'], valuesDict['ad2usbSerialPort'])
+
+            except Exception as err:
+                errorMsgDict[u'ad2usbCommType'] = u"Invalid AD2USB communication settings"
+                self.logger.error('Error in AlarmDecoder communication settings:{}'.format(str(err)))
+                isPrefsValid = False
+                debugLogMessage = 'AD2USB Communication Settings Error.'
+
+            # we have a hidden value in Prefs for ad2usbKeyPadAddress
+            currentAddress = self.getAlarmDecoderKeypadAddress()
+            if self.isValidKeypadAddress(currentAddress):
+                valuesDict['ad2usbKeyPadAddress'] = currentAddress
+            else:
+                pass  # do not change if invalid
+
+            # All other Plugin Config items are checkboxes or pull downs and are constrained
+            # end checking preferences
 
             # if prefs are not valid return the error
             if not isPrefsValid:
-                self.logger.debug(u"prefs did not validate")
+                self.logger.debug(u"invalid Plugin preferences:{}".format(debugLogMessage))
                 return (False, valuesDict, errorMsgDict)
             else:
                 # if we made it this far all checks are complete and user choices look good
                 # so return True (client will then close the dialog window).
                 self.logger.debug(u"completed")
-                valuesDict['msgControl'] == '0'  # reset back empty message
                 return (True, valuesDict)
 
-        elif valuesDict['msgControl'] == '2':
+        except Exception as err:
+            self.logger.error(u"Unexpected error validating Plugin Config:{}".format(str(err)))
             errorMsgDict = indigo.Dict()
-            errorMsgDict[u'ad2usbCommType'] = u"IP Address or USB device Invalid"
-            return (False, valuesDict, errorMsgDict)
-
-        elif valuesDict['msgControl'] == '4':
-            self.logger.debug(u"prefs validated for Playback mode")
-            valuesDict['msgControl'] == '0'  # reset back empty message
-            return (True, valuesDict)
-
-        else:
-            self.logger.error(u"unexpected msgControl in Config Dialog:{}".format(valuesDict['msgControl']))
-            errorMsgDict = indigo.Dict()
-            errorMsgDict[u'ad2usbCommType'] = u"msgControl error in dialog"
+            errorMsgDict['ad2usbCommType'] = "Unexpected error. Check Indigo Event Log for more details."
+            errorMsgDict['showAlertText'] = "Unexpected error. Check Indigo Event Log for more details."
             return (False, valuesDict, errorMsgDict)
 
     def setAlarmDecoderConfigDictFromPrefs(self, valuesDict):
@@ -749,22 +769,24 @@ class Plugin(indigo.PluginBase):
 
         # verify and set the URL - as it may be new
         try:
-            self.setURL(valuesDict['ad2usbCommType'], valuesDict['ad2usbAddress'],
-                        valuesDict['ad2usbPort'], valuesDict['ad2usbSerialPort'])
+            self.__setURLFromConfig()
 
         except Exception as err:
-            errorMsgDict[u'ad2usbCommType'] = u"Invalid AD2USB communication settings"
-            self.logger.error(u'error in AlarmDecoder communication settings:{}'.format(str(err)))
+            errorMsgDict['ad2usbCommType'] = "Invalid AD2USB communication settings"
+            self.logger.error('error in AlarmDecoder communication settings:{}'.format(str(err)))
             return (False, valuesDict, errorMsgDict)
 
         # The keypad address is required. Without it we cannot continue
         # make sure keypad address is valid - 2 digits
-        # TO DO: make this match [0-9]{2}
-        if len(valuesDict['ad2usbKeyPadAddress']) > 0:
-            self.configSettings['ADDRESS'] = valuesDict['ad2usbKeyPadAddress']
-        else:
-            errorMsgDict[u'ad2usbKeyPadAddress'] = u"A valid keypad address is required"
+        validKeypadAddress = self.keypadAddressFrom(valuesDict['ad2usbKeyPadAddress'])
+        if validKeypadAddress is None:
+            errorMsgDict[u'ad2usbKeyPadAddress'] = "A valid keypad address is required"
             return (False, valuesDict, errorMsgDict)
+        else:
+            # set configSettings, this menu dictionary, and the hidden preference
+            self.configSettings['ADDRESS'] = validKeypadAddress
+            valuesDict['ad2usbKeyPadAddress'] = validKeypadAddress
+            self.pluginPrefs['ad2usbKeyPadAddress'] = validKeypadAddress
 
         # virtual zone expanders - no more than 2
         zxCount = 0
@@ -838,6 +860,7 @@ class Plugin(indigo.PluginBase):
     ########################################################
     # Confg callback methods
     ########################################################
+    # TO DO: remove - replaced by NewConfigButtonPressed
     def ConfigButtonPressed(self, valuesDict):
         """
         reads the AlarmDecoder config from the AlarmDecoder and updates the plugin Config dialog settings from the AlarmDecoder
@@ -918,21 +941,206 @@ class Plugin(indigo.PluginBase):
         except Exception as err:
             self.logger.error(u"unable to read AlarmDecoder Config:{}".format(str(err)))
 
+    def NewConfigButtonPressed(self, valuesDict, typeId):
+        """
+        Reads the AlarmDecoder config from the AlarmDecoder and updates the plugin Menu
+        "AlarmDecoder Configuration" dialog settings from the AlarmDecoder so they can be reviewed and
+        updated by saving the dialog. Note that this only sends the CONFIG message and waits
+        for the runConcurrentThread method to read the CONFIG messsage and update a property
+        that is has been read. This method must return valuesDict to conform to Indigo. Message
+        control is handled by property ADButtonMsgControl with values:
+
+        ADButtonMsgControl:
+        0 - default - blank
+        1 - CONFIG message sent
+        2 - CONFIG message read
+        3 - Unable to send message to AlarmDecoder
+        4 - Connection type does not support automatic configuration (Playback)
+        5 - AlarmDecoder not defined in Plugin config (IP, USB, or Playback)
+        6 - Error while attempting to read
+        """
+        self.logger.debug(u"called with: {}".format(valuesDict))
+
+        try:
+            # set a flag
+            self.hasAlarmDecoderConfigBeenRead = False
+            self.logger.debug("ad2usbCommType is:{}".format(self.ad2usbCommType))
+
+            # test first if the AlarmDecoder communication has been setup in Plugin configure
+            # so we know if we have and IP or USB
+            if (self.ad2usbCommType == 'IP') or (self.ad2usbCommType == 'USB'):
+
+                # send config - detailed logging is handled by the underlying methods
+                self.logger.debug("sending CONFIG command to AlarmDecoder")
+                if self.ad2usb.sendAlarmDecoderConfigCommand():
+                    self.logger.debug("sending CONFIG command was successful")
+                    valuesDict['ADButtonMsgControl'] = '1'
+                else:
+                    self.logger.debug("sending CONFIG command failed")
+                    valuesDict['ADButtonMsgControl'] = '3'
+
+                # the reading of the CONFIG response is handled on another thread
+                # we wait a max of the 2 x SERIAL_TIMEOUT
+                timeout = time.time() + (2 * self.ad2usb.getTimeout())
+
+                # we loop for up to the timeout set above or until the CONFIG was read
+                self.logger.debug("waiting to read CONFIG command...")
+                while (time.time() < timeout) and (self.hasAlarmDecoderConfigBeenRead is False):
+                    time.sleep(1)  # sleep for 1 second
+
+                if self.hasAlarmDecoderConfigBeenRead:
+                    self.logger.debug("successfully read CONFIG command...")
+                    valuesDict['ADButtonMsgControl'] = '2'  # success
+
+                    # this method updates the valuesDict from the configSettings property
+                    self.logger.debug("updating dialog values from CONFIG...")
+                    self.updateValuesDictFromADConfigSettings(valuesDict)
+
+                    return valuesDict
+
+                else:
+                    self.logger.debug("timed out waiting for CONFIG to be read...")
+                    valuesDict['ADButtonMsgControl'] = '6'  # error
+                    self.logger.warning(
+                        "Unable to read the config from the AlarmDecoder or possible timeout while waiting. Try again.")
+                    return valuesDict
+
+            elif self.ad2usbCommType == 'messageFile':
+
+                # we can't read the config in playback mode so set the flag as if we did
+                # but we do have the settings in the plugin property if CONFIG message was read in playback file
+                # we can test both scenarios here by changing True or False
+                if True:
+                    self.hasAlarmDecoderConfigBeenRead = True
+                    valuesDict['ADButtonMsgControl'] = '2'  # success load settings test
+                    self.updateValuesDictFromADConfigSettings(valuesDict)
+                else:
+                    self.hasAlarmDecoderConfigBeenRead = False
+                    valuesDict['ADButtonMsgControl'] = '4'  # invalid commType test
+
+                return valuesDict
+
+            else:
+                # the user needs to return to the Plugin config and update the settings for the AlarmDecoder
+                valuesDict['ADButtonMsgControl'] = 5
+                self.logger.warning('Unknown AlarmDecoder communication type:{}'.format(self.ad2usbCommType))
+                return valuesDict
+
+        except Exception as err:
+            valuesDict['ADButtonMsgControl'] = 6
+            self.logger.error(u"unable to read AlarmDecoder Config:{}".format(str(err)))
+            return valuesDict
+
+    def updateValuesDictFromADConfigSettings(self, valuesDict):
+        """
+        Updates the provided valuesDict object (typically for a Config dialog) values from the plugin's
+        property 'configSettings'. This is used to set the valuesDict properties to the values
+        in the configSettings property. The configSettings property is updated anytime the CONFIG
+        message is read from the AlarmDecoder.
+
+        Returns True is update was successful, False if it was unsuccessful.
+        """
+        self.logger.debug(u"called with: {}".format(valuesDict))
+
+        try:
+            # test if configSettings is not empty
+            if bool(self.configSettings):
+                self.logger.debug("current AlarmDecoder Config dictionary values:{}".format(valuesDict))
+                self.logger.debug("current AlarmDecoder configSettings are:{}".format(self.configSettings))
+
+                # update the values
+                valuesDict['ad2usbKeyPadAddress'] = self.configSettings['ADDRESS']
+
+                valuesDict['ad2usbLrr'] = self.getFlagInString(self.configSettings['LRR'])
+
+                valuesDict['ad2usbExpander_1'] = self.getFlagInString(self.configSettings['EXP'], 1)
+                valuesDict['ad2usbExpander_2'] = self.getFlagInString(self.configSettings['EXP'], 2)
+                valuesDict['ad2usbExpander_3'] = self.getFlagInString(self.configSettings['EXP'], 3)
+                valuesDict['ad2usbExpander_4'] = self.getFlagInString(self.configSettings['EXP'], 4)
+                valuesDict['ad2usbExpander_5'] = self.getFlagInString(self.configSettings['EXP'], 5)
+
+                valuesDict['ad2usbVirtRelay_1'] = self.getFlagInString(self.configSettings['REL'], 1)
+                valuesDict['ad2usbVirtRelay_2'] = self.getFlagInString(self.configSettings['REL'], 2)
+                valuesDict['ad2usbVirtRelay_3'] = self.getFlagInString(self.configSettings['REL'], 3)
+                valuesDict['ad2usbVirtRelay_4'] = self.getFlagInString(self.configSettings['REL'], 4)
+
+                valuesDict['ad2usbDeduplicate'] = self.getFlagInString(self.configSettings['DEDUPLICATE'])
+
+                self.logger.debug(u"newly updated config dictionary is:{}".format(valuesDict))
+                self.logger.debug(u"completed with valid config")
+
+                return True
+
+            # else configSettings is empty - possibly because Plugin just restarted and no CONFIG mms read
+            else:
+                self.logger.warning(
+                    "No AlarmDecoder CONIFG settings in memory. This is possible when the Plugin has just restarted. Sending CONFIG message to AlarmDecoder.")
+                self.ad2usb.sendAlarmDecoderConfigCommand()
+
+                return False
+
+        except Exception as err:
+            self.logger.error(
+                u"Error while setting dictionary from AlarmDecoder configSettings property:{}".format(str(err)))
+            return False
+
+    def getMenuActionConfigUiValues(self, menuId):
+        """
+        Callback method called prior to MenuItem being opened. For configureAlarmDecoder this loads
+        settings from the configSettings property - the last known/read AlarmDecoder settings.
+        """
+        valuesDict = indigo.Dict()
+        errorDict = indigo.Dict()
+
+        # fill in the valuesDict here with pre-fill data
+        if menuId == 'configureAlarmDecoder':
+            if self.updateValuesDictFromADConfigSettings(valuesDict):
+                # we reset the flag here to indicate the CONFIG message needs to be read
+                # TO DO: possibe bug - if the dialog is open too long the message could be
+                self.hasAlarmDecoderConfigBeenRead = False
+
+            else:
+                errorDict["makeSpace3"] = "Error loading previous values"
+                errorDict["showAlertText"] = "Error loading previous AlarmDecoder values. Use the \"Read Config\" button in Step 1 read the current AlarmDecoder settings."
+
+        return (valuesDict, errorDict)
+
+    def getAlarmDecoderKeypadAddress(self):
+        """
+        Returns the cached value of the AlarmDecoder Keypad adddress set via 'ADDRESS' configuration.
+        Returns keypad address as string or returns None if it is not set.
+        """
+        if 'ADDRESS' in self.configSettings:
+            return self.configSettings['ADDRESS']
+        else:
+            return None
+
     ########################################################
-    # ConfiguUI callbacks from Actions and Devices
+    # ConfigUI callbacks from Actions and Devices
     def getPartitionList(self, filter="", valuesDict=None, typeId="", targetId=0):
         self.logger.debug(u"Called")
 
         myArray = []
+        emptyArray = []
 
-        for panelKeypadAddress in self.panelsDict:
-            partition = self.panelsDict[panelKeypadAddress]['partition']
-            myArray.append((panelKeypadAddress, partition))
+        try:
 
-        self.logger.debug(u"Returned myArray:{}".format(myArray))
-        self.logger.debug(u"Completed with valid config")
+            for oneKeypad in self.getAllKeypadDevices():
+                try:
+                    partition = oneKeypad.pluginProps['panelPartitionNumber']
+                    panelKeypadAddress = oneKeypad.pluginProps['panelKeypadAddress']
+                    myArray.append((panelKeypadAddress, partition))
 
-        return myArray
+                except Exception as err:
+                    self.logger.error("Unable to read partition and/or address from keypads, error:{}".format(str(err)))
+                    return emptyArray
+
+            self.logger.debug("Completed with valid list of keypads:{}".format(myArray))
+            return myArray
+
+        except Exception as err:
+            self.logger.error("Unable to read partition and/or address from keypads, error:{}".format(str(err)))
+            return emptyArray
 
     ########################################################
     def getZoneList(self,  filter="", valuesDict=None, typeId="", targetId=0):
@@ -1091,6 +1299,7 @@ class Plugin(indigo.PluginBase):
                 u"error retrieving Zone Groups for Zone Address:{} - error:{}".format(forZoneNumber, str(err)))
             return []
 
+    # TO DO: simplify and leverage getDeviceForZoneNumber()
     def getDeviceIdForZoneNumber(self, forZoneNumber=''):
         """
         Returns the device.id (integer) for the Zone Number (Address) provided or 0 if not found.
@@ -1103,14 +1312,22 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"called with zone number:{}".format(forZoneNumber))
 
         try:
+            # convert zone to a string if needed
+            zoneNumberAsString = ''
+            if isinstance(forZoneNumber, str):
+                zoneNumberAsString = forZoneNumber
+            else:
+                zoneNumberAsString = str(forZoneNumber)
+
             for device in indigo.devices.iter("self"):
                 # TO DO: do I need this restriction?
                 if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
                     deviceProperties = device.pluginProps.to_dict()
                     self.logger.debug(u"device properties are:{}".format(deviceProperties))
                     zoneNumber = deviceProperties.get('zoneNumber', "NONE")
-                    if zoneNumber == forZoneNumber:
-                        self.logger.debug(u"found device id:{} for zone number:{}".format(device.id, forZoneNumber))
+                    if zoneNumber == zoneNumberAsString:
+                        self.logger.debug(u"found device id:{} for zone number:{}".format(
+                            device.id, zoneNumberAsString))
                         return device.id
 
             # did not find device
@@ -1121,6 +1338,88 @@ class Plugin(indigo.PluginBase):
             self.logger.error("Error trying to get device id for zone number:{}, error:{}".format(
                 forZoneNumber, str(err)))
             return 0
+
+    def getDeviceForZoneNumber(self, forZoneNumber=''):
+        """
+        Returns the Indigo device objcet for the Zone Number (Address) provided or None if not found.
+        This only looks at Alarm Zone and Virtual Zone devices. Keypad devices are not included.
+
+        **parameters**:
+        forZoneNumber -- an string that is the Zone Number (Address)
+        """
+
+        self.logger.debug(u"called with zone number:{}".format(forZoneNumber))
+
+        try:
+            # convert zone to a string if needed
+            zoneNumberAsString = ''
+            if isinstance(forZoneNumber, str):
+                zoneNumberAsString = forZoneNumber
+            else:
+                zoneNumberAsString = str(forZoneNumber)
+
+            for device in indigo.devices.iter("self"):
+                # TO DO: do I need this restriction?
+                if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
+                    deviceProperties = device.pluginProps.to_dict()
+                    self.logger.debug(u"device properties are:{}".format(deviceProperties))
+                    zoneNumber = deviceProperties.get('zoneNumber', "NONE")
+                    if zoneNumber == zoneNumberAsString:
+                        self.logger.debug(u"found device id:{} for zone number:{}".format(
+                            device.id, zoneNumberAsString))
+                        return device
+
+            # did not find device
+            self.logger.error(u"Unable to find device id for zone number:{}".format(forZoneNumber))
+            return None
+
+        except Exception as err:
+            self.logger.error("Error trying to get device id for zone number:{}, error:{}".format(
+                forZoneNumber, str(err)))
+            return None
+
+    def getDeviceForZoneNumberAsInt(self, forZoneNumber=0):
+        """
+        Returns the Indigo device object for the Zone Number (integer) provided or None if not found.
+        This only looks at Alarm Zone and Virtual Zone devices. Keypad devices are not included.
+
+        **parameters**:
+        forZoneNumber -- an integer that is the Zone Number (Address)
+        """
+
+        self.logger.debug(u"called with zone number:{}".format(forZoneNumber))
+
+        try:
+            # convert zone to a string if needed
+            zoneNumberAsInt = 0
+            if isinstance(forZoneNumber, int):
+                zoneNumberAsInt = forZoneNumber
+            else:
+                zoneNumberAsInt = int(forZoneNumber)
+
+            for device in indigo.devices.iter("self"):
+                # TO DO: do I need this restriction?
+                if device.deviceTypeId == 'alarmZone' or device.deviceTypeId == 'alarmZoneVirtual':
+                    deviceProperties = device.pluginProps.to_dict()
+                    self.logger.debug(u"device properties are:{}".format(deviceProperties))
+                    zoneNumberAsString = deviceProperties.get('zoneNumber', '0')
+
+                    # convert the property to an int for comparison
+                    zoneNumberProperty = int(zoneNumberAsString)
+
+                    if zoneNumberProperty == zoneNumberAsInt:
+                        self.logger.debug(u"found device id:{} for zone number:{}".format(
+                            device.id, zoneNumberAsString))
+                        return device
+
+            # did not find device
+            self.logger.error(u"Unable to find device id for zone number:{}".format(forZoneNumber))
+            return None
+
+        except Exception as err:
+            self.logger.error("Error trying to get device id for zone number:{}, error:{}".format(
+                forZoneNumber, str(err)))
+            return None
 
     def getZoneNumberForDevice(self, forDevice):
         """
@@ -1246,11 +1545,11 @@ class Plugin(indigo.PluginBase):
 
     def setDeviceState(self, forDevice, newState='NONE', ignoreBypass=False):
         """
-        updates the indio.device for a given device object (indigo.device) and new state (string)
+        Updates the indio.device for a given device object (indigo.device) and new state (string)
         the state is the key - not the value in the Devices.xml. The default logic for Bypassed
         devices is to update the text display and internal state but not the icon. If ignoreBypass
-        is set to True, devices will CLEAR and FAULT normally and ignore the Bypass state. This is
-        used internally to reset all devices.
+        is set to True, devices will CLEAR and FAULT normally and ignore the Bypass state. This
+        feature is used internally to reset all devices.
 
         **parameters**:
         forDevice -- a valid indigo.device object
@@ -1277,14 +1576,13 @@ class Plugin(indigo.PluginBase):
                                                   uiValue=AD2USB_Constants.kZoneStateUIValues[AD2USB_Constants.k_CLEAR])
                     forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
 
-                # TO DO: consider removing on/off state
                 forDevice.updateStateOnServer(key='onOffState', value=False)
 
             elif newState == AD2USB_Constants.k_FAULT:
                 forDevice.updateStateOnServer(key='zoneState', value=newState,
                                               uiValue=AD2USB_Constants.kZoneStateUIValues[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
-                # TO DO: consider removing on/off state
+
                 forDevice.updateStateOnServer(key='onOffState', value=True)
 
             elif newState == AD2USB_Constants.k_ERROR:
@@ -1326,7 +1624,7 @@ class Plugin(indigo.PluginBase):
                                               uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
 
-            elif newState == AD2USB_Constants.k_ERROR:
+            elif (newState == AD2USB_Constants.k_ERROR) or (newState == AD2USB_Constants.k_PANEL_UNK):
                 forDevice.updateStateOnServer(key='panelState', value=newState,
                                               uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.Error)
@@ -1465,20 +1763,68 @@ class Plugin(indigo.PluginBase):
 
         self.logger.debug(u"ad2USB URL property set to:{}".format(self.URL))
 
-    def generateAlarmDecoderConfigString(self):
+    def generateAlarmDecoderConfigString(self, sortList=False):
         """
-        reads the internal property 'configSettings' and returns a valid AlarmDecoder config string
-        ex: 'CADDRESS=20&DEDUPLICATE=Y\r'
+        Reads the internal property 'configSettings' and returns a valid AlarmDecoder config string.
+        If the 'sortList' paramater of True is passed it will sort the keys before generating the string.
+        The sort is used primarily to be able to detect changes to the string.
+        ex: 'CADDRESS=20&DEDUPLICATE=Y\\r'
         """
         self.logger.debug(u'called')
 
         configString = 'C'  # setting CONFIG always starts with C
-        for parameter, setting in self.configSettings.items():
-            configString = configString + parameter + '=' + setting + '&'
+
+        if sortList:
+
+            for parameter in sorted(self.configSettings):
+                configString = configString + parameter + '=' + self.configSettings[parameter] + '&'
+
+        else:
+
+            for parameter, setting in self.configSettings.items():
+                configString = configString + parameter + '=' + setting + '&'
 
         # strip the last '&' since it is not needed
         self.logger.debug(u'CONFIG string is:{}'.format(configString[:-1]))
         return configString[:-1] + '\r'  # strip the trailing '&' and add '\r'
+
+    def updateAlarmDecoderConfig(self, valuesDict, typeId):
+        """
+        Callback used by the AlarmDecoder Configuration Menu Dialog to update the AlarmDecoder CONFIG settings.
+        """
+        self.logger.debug(u'called with:{}'.format(valuesDict))
+
+        errorDict = indigo.Dict()
+
+        # check to see if the AlarmDecoder was read first
+        if self.hasAlarmDecoderConfigBeenRead:
+            pass
+        else:
+            errorDict["makeSpace3"] = "AlarmDecoder Configuration not read."
+            errorDict["showAlertText"] = "You must read and load the current AlarmDecoder values before updating. Use the \"Read Config\" button in Step 1 to read the current AlarmDecoder settings."
+            return (False, valuesDict, errorDict)
+
+        # validate the field and update configSettings property
+        (isSettingsValid, valuesDict, errorDict) = self.setAlarmDecoderConfigDictFromPrefs(valuesDict)
+
+        if isSettingsValid:
+            # write the new config to the AlarmDecoder
+            configString = self.generateAlarmDecoderConfigString()
+            if self.ad2usb.writeAlarmDecoderConfig(configString):
+                self.logger.info(
+                    u"AlarmDecoder CONFIG message:{} has been sent. Check the Event Log to verify it was successful.".format(configString))
+                self.logger.info(u"Plugin preferences have been updated")
+
+                return (True, valuesDict, errorDict)
+            else:
+                self.logger.warning(u"AlarmDecoder CONFIG:{} was not sent".format(configString))
+                errorDict["makeSpace3"] = "AlarmDecoder Configuration not written."
+                errorDict["showAlertText"] = "Unable to send the CONFIG message to the AlarmDecoder. AlarmDecoder Configuration will not be updated."
+                return (False, valuesDict, errorDict)
+
+        else:
+            self.logger.warning(u"AlarmDecoder CONFIG was not updated from valuesDict:{}".format(valuesDict))
+            return (False, valuesDict, errorDict)
 
     def __initPanelLogging(self):
         try:
@@ -1701,6 +2047,42 @@ class Plugin(indigo.PluginBase):
         # we should never get here but just in case
         return string
 
+    def getZoneDeviceForEXP(self, address=None, channel=None, includeDisabled=False):
+        """
+        Returns an Indigo EXP Zone device object for the address and channel provided. By default disabled devices
+        will not be included. Optionally pass parameter 'includeDisabled' with a value of True to include disable
+        devices too. Return a device object if found, None if not.
+        """
+        try:
+            if (address is None) or (channel is None):
+                return None
+
+            for device in indigo.devices.iter("self"):
+                # just the Zone Devices
+                if device.deviceTypeId == 'alarmZone':
+                    # just the EXP devices
+                    if device.pluginProps['ad2usbZoneType'] == 'zoneTypeEXP':
+                        self.logger.debug("looking for address:{}, channel:{} in:{}".format(
+                            address, channel, device.pluginProps))
+                        # just the match of the address and channel
+                        # ad2usbZoneTypeEXP_Board, ad2usbZoneTypeEXP_Device
+                        if (int(device.pluginProps['ad2usbZoneTypeEXP_Board']) == int(address)) and (int(device.pluginProps['ad2usbZoneTypeEXP_Device']) == int(channel)):
+                            # only if enabled of the includeDisabled flag is True
+                            if device.enabled or (includeDisabled is True):
+                                return device
+
+            # if we get here device was not found
+            if includeDisabled:
+                self.logger.warning("Indigo EXP Device for address:{}, channel:{} not found".format(address, channel))
+            else:
+                self.logger.warning(
+                    "Indigo EXP Device for address:{}, channel:{} not found or disabled.".format(address, channel))
+
+        except Exception as err:
+            self.logger.error("Error retrieving Indigo EXP Device for address:{}, channel:{} msg:{}".format(
+                address, channel, str(err)))
+            return None
+
     def getAllKeypadDevices(self, includeDisabled=False):
         """
         Returns an array of 'ad2usb Keypad' Indigo device objects. By default disabled
@@ -1723,8 +2105,75 @@ class Plugin(indigo.PluginBase):
 
         except Exception as err:
             self.logger.error(u"error retrieving ad2usb Keypad devices from Indigo, msg:{}".format(str(err)))
+            # return emptyArray
+            emptyArray = []
+            return emptyArray
+
+    def getAllKeypadAddresses(self, includeDisabled=False):
+        """
+        Returns an array of keypad addresses (strings). The array is the address from each 'ad2usb Keypad'
+        Indigo device objects. By default disabled keypad devices will not be included. Optionally pass
+        the parameter of True to include disable devices too.
+        """
+        try:
+            self.logger.debug('called')
+
+            allKeypadAddresses = []
+
+            # get all the keypad devices
+            for device in indigo.devices.iter("self"):
+                # just the Keypad Devices
+                if device.deviceTypeId == 'ad2usbInterface':
+                    if device.enabled or (includeDisabled is True):
+
+                        # get the address from each keypad
+                        localProps = device.pluginProps.to_dict()
+                        if 'panelKeypadAddress' in localProps:
+                            allKeypadAddresses.append(localProps['panelKeypadAddress'])
+
+            self.logger.debug("found {} keypad addresses:{}".format(len(allKeypadAddresses), allKeypadAddresses))
+            return allKeypadAddresses
+
+        except Exception as err:
+            self.logger.error(u"error retrieving ad2usb Keypad addresses from Indigo, msg:{}".format(str(err)))
+            # return emptyArray
+            emptyArray = []
+            return emptyArray
+
+    def getKeypadAddressFromDevice(self, keypadDevice=None):
+        """
+        Returns a valid keypad address from an Indigo ad2us keypad device object. None is returned if address is
+        does not exist.
+
+        **parameters**
+        keypadDevice - a valid Indigo ad2usb keypad device object
+        """
+        try:
+            self.logger.debug("called with:{}".format(keypadDevice))
+
+            if keypadDevice is None:
+                return None
+
+            # get a Python dict from plugin properities
+            localProps = keypadDevice.pluginProps.to_dict()
+            if 'panelKeypadAddress' in localProps:
+                self.logger.debug("keypad address found:{}".format(localProps['panelKeypadAddress']))
+                # check if its all digits
+                if localProps['panelKeypadAddress'].isdigit():
+                    return localProps['panelKeypadAddress']
+                else:
+                    self.logger.debug("keypad address found but not valid:{}".format(localProps['panelKeypadAddress']))
+                    return None
+
+            # if we get this far it does not exist
+            self.logger.debug("did not find keypad adddress for keypad device")
             return None
 
+        except Exception as err:
+            self.logger.error("error getting keypad address for ad2usb Keypad device, msg:{}".format(str(err)))
+            return None
+
+    # TO DO: remove method no longer used
     def getKeypadDevice(self, partition=None):
         """
         If no partition parameter is provided, this method checks if at least one AlarmDecoder
@@ -1744,7 +2193,11 @@ class Plugin(indigo.PluginBase):
 
             # the case of no devices
             if len(allKeypadDevices) == 0:
-                self.logger.error("No Indigo ad2usb Keypad device found; exactly one (1) should be defined")
+                if int(self.numPartitions) == 1:
+                    self.logger.error("No Indigo ad2usb Keypad device found; exactly one (1) should be defined")
+                else:
+                    self.logger.error("No Indigo ad2usb Keypad device found; one (1) per partition should be defined")
+
                 return None
 
             # the case of only one device and no parition parameter provided
@@ -1789,6 +2242,295 @@ class Plugin(indigo.PluginBase):
             # return None
             return None
 
+    def getKeypadDeviceForDevice(self, forDevice=None):
+        """
+        A keypad Indigo device object is returned if the partition number of the zone device
+        'forDevice' matches keypad's partition setting. Otherwise None is returned.
+
+        **parameters**
+        forDevice - an Indigo zone device
+        """
+        try:
+            # make sure we have device parameter
+            if forDevice is None:
+                return None
+
+            # set the default value for the keypad
+            keypadDevice = None
+
+            # get the partition from provided device
+            validPartition = forDevice.pluginProps['zonePartitionNumber']
+            if validPartition.isdigit():
+                self.logger.debug("looking for keypad device for partition:{}".format(validPartition))
+                keypadDevice = self.getKeypadDeviceForPartition(partition=validPartition)
+            else:
+                self.logger.warning(
+                    "Device:{} does not have a valid parition set. Cannot determine associated keypad.".format(forDevice.name))
+                return None
+
+            if keypadDevice is None:
+                self.logger.warning("Device:{} with parition:{} does not have an associated Indigo ad2usb Keypad device.".format(
+                    forDevice.name, validPartition))
+                return None
+            else:
+                self.logger.debug("found keypad device for partition:{}".format(validPartition))
+                return keypadDevice
+
+        except Exception as err:
+            self.logger.error("error searching for ad2usb Keypad device for device, msg:{}".format(str(err)))
+            return None
+
+    def getKeypadDeviceForPartition(self, partition=None):
+        """
+        A keypad Indigo device object is returned if the partition number of the keypad device
+        matches partition parameter. Otherwise None is returned.
+
+        **parameters**
+        partition - a partition value as a string (e.g. "2")
+        """
+        try:
+            allKeypadDevices = self.getAllKeypadDevices()
+            partitionAsString = str(partition)
+
+            # the case of no devices
+            if len(allKeypadDevices) == 0:
+                if int(self.numPartitions) == 1:
+                    self.logger.error("No Indigo ad2usb Keypad device found; exactly one (1) should be defined")
+                else:
+                    self.logger.error("No Indigo ad2usb Keypad device found; one (1) per partition should be defined")
+
+                return None
+
+            # the case of mutiple keypad devices and parition parameter provided but not '0'
+            elif (partition is not None):
+                for oneKeypadDevice in allKeypadDevices:
+                    if oneKeypadDevice.pluginProps['panelPartitionNumber'] == partitionAsString:
+                        return oneKeypadDevice
+
+            # if we get this far it does not exist
+            self.logger.debug("did not find keypad match for partition:{}".format(partitionAsString))
+            return None
+
+        except Exception as err:
+            self.logger.error("error searching for ad2usb Keypad device by partition, msg:{}".format(str(err)))
+            return None
+
+    def getKeypadDeviceForAddress(self, address=None):
+        """
+        Returns a keypad device matching the address (string). If found the device object is returned.
+        None is returned if no address parameter is provided, if no keypad is found with the address,
+        of the address provided is invalid.
+
+        **parameters**
+        address - a keypad address value as a string (zero-padded, 2-digits) (e.g. "18")
+        """
+        try:
+            if address is None:
+                return None
+
+            if not self.isValidKeypadAddress(address):
+                return None
+
+            allKeypadDevices = self.getAllKeypadDevices()
+            addressAsInt = int(address)
+
+            # the case of no devices
+            if len(allKeypadDevices) == 0:
+                if int(self.numPartitions) == 1:
+                    self.logger.error("No Indigo ad2usb Keypad device found; exactly one (1) should be defined")
+                else:
+                    self.logger.error("No Indigo ad2usb Keypad device found; one (1) per partition should be defined")
+
+                return None
+
+            # now look thru each keypad for one that matches address and return it
+            for eachKeypad in allKeypadDevices:
+                localProps = eachKeypad.pluginProps.to_dict()
+                if 'panelKeypadAddress' in localProps:
+                    # if the addresses match via integer comparison
+                    if int(localProps['panelKeypadAddress']) == addressAsInt:
+                        self.logger.debug("found keypad match for address (as int):{}".format(addressAsInt))
+                        return eachKeypad
+
+            # if we get this far it does not exist
+            self.logger.debug("did not find keypad match for address (as int):{}".format(addressAsInt))
+            return None
+
+        except Exception as err:
+            self.logger.error("error searching for ad2usb Keypad device by address, msg:{}".format(str(err)))
+            return None
+
+    def updateKeypadDevice(self, newAddress='', oldAddress=''):
+        """
+        This method is called when the AlarmDecoder Keypad Address may have changed. It will do several things:
+        It will do nothing if the old and new addresses are the same or the new address is not a valid address.
+        If the new address is valid and different it will update the hidden preference for the keypad and
+        update the plugin legacy property 'ad2usbKeyPadAddress'. It will als look for the appropiate
+        keypad device and change the address. This is trivial for single (1) parition systems since they will
+        have one keypad device but more complicated when multiple keypads exist.
+
+        Return True if the keypad was updated, False if it was not, and None if either address is invalid of there was
+        and error.
+        """
+        try:
+            # do nothing is newAddress = oldAddress
+            if newAddress == oldAddress:
+                return False
+
+            # test that new the new address is valid
+            if self.isValidKeypadAddress(newAddress):
+                # update the legacy property
+                self.ad2usbKeyPadAddress = newAddress
+
+                # update the hidden preference
+                self.pluginPrefs['ad2usbKeyPadAddress'] = newAddress
+
+            # return is invalid new address
+            else:
+                return None
+
+            # need to update panelKeypadAddress and address property
+            # get all keypads
+            allKeypads = self.getAllKeypadDevices()
+
+            # test the single keypad device case
+            # a single keypad
+            if len(allKeypads) == 1:
+                newPluginProps = allKeypads[0].pluginProps
+                newPluginProps['address'] = 'Keypad ' + newAddress
+                newPluginProps['panelKeypadAddress'] = newAddress
+
+                # replace the values on the server
+                allKeypads[0].replacePluginPropsOnServer(newPluginProps)
+
+            else:
+                # store if the old address is valid.
+                # we will suppress log messages if old address was invalid for first time runs
+                isValidOldAddress = self.isValidKeypadAddress(oldAddress)
+                if isValidOldAddress:
+                    # look for the old address exists
+                    keyPadDevice = self.getKeypadDeviceForAddress(oldAddress)
+                else:
+                    keyPadDevice = None
+
+                possibleDuplicateKeypad = self.getKeypadDeviceForAddress(newAddress)
+
+                # scenarios:
+                # 1. keypad exists with old address and no keypad found with new address: update keypad
+                # 2. no keypad exists with old address and no keypad found with new address: alert error to add keypad
+                # 3. keypad exists with old address and keypad found with new address: alert warn to review keypad devices
+                # 4. no keypad exists with old address and keypad found with new address: alert error to possible remove keypad
+
+                # scenario 1
+                if (keyPadDevice is not None) and (possibleDuplicateKeypad is None):
+                    self.logger.info("Updating Keypad Device:{} with keypad address:{} from Alarm Decoder. Review your Keypad Devices if needed.".format(
+                        keyPadDevice.name, newAddress))
+
+                    newPluginProps = keyPadDevice.pluginProps
+                    newPluginProps['address'] = 'Keypad ' + newAddress
+                    newPluginProps['panelKeypadAddress'] = newAddress
+
+                    # replace the values on the server
+                    keyPadDevice.replacePluginPropsOnServer(newPluginProps)
+
+                # scenario 2
+                elif (keyPadDevice is None) and (possibleDuplicateKeypad is None):
+                    self.logger.error(
+                        "No Keypad Device exists with (new?) keypad address:{} from Alarm Decoder. Add at least one Keypad Devices with the address of your AlarmDecoder.".format(newAddress))
+
+                # scenario 3
+                elif (keyPadDevice is not None) and (possibleDuplicateKeypad is not None):
+                    self.logger.warning(
+                        "Detected change in Alarm Decoder address:{}. Review your Keypad Indigo Device settings.".format(newAddress))
+
+                # scenario 4
+                elif (keyPadDevice is None) and (possibleDuplicateKeypad is not None):
+                    if isValidOldAddress:
+                        self.logger.warning(
+                            "Detected change in Alarm Decoder address:{}. Review your Keypad Indigo Device settings.".format(newAddress))
+
+        except Exception as err:
+            self.logger.error(
+                "Error while attempting to update Keypad Device with new AlarmDecoder address:{}".format(str(err)))
+
+    def isValidKeypadAddress(self, address=None):
+        """
+        Test the provided keypad address (string) to make sure its a zero-padded string between 01 and 99.
+        Returns True or False.
+        """
+        # return if nothing is passed
+        if address is None:
+            self.logger.debug('invalid keypad address of None:{}'.format(address))
+            return False
+
+        # return if not a string
+        if not isinstance(address, str):
+            self.logger.debug('invalid keypad address is not a string:{}'.format(address))
+            return False
+
+        # make sure every character is a digit
+        allDigits = True  # assume its true
+        for c in address:
+            if c.isdigit():
+                pass
+            else:
+                allDigits = False
+                self.logger.debug('invalid keypad address:{} contains a non-digit character'.format(address))
+
+        # if every character is a digit test the value range
+        if allDigits and (int(address) > 0) and (int(address) <= 99):
+            self.logger.debug('valid keypad address:{}'.format(address))
+            return True
+        else:
+            self.logger.debug('invalid keypad address:{} not between 1 and 99'.format(address))
+            return False
+
+    def keypadAddressFrom(self, addressToTransform=''):
+        """
+        Transform provided address 'addressToTransform' (string) to be a two-digit valid keypad
+        address (01-99). Returns the valid string ('01' to '99') or None if cannot be converted.
+        """
+        try:
+            address = addressToTransform
+
+            # if its not a string make it one
+            if not isinstance(address, str):
+                address = str(address)
+
+            # remove all non-digits
+            newString = ''
+            for c in address:
+                if c.isdigit():
+                    newString = newString + c
+
+            address = newString
+
+            # try to make it an valid integer
+            try:
+                addressAsInt = int(address)
+                addressAsInt = abs(addressAsInt)
+            except Exception as err:
+                self.logger.warning(
+                    'provided keypad address:{} is not a valid keypad address (01-99). Error:{}'.format(addressToTransform, str(err)))
+                addressAsInt = 0
+
+            # convert address as an integer to zero padded string
+            if (addressAsInt > 9) and (addressAsInt < 100):
+                return str(addressAsInt)
+
+            elif (addressAsInt > 0) and (addressAsInt < 10):
+                return '0' + str(addressAsInt)
+
+            else:
+                self.logger.warning(
+                    'Provided keypad address:{} is not a valid keypad address (01-99).'.format(addressToTransform))
+                return None
+
+        except Exception as err:
+            self.logger.warning(
+                'provided keypad address:{} is not a valid keypad address (01-99). Error:{}'.format(addressToTransform, str(err)))
+            return None
+
     def basicBuildDevDict(self, dev, funct, ad2usbKeyPadAddress):
         """
         Build/Modify device property dictionaries for basic mode. Called on startup and
@@ -1818,7 +2560,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(u"wrote record:{}".format(self.zonesDict[zoneIndex]))
 
             elif dev.deviceTypeId == 'ad2usbInterface':
-                self.addPanelDev(dev, 'basic', ad2usbKeyPadAddress)
+                pass
 
             elif dev.deviceTypeId == 'zoneGroup':
                 self.addGroupDev(dev)
@@ -1892,7 +2634,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(u"wrote record:{}".format(self.advZonesDict[zoneIndex]))
 
             elif dev.deviceTypeId == 'ad2usbInterface':
-                self.addPanelDev(dev, 'advanced', ad2usbKeyPadAddress)
+                pass
 
             elif dev.deviceTypeId == 'zoneGroup':
                 self.addGroupDev(dev)
@@ -1933,42 +2675,6 @@ class Plugin(indigo.PluginBase):
                 del self.advZonesDict[zoneIndex]
                 self.logger.debug(u"deleted entry for zone number:{}, name:{}, type:{}".format(
                     zoneNumber, zoneName, zoneType))
-
-        self.logger.debug(u"completed")
-
-    def addPanelDev(self, dev, mode, ad2usbKeyPadAddress):
-        """
-        Maintain panel keypad devices cache data. Data is stored in 'panelsDict' property for
-        basic mode; 'partition2address' for advanced mode.
-        """
-        self.logger.debug(u"Called")
-        self.logger.debug(u"received device:{}".format(dev))
-
-        try:
-            alarmPartition = dev.pluginProps['panelPartitionNumber']
-        except:
-            alarmPartition = "1"
-            self.logger.error(
-                u"partition number not found for keypad device:{} - assigning partition 1".format(dev.name))
-            self.logger.error(u"please reconfigure the keypad device to resolve this problem")
-
-        try:
-            alarmPartitionAddress = dev.pluginProps['panelKeypadAddress']
-        except:
-            alarmPartitionAddress = ad2usbKeyPadAddress
-            # TO DO: review this log
-            self.logger.error(
-                u"alarm panel keypad address not found for keypad device:{} - assigning address:{}.".format(alarmPartition, dev.name))
-            self.logger.error(u"reconfigure the keypad device to resolve this problem")
-
-        self.panelsDict[alarmPartitionAddress] = {'devId': dev.id, 'name': dev.name, 'partition': alarmPartition}
-        self.logger.debug(u"added address to partition record:{}".format(self.panelsDict[alarmPartitionAddress]))
-
-        # If advanced mode, add a reverse lookup: partition to keypad address
-        if mode == 'advanced':
-            self.partition2address[alarmPartition] = {'devId': dev.id,
-                                                      'name': dev.name, 'address': alarmPartitionAddress}
-            self.logger.debug(u"added partition to address record:{}".format(self.partition2address[alarmPartition]))
 
         self.logger.debug(u"completed")
 
@@ -2077,3 +2783,18 @@ class Plugin(indigo.PluginBase):
         else:
             self.logger.debug('Unable to generate padded zone string')
             return None
+
+    def logPluginProps(self):
+        self.logger.info("ZoneDict:{}".format(self.zonesDict))
+        self.logger.info("Advanced ZonesDict:{}".format(self.advZonesDict))
+        self.logger.info("Preferences:{}\n".format(self.pluginPrefs))
+
+    def logDeviceProps(self):
+        for device in indigo.devices.iter("self"):
+            self.logger.info("Device:{}".format(device))
+
+    def sendAlarmDecoderConfigCommand(self):
+        self.ad2usb.sendAlarmDecoderConfigCommand()
+
+    def sendAlarmDecoderVersionCommand(self):
+        self.ad2usb.sendAlarmDecoderVersionCommand()

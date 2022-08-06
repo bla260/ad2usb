@@ -14,6 +14,9 @@ kVALIDMESSAGETYPES = ['PROMPT', 'CONFIG', 'AUI', 'CRC', 'EXP',
 kCAPABILITIES = ['TX', 'RX', 'SM', 'VZ', 'RF', 'ZX', 'RE', 'AU', '3X', 'CG', 'DD',
                  'MF', 'LR', 'L2', 'KE', 'MK', 'CB', 'DS', 'ER', 'CR']
 
+# define valid CONFIG setting we will store
+kVALID_CONFIG_ITEMS = ['ADDRESS', 'EXP', 'REL', 'LRR', 'DEDUPLICATE']
+
 
 class Message(object):
     """
@@ -196,6 +199,7 @@ class Message(object):
         zoneNumberAsInt (int) - conversion of the numericCode (part 2) to an integer for the zone number
         isValidNumericCode (boolean) - sometimes numericCode may not be base 10 number (see NuTech docs)
                 in this case we consider it a bad keypad message
+        isBypassZone (boolean) - if message text start with BYPAS
         keypadDestinations (array of int) - the list of keypads this message is intended for
         keypadFlags (dictionary) - a dictionary with the following keys created based on bitField above.
                 most are 0 or 1; except BEEPS (int), ERROR_REPORT (?), and ADEMCO_OR_DSC ("A or "D")
@@ -226,6 +230,16 @@ class Message(object):
             # init the properites
             self.messageDetails['KPM'] = {}
             self.messageDetails['KPM']['isValidNumericCode'] = False
+            self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_UNK
+
+            # text of message
+            self.messageDetails['KPM']['isBypassZone'] = False
+            self.messageDetails['KPM']['isPressForFaultMessage'] = False
+            self.messageDetails['KPM']['isAlarmTripped'] = False
+            self.messageDetails['KPM']['isCountdown'] = False
+            self.messageDetails['KPM']['isFault'] = False
+            self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False
+            self.messageDetails['KPM']['doesMessageZoneMatchNumericCode'] = False
 
             # split the message on comma
             kpmItems = re.split(',', kpmMessage)
@@ -291,6 +305,17 @@ class Message(object):
             elif akm[1:6] == "BYPAS":
                 # zoneNumberAsInt has bypassed zone details
                 self.messageDetails['KPM']['isBypassZone'] = True
+                zoneAsInt = self.__getIntFromString(akm[7:9])
+                if zoneAsInt is None:
+                    self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False
+                    self.messageDetails['KPM']['zoneFromMessage'] = None
+                else:
+                    self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False
+                    self.messageDetails['KPM']['zoneFromMessage'] = zoneAsInt
+
+                # check if zone number in message text = numericCode field
+                if self.messageDetails['KPM']['zoneFromMessage'] == self.messageDetails['KPM']['zoneNumberAsInt']:
+                    self.messageDetails['KPM']['doesMessageZoneMatchNumericCode'] = True
 
             # ARMED .. May Exit Countdown
             elif ("ARMED" in akm) and ("Exit Now" in akm):
@@ -301,24 +326,61 @@ class Message(object):
             elif akm[1:6] == "FAULT":
                 # zoneNumberAsInt has bypassed zone details
                 self.messageDetails['KPM']['isFault'] = True
+                zoneAsInt = self.__getIntFromString(akm[7:9])
+                if zoneAsInt is None:
+                    self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False
+                    self.messageDetails['KPM']['zoneFromMessage'] = None
+                else:
+                    self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False
+                    self.messageDetails['KPM']['zoneFromMessage'] = zoneAsInt
+
+                # check if zone number in message text = numericCode field
+                if self.messageDetails['KPM']['zoneFromMessage'] == self.messageDetails['KPM']['zoneNumberAsInt']:
+                    self.messageDetails['KPM']['doesMessageZoneMatchNumericCode'] = True
 
             #
             # ########## END
 
             # determine the panel state
-            if self.getKPMattr(flag='READY') == 1:
+            if (self.getKPMattr(flag='READY') == 1) and (self.getKPMattr(flag='ARMED_AWAY') == 0) and (self.getKPMattr(flag='ARMED_HOME') == 0):
                 self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_READY
 
-            elif self.getKPMattr(flag='ARMED_AWAY') == 1:
-                self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_AWAY
+            elif (self.getKPMattr(flag='READY') == 0) and (self.getKPMattr(flag='ARMED_AWAY') == 1):
 
-            elif self.getKPMattr(flag='ARMED_HOME') == 1:
-                self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_STAY
+                # MAX
+                if self.getKPMattr(flag='ARMED_INSTANT') == 1:
+                    self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_MAX
 
-            # TO DO: address ARMED_INSTANT and ARMED_STAY_NIGHT
+                # AWAY
+                else:
+                    self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_AWAY
+
+            elif (self.getKPMattr(flag='READY') == 0) and (self.getKPMattr(flag='ARMED_HOME') == 1):
+
+                # INSTANT
+                if (self.getKPMattr(flag='ARMED_INSTANT') == 1) and (self.getKPMattr(flag='ARMED_STAY_NIGHT') == 0):
+                    self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_INSTANT
+
+                # NIGHT STAY
+                elif (self.getKPMattr(flag='ARMED_INSTANT') == 0) and (self.getKPMattr(flag='ARMED_STAY_NIGHT') == 1):
+                    self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_NIGHT_STAY
+
+                # STAY
+                else:
+                    self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_STAY
+
+            elif (self.getKPMattr(flag='READY') == 0) and (self.getKPMattr(flag='ARMED_AWAY') == 0) and (self.getKPMattr(flag='ARMED_HOME') == 0):
+                # this is a fault
+                # first 3 bits are zero: READY = 0, AWAY = 0, HOME = 0
+                # unless not a numeric in which case it is an error
+                if self.messageDetails['KPM']['isValidNumericCode']:
+                    self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_FAULT
+                else:
+                    self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ERROR
+
             else:
-                # do nothing - that is OK
-                pass
+                # we have an error or unknown
+                self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_UNK
 
             self.needsProcessing = True
             self.logger.debug('KPM message parsed:{}'.format(self.messageDetails['KPM']))
@@ -433,6 +495,7 @@ class Message(object):
 
         **properties created:**
         configMessageString - the part of the message after '!CONFIG>'
+        keypadAddress - same as flag['ADDRESS']
         flags (dictionary) - with key values of: MODE, ADDRESS, CONFIGBITS, MASK, EXP, REL, LRR, DEDUPLICATE
         """
         # return if not a VER message
@@ -443,6 +506,7 @@ class Message(object):
         try:
             self.messageDetails['CONFIG'] = {}
             self.messageDetails['CONFIG']['flags'] = {}
+            self.messageDetails['CONFIG']['keypadAddress'] = ''
 
             # strip first 8 chars from the message - !CONFIG>
             configMessage = self.messageString[8:]
@@ -452,7 +516,18 @@ class Message(object):
 
             for oneConfig in configItems:
                 configParam = re.split('=', oneConfig)
-                self.messageDetails['CONFIG']['flags'][configParam[0]] = configParam[1]
+
+                # only process parameters we manage so we never change them
+                # see the constant kVALID_CONFIG_ITEMS at the top of this file
+                if (configParam[0] in kVALID_CONFIG_ITEMS):
+                    self.messageDetails['CONFIG']['flags'][configParam[0]] = configParam[1]
+                # skip parameters we don't manage
+                else:
+                    pass
+
+            # update keypad address property of the message object
+            if 'ADDRESS' in self.messageDetails['CONFIG']['flags'].keys():
+                self.messageDetails['CONFIG']['keypadAddress'] = self.messageDetails['CONFIG']['flags']['ADDRESS']
 
             self.needsProcessing = True
             self.logger.debug('CONFIG message parsed:{}'.format(self.messageDetails['CONFIG']))
@@ -901,9 +976,15 @@ class Message(object):
         **parameters:**
         attributeName - name of the property you want to get
         """
-        if attributeName in self.messageDetails[self.messageType]:
-            return self.messageDetails[self.messageType][attributeName]
-        else:
+        try:
+            if attributeName in self.messageDetails[self.messageType]:
+                return self.messageDetails[self.messageType][attributeName]
+            else:
+                return None
+
+        except Exception as err:
+            self.logger.error("Unable to retrieve panel message attribute:{}, error msg:{}".format(
+                attributeName, str(err)))
             return None
 
     def getKPMattr(self, flag=''):
@@ -949,15 +1030,6 @@ class Message(object):
         # return it as an integer
         return int(hexString, 16)
 
-    def __paddedStringToInt(self, paddedString=''):
-        # see if its valid
-        for s in paddedString.lower():
-            if s not in '0123456789':
-                return None
-
-        # return it as an integer
-        return int(paddedString)
-
     def __getBitFromInt(self, value=0, bitIndex=0):
         """
         Takes value (int) and bitIndex (int) and returns 1 if the bitIndex of value (in binary) is 1, 0 otherwise
@@ -979,11 +1051,11 @@ class Message(object):
 
     def __getIntFromString(self, intAsString=''):
         """
-        Converts a string to an int. Returns None if the string is invalid
+        Converts a string to an int. Returns None if the string is not a valid integer.
         """
         for c in intAsString:
             if c not in '0123456789':
-                # return None if we find an invalid
+                # return None if we find an invalid character
                 return None
             else:
                 pass
@@ -994,5 +1066,5 @@ class Message(object):
             return x
 
         except Exception as err:
-            self.logger.warning('Error converting:{} to integer - error:{}'.format(intAsString, str(err)))
+            self.logger.debug('Error converting:{} to integer - error:{}'.format(intAsString, str(err)))
             return None
