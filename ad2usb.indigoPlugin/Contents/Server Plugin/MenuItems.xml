@@ -147,7 +147,7 @@
     </MenuItem>
     <MenuItem id="sendVERCommand">
         <Name>Get AlarmDecoder Firmware Version</Name>
-        <CallbackMethod>sendAlarmDecoderConfigCommand</CallbackMethod>
+        <CallbackMethod>sendAlarmDecoderVersionCommand</CallbackMethod>
     </MenuItem>
 
     <!-- Comment these out prior to release

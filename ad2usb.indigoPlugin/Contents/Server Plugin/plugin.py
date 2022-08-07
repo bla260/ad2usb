@@ -82,6 +82,7 @@ class Plugin(indigo.PluginBase):
         self.isThisFirstStartup = True
         self.hasAlarmDecoderConfigBeenRead = False
         self.previousCONFIGString = ''
+        self.showFirmwareVersionInLog = True
 
         # adding new logging object introduced in API 2.0
         self.logger.info(u"Plugin init completed")
@@ -2794,7 +2795,10 @@ class Plugin(indigo.PluginBase):
             self.logger.info("Device:{}".format(device))
 
     def sendAlarmDecoderConfigCommand(self):
+        # set the previous CONFIG string to empty to force message to be written to console log
+        self.previousCONFIGString = ''
         self.ad2usb.sendAlarmDecoderConfigCommand()
 
     def sendAlarmDecoderVersionCommand(self):
+        self.showFirmwareVersionInLog = True
         self.ad2usb.sendAlarmDecoderVersionCommand()

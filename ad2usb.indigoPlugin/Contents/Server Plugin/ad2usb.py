@@ -1249,14 +1249,14 @@ class ad2usb(object):
             if self.plugin.hasAlarmDecoderConfigBeenRead:
 
                 if newSettingsStringSorted != self.plugin.previousCONFIGString:
-                    self.logger.info("AlarmDecoder CONFIG setting are now:{}".format(newSettingsString))
+                    self.logger.info("AlarmDecoder CONFIG setting are now: {}".format(newSettingsString))
 
             # or log if the read flag is not set
             else:
-                self.logger.info("AlarmDecoder CONFIG message read:{}".format(
+                self.logger.info("AlarmDecoder CONFIG message read: {}".format(
                     configMessage.attr('configMessageString')))
 
-                self.logger.info("AlarmDecoder CONFIG setting are now:{}".format(newSettingsString))
+                self.logger.info("AlarmDecoder CONFIG setting are now: {}".format(newSettingsString))
                 self.plugin.hasAlarmDecoderConfigBeenRead = True
 
             # reset the previous CONFIG string to detect changes
@@ -1575,9 +1575,11 @@ class ad2usb(object):
 
         Returns True if changed; False otherwise
         """
-        if firmwareVersion != self.firmwareVersion:
+        if (firmwareVersion != self.firmwareVersion) or self.plugin.showFirmwareVersionInLog:
             self.firmwareVersion = firmwareVersion
-            self.logger.info("AlarmDecoder Firmware Version is:{}".format(firmwareVersion))
+            self.logger.info("AlarmDecoder Firmware Version is: {}".format(firmwareVersion))
+            # reset flag so we don't show the version message every time
+            self.plugin.showFirmwareVersionInLog = False
             return True  # changed
         else:
             return False  # no change
