@@ -1,6 +1,6 @@
 **IMPORTANT:** Version 3.0 and higher requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
-v 3.1.0 August 10, 2022
+v 3.1.0 August 6, 2022
 - Changes to Alarm Keypad (ad2usb Keypad) device.
   - Changes to the Alarm Keypad Ready/Armed states. Internal to the plugin, the device state `displayState` for keypad devices has been removed. If you have any Indigo Trigger Types of "Device State Changed" based on the AD2SUB Alarm Keypad Device states `Alarm State Changed...` (usually the first options in the Trigger pull down) you should disable these Triggers before upgrading and then edit and re-save each of these Triggers after upgrading. Other Triggers based on ad2usb Keypad states other than `Alarm State Changed` are not impacted by this change.
   - Alarm Keypad (ad2usb Keypad) Device State. In version 3.0.0 the list of valid states were: Ready (Not Armed), Fault, Armed Stay, Armed Away, and Error. Additional states Armed Night-Stay, Armed Instant, and Armed Max have been added. Refer to your alarm panel guide for more information about these states.
