@@ -409,17 +409,11 @@ class ad2usb(object):
             self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, removeZone=int(zoneIndex))
             self.logger.debug(u"clear... State list:{}".format(self.zoneStateDict))
 
-        # update the device state
+        # update the device state - this also call the Zone Group update
         self.plugin.setDeviceState(indigoDevice, zoneState)
 
         # update the panel device state info
         panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[panelKeypadAddress]))
-
-        try:
-            # now that zones have been updated we can refresh the zone groups
-            self.plugin.updateAllZoneGroups()
-        except Exception as err:
-            self.logger.error(u"updateAllZoneGroups error:{}".format(str(err)))
 
         # If we are supposed to log zone changes, this is where we do it (unless this was a supervision message)
         if zLogChanges:
@@ -646,6 +640,21 @@ class ad2usb(object):
 
                     skipOldMesssageProcessing = True
                     self.logger.debug('LRR message seen')
+
+                elif (newMessageObject.messageType == 'LR2') and newMessageObject.needsProcessing:
+                    # attempt to send VER command if VER not known
+                    if self.firmwareVersion == '':
+                        self.logger.warning(
+                            'LRR message seen but firmware unknown - will attempt to send firmware message to AlarmDecoder')
+                        if self.sendAlarmDecoderVersionCommand() is False:
+                            self.logger.error("Unable to send VER command.")
+
+                    # check if we should process it
+                    if newMessageObject.isValidMessage:
+                        self.process_LRR_Message(newMessageObject)
+
+                    skipOldMesssageProcessing = True
+                    self.logger.debug('LR2 message seen')
 
                 else:
                     pass

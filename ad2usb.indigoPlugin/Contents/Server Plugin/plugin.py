@@ -1496,7 +1496,7 @@ class Plugin(indigo.PluginBase):
 
     def updateAllZoneGroups(self):
         """
-        updates all the applicable Zone Groups when a Zone changes. call this method after an alarm zone state update
+        Updates all the applicable Zone Groups when a Zone changes. call this method after an alarm zone state update
         """
 
         self.logger.debug(u"called")
@@ -1593,6 +1593,13 @@ class Plugin(indigo.PluginBase):
             else:
                 self.logger.error(u"Unable to set device name:{}, id:{}, to state:{}".format(
                     forDevice.name, forDevice.id, newState))
+
+            # update any Zone Groups
+            try:
+                # now that zones have been updated we can refresh the zone groups
+                self.updateAllZoneGroups()
+            except Exception as err:
+                self.logger.error("Error updating Zone Groups:{}".format(str(err)))
 
         except Exception as err:
             self.logger.error(u"Unable to set device:{}, to state:{}, error:{}".format(forDevice, newState, str(err)))

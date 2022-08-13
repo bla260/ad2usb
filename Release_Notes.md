@@ -1,5 +1,8 @@
 **IMPORTANT:** Version 3.0 and higher requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
+v 3.1.1 Planned August 18, 2022
+- AlarmDecoder Firmware version V2.2a.8.8 is now supported. Added processing for LRR messages with the newer AlarmDecoder firmware.
+
 v 3.1.0 August 6, 2022
 - Changes to Alarm Keypad (ad2usb Keypad) device.
   - Changes to the Alarm Keypad Ready/Armed states. Internal to the plugin, the device state `displayState` for keypad devices has been removed. If you have any Indigo Trigger Types of "Device State Changed" based on the AD2SUB Alarm Keypad Device states `Alarm State Changed...` (usually the first options in the Trigger pull down) you should disable these Triggers before upgrading and then edit and re-save each of these Triggers after upgrading. Other Triggers based on ad2usb Keypad states other than `Alarm State Changed` are not impacted by this change.

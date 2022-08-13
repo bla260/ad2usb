@@ -41,9 +41,9 @@ class Message(object):
         # check for valid firmware and logger parameters
         if firmwareVersion == 'V2.2a.6':
             self.firmwareVersion = firmwareVersion
-        # TO DO: correct the string below when new version of firmware is supported
-        elif firmwareVersion == 'V2.2a.8.8--FUTURE':
+        elif firmwareVersion == 'V2.2a.8.8':
             self.firmwareVersion = firmwareVersion
+
         elif firmwareVersion == '':
             self.isValidMessage = False
             self.needsProcessing = False
@@ -51,7 +51,8 @@ class Message(object):
         else:
             self.isValidMessage = False
             self.needsProcessing = False
-            self.invalidReason = 'invalid firmware provided:{}'.format(firmwareVersion)
+            self.invalidReason = 'Invalid firmware detected:{}. Only V2.2a.6 or V2.2a.8.8 are supported.'.format(
+                firmwareVersion)
 
         # check for logger parameters
         if logger is None:
@@ -150,9 +151,8 @@ class Message(object):
                 self.setMessageToInvalid('Unidentified firmware')
             else:
                 # need firmware version to process LRR
-                # TO DO: change to error
-                self.logger.warning(
-                    'cannot read {} message type - unsupported firmware version:{}'.format(self.messageType, self.firmwareVersion))
+                self.logger.error(
+                    'Cannot read {} message type - unsupported firmware version:{}. Only V2.2a.6 or V2.2a.8.8 versions are supported.'.format(self.messageType, self.firmwareVersion))
                 self.setMessageToInvalid('Unsupported firmware')
 
         elif self.messageString[0:4] == '!KPE':
@@ -449,7 +449,7 @@ class Message(object):
 
         **properties created:**
         serialNumber (string)
-        firmwareVersion (string) (can be used to call AlarmDecoerMessage)
+        firmwareVersion (string) (can be used to call AlarmDecoderMessage)
         capabilities (dictionary) - dictionary with a capability and True as the value
         """
         # return if not a VER message
@@ -643,38 +643,41 @@ class Message(object):
             self.messageDetails['LRR']['partition'] = int(messageItems[1])
             self.messageDetails['LRR']['eventType'] = messageItems[2]
 
-            # if parition == 0 then partiion is ALL
+            # if parition == 0 then partition is ALL
             if self.messageDetails['LRR']['partition'] == 0:
                 self.messageDetails['LRR']['isAllPartitions'] = True
 
             # determine valid event type and user vs. paritition event
+            # triggers are currently: first 19 lines
+            # added ALARM_RESTORE in 3.1.1 - not documented in AlarmDecoder protocol
             validLRREvents = {
+                'OPEN': {'type': 'user', 'desc': 'Indicates that the alarm is disarmed'},
+                'ARM_AWAY': {'type': 'user', 'desc': 'Indicates that the system was armed AWAY'},
+                'ARM_STAY': {'type': 'user', 'desc': 'Indicates that the system was armed STAY'},
                 'ACLOSS': {'type': 'zone', 'desc': 'Indicates that AC power was lost'},
                 'AC_RESTORE': {'type': 'zone', 'desc': 'Indicates that AC power was restored'},
+                'LOWBAT': {'type': 'zone', 'desc': 'Low battery indication'},
+                'LOWBAT_RESTORE': {'type': 'zone', 'desc': 'Indicates that the low battery has been restored'},
+                'RFLOWBAT': {'type': 'zone', 'desc': 'Low battery indication for the RF transmitter'},
+                'RFLOWBAT_RESTORE': {'type': 'zone', 'desc': 'Indicates that the low battery on the RF transmitter has been restored.'},
+                'TROUBLE': {'type': 'zone', 'desc': 'Indicates that a zone is reporting a tamper or failure'},
+                'TROUBLE_RESTORE': {'type': 'zone', 'desc': 'Indicates that the trouble event was restored'},
                 'ALARM_AUDIBLE': {'type': 'zone', 'desc': 'Indicates that an audible alarm is in progress'},
                 'ALARM_AUX': {'type': 'zone', 'desc': 'Indicates that an auxiliary alarm type was triggered'},
                 'ALARM_ENTRY': {'type': 'zone', 'desc': 'Indicates that there was an entry alarm'},
-                'ALARM_EXIT_ERROR': {'type': 'zone', 'desc': 'Indicates an error when a zone is not closed during arming'},
                 'ALARM_FIRE': {'type': 'zone', 'desc': 'Indicates that there is a fire'},
                 'ALARM_PANIC': {'type': 'zone', 'desc': 'Indicates that there is a panic'},
                 'ALARM_PERIMETER': {'type': 'zone', 'desc': 'Indicates that there was a perimeter alarm'},
                 'ALARM_SILENT': {'type': 'zone', 'desc': 'Indicates that there was a silent alarm'},
                 'ALARM_TRIPPED': {'type': 'zone', 'desc': 'Alarm Tripped'},
-                'ARM_AWAY': {'type': 'user', 'desc': 'Indicates that the system was armed AWAY'},
-                'ARM_STAY': {'type': 'user', 'desc': 'Indicates that the system was armed STAY'},
+                'ALARM_EXIT_ERROR': {'type': 'zone', 'desc': 'Indicates an error when a zone is not closed during arming'},
                 'BYPASS': {'type': 'zone', 'desc': 'Indicates that a zone has been bypassed'},
                 'BYPASS_RESTORE': {'type': 'zone', 'desc': 'Indicates that the bypassed zone was restored'},
                 'CANCEL': {'type': 'user', 'desc': 'Indicates that the alarm was canceled after second disarm'},
-                'LOWBAT': {'type': 'zone', 'desc': 'Low battery indication'},
-                'LOWBAT_RESTORE': {'type': 'zone', 'desc': 'Indicates that the low battery has been restored'},
-                'OPEN': {'type': 'user', 'desc': 'Indicates that the alarm is disarmed'},
-                'RFLOWBAT': {'type': 'zone', 'desc': 'Low battery indication for the RF transmitter'},
                 'TEST_CALL': {'type': 'zone', 'desc': 'Indicates a phone test when in testing mode'},
                 'TEST_RESTORE': {'type': 'zone', 'desc': 'Indicates that a zone was restored in testing mode'},
-                'TROUBLE': {'type': 'zone', 'desc': 'Indicates that a zone is reporting a tamper or failure'},
-                'TROUBLE_RESTORE': {'type': 'zone', 'desc': 'Indicates that the trouble event was restored'},
                 'RESTORE': {'type': 'zone', 'desc': 'Indicates that the alarm was restored'},
-                'RFLOWBAT_RESTORE': {'type': 'zone', 'desc': 'Indicates that the low battery on the RF transmitter has been restored.'}
+                'ALARM_RESTORE': {'type': 'zone', 'desc': 'Indicates that the alarm was restored'}
                 }
 
             # build list of zone vs. user types
@@ -741,12 +744,17 @@ class Message(object):
             self.messageDetails['LR2'] = {}
             self.messageDetails['LR2']['eventData'] = ''
             self.messageDetails['LR2']['partition'] = 0
+            self.messageDetails['LR2']['user'] = ''
+            self.messageDetails['LR2']['eventType'] = ''
+            self.messageDetails['LR2']['isUserEvent'] = False
+            self.messageDetails['LR2']['isZoneEvent'] = False
+            self.messageDetails['LR2']['isAllPartitions'] = False
+
             self.messageDetails['LR2']['cid_message'] = ''
             self.messageDetails['LR2']['report_code'] = ''
 
             self.messageDetails['LR2']['cid_event_qualifier'] = ''
             self.messageDetails['LR2']['cid_event_code'] = ''
-            self.messageDetails['LR2']['eventType'] = ''
 
             # strip first 5 chars from the message - !LRR:
             messageText = self.messageString[5:]
@@ -757,6 +765,10 @@ class Message(object):
             self.messageDetails['LR2']['partition'] = int(messageItems[1])
             self.messageDetails['LR2']['cid_message'] = messageItems[2]
             self.messageDetails['LR2']['report_code'] = messageItems[3]
+
+            # if parition == 0 then partition is ALL
+            if self.messageDetails['LR2']['partition'] == 0:
+                self.messageDetails['LR2']['isAllPartitions'] = True
 
             # additional parsing of CID string
             # check that it starts with CID_ chars 0-3
@@ -770,20 +782,33 @@ class Message(object):
                 self.logger.warning('LR2 message failed to parse - CID not found:{}'.format(self.messageDetails['LR2']))
                 return
 
+            # a 3 digit code ex: 570
             cid_code = self.messageDetails['LR2']['cid_event_code']
+            cid_event_qualifier = self.messageDetails['LR2']['cid_event_qualifier']
 
-            if cid_code in SAIC_EventCodes.kCODE.keys():
+            # check if code exists in SAIC_EventCodes file
+            if cid_code in SAIC_EventCodes.kCODE:
 
                 self.messageDetails['LR2']['isKnownCode'] = True
+
+                # event description from SIA DC-05-1999.09
                 self.messageDetails['LR2']['cid_event_string'] = SAIC_EventCodes.kCODE[cid_code][0]
 
+                # check if zone or user event
                 if SAIC_EventCodes.kCODE[cid_code][1] == 'user':
                     self.messageDetails['LR2']['userCode'] = int(self.messageDetails['LR2']['eventData'])
+                    self.messageDetails['LR2']['isUserEvent'] = True
+
                 elif SAIC_EventCodes.kCODE[cid_code][1] == 'zone':
                     self.messageDetails['LR2']['zoneNumber'] = int(self.messageDetails['LR2']['eventData'])
+                    self.messageDetails['LR2']['isZoneEvent'] = True
+
                 else:
-                    self.logger.warning('unable to find user or zone setting in SAIC message:{}'.format(
+                    self.logger.error('Unable to find user or zone setting in SAIC message file:{}'.format(
                         SAIC_EventCodes.kCODE[cid_code]))
+                    # return without processing messsage
+                    self.setMessageToInvalid('Unable to find user or zone setting')
+                    return
 
             else:
                 self.logger.warning('Unknown LR2 (v2.2a.8.8) CID code:{} message parsed:{}'.format(
@@ -791,6 +816,27 @@ class Message(object):
                 self.setMessageToInvalid('Code {} not found in SAIC List'.format(cid_code))
                 return
 
+            # map the code to a valid Event - the events were defined as old LRR message types
+            cid_code_to_event = {
+                '110': {'1': 'ALARM_FIRE'},
+                '120': {'1': 'ALARM_PANIC'},
+                '122': {'1': 'ALARM_SILENT'},
+                '123': {'1': 'ALARM_AUDIBLE'},
+                '131': {'1': 'ALARM_PERIMETER'},
+                '134': {'1': 'ALARM_ENTRY'},
+                '300': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},
+                '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},
+                '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},
+                '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'},
+                '441': {'1': 'ARM_STAY'},
+            }
+
+            # and set the event type property which matches Events.xml triggers
+            if cid_code in cid_code_to_event:
+                if cid_event_qualifier in cid_code_to_event[cid_code]:
+                    self.messageDetails['LR2']['eventType'] = cid_code_to_event[cid_code[cid_event_qualifier]]
+
+            # pass back to process the message
             self.needsProcessing = True
             self.logger.debug('LRR (v2.2a.8.8) LR2 message parsed:{}'.format(self.messageDetails['LR2']))
 
