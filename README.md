@@ -105,44 +105,44 @@ In addition to the ability to add Triggers for Indigo Device state changes, the 
 * Enabling of the respective reporting event on your alarm panel. For VISTA-15P and VISTA-20P refer to panel programming fields \*29 and \*59 through \*76 for the programming fields. Each of these fields is also listed below for each event.
 
 #### Panel Arming Trigger Events
-Event | Description | VISTA-15P and VISTA-20P Programming Fields |
------ | ----------- | --------- |
-Armed Stay | Detect when your panel is set to Armed Stay | \*66
-Armed Away | Detect when your panel is set to Armed Away | \*66
-Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be enabled
+Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
+----- | ----------- | --------- | -------- |
+Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)
+Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)
+Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be enabled | No
 
 #### System Status Trigger Events
-Event | Description | VISTA-15P and VISTA-20P Programming Fields |
------ | ----------- | --------- |
-AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62
-AC Power Restore | Indicates that AC power was restored | \*73
-Panel Battery Low | Alarm panel low battery indication | \*63
-Panel Battery Restore | Alarm panel low battery indication | \*74
-RF Battery Low | Low battery indication for the RF transmitter | \*67
-RF Battery Restore | Low battery indication for the RF transmitter restored | \*75
-Trouble| Indicates that a zone is reporting a tamper or failure |  \*60
-Trouble Restore | Indicates that the trouble event was restored | \*71
+Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
+----- | ----------- | --------- | --- |
+AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62 | No
+AC Power Restore | Indicates that AC power was restored | \*73 | No
+Panel Battery Low | Alarm panel low battery indication | \*63 | No
+Panel Battery Restore | Alarm panel low battery indication | \*74 | No
+RF Battery Low | Low battery indication for the RF transmitter | \*67 | No
+RF Battery Restore | Low battery indication for the RF transmitter restored | \*75 | No
+Trouble| Indicates that a zone is reporting a tamper or failure |  \*60 | No
+Trouble Restore | Indicates that the trouble event was restored | \*71 | No
 
 #### Alarm Trigger Events
-Event | Description | VISTA-15P and VISTA-20P Programming Fields |
------ | ----------- | --------- |
-Panic Alarm | Indicates that there is a panic | ***TBD***
-Fire Alarm | Indicates that there is a fire | ***TBD***
-Audible Alarm |Indicates that an audible alarm is in progress |***TBD***
-Silent Alarm | Indicates that there was a silent alarm | ***TBD***
-Entry Alarm | Indicates that there was an entry alarm |***TBD***
-Aux Alarm | Indicates that an auxiliary alarm type was triggered |***TBD***
-Perimeter Alarm | Indicates that there was a perimeter alarm |***TBD***
-Alarm Tripped: Countdown started | The alarm has been tripped and the countdown to Disarm has started | N/A - this event is detected from changes in the Keypad message
+Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
+----- | ----------- | --------- | ----- |
+Panic Alarm | Indicates that there is a panic | ***TBD*** | No
+Fire Alarm | Indicates that there is a fire | ***TBD*** | No
+Audible Alarm |Indicates that an audible alarm is in progress |***TBD*** | No
+Silent Alarm | Indicates that there was a silent alarm | ***TBD*** | No
+Entry Alarm | Indicates that there was an entry alarm |***TBD*** | No
+Aux Alarm | Indicates that an auxiliary alarm type was triggered |***TBD*** | No
+Perimeter Alarm | Indicates that there was a perimeter alarm |***TBD*** | No
+Alarm Tripped: Countdown started | The alarm has been tripped and the countdown to Disarm has started | N/A - this event is detected from changes in the Keypad message | Yes (3.2.0 and above)
 
 #### User Trigger Events
-While similar to Panel Arming Events, with User events you can detect when a specific user ID you specify has initiated any these events: Disarmed, Armed Stay, or Armed Away. Note that if you have Triggers enabled for both a Panel Arming event and a User event both triggers will execute. For example if a Panel Disarmed Trigger is defined **AND** a User Trigger is defined for when user number 07 disarms the panel then when user 07 disarms the panel the **BOTH** of these triggers will execute. 
+While similar to Panel Arming Events, with User events you can detect when a specific user ID you specify has initiated any these events: Disarmed, Armed Stay, or Armed Away. Note that if you have Triggers enabled for both a Panel Arming event and a User event both triggers will execute. For example if a Panel Disarmed Trigger is defined **AND** a User Trigger is defined for when user number 07 disarms the panel then when user 07 disarms the panel the **BOTH** of these triggers will execute.
 
-Event | Description | VISTA-15P and VISTA-20P Programming Fields |
------ | ----------- | --------- |
-Armed Stay | Detect when your panel is set to Armed Stay | \*66
-Armed Away | Detect when your panel is set to Armed Away | \*66
-Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be enabled
+Event | Description | VISTA-15P and VISTA-20P Programming Fields |Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
+----- | ----------- | --------- | ---- |
+Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)
+Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)
+Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be  | No
 
 
 ### Indigo Client UI
