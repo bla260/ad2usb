@@ -209,12 +209,12 @@ It is recommended that you Disable and then Enable the Plugin after making Confi
   - Basic Mode - The AlarmDecoder is capable of reading numerous message types. Refer to the [Protocol dcoumentation](https://www.alarmdecoder.com/wiki/index.php/Protocol) for details (note: the online documentation refers to the latest firmaware of the AlarmDecoder). Basic mode limits your device configuration to Zone Numbers and the Plugin will only process Keypad messages.
   - Advanced Mode - Advanced mode allows you to configure Relay, Expander, and Wireless devices (note: advanced mode is not needed if you have these devices so long as your keypad messages include the zone numbers for these devices).
 
-
-- **Log arm/disarm events:** Choose whether to log arm/disarm events. These events are logged with the log level of INFO and will only be visible in the logs if you log level setting are INFO or DEBUG.
 - **Clear all Zone devices on plugin restart:** When selected all devices are set to Clear on restart of the plugin **or** when enabling communication of a device. This is the recommended setting. When set, if Indigo and your alarm panel are reporting not in sync then you can clear the faults on your alarm panel for the zone in question and then disable and re-enable communications in the Indigo Client UI. You can also restart the plugin to clear all ad2usb devices.
 - **Number of Partitions:** Select the number of partitions for your alarm system. Refer to your alarm setup. The default of "1" is typical for most home installations.
 
-#### Log Configuration
+#### Logging Options
+- **Log Arm/Disarm events:** Choose whether to log arm/disarm events. These events are logged with the log level of INFO and will only be visible in the logs if you log level setting are INFO or DEBUG.
+- **Log Unknown LRR Messages:** This setting has been added to help identify all the different panel messages with the newer AlarmDecoder firmware v2.2a.8.8. It is turned on by default. It will log unknown Long Range Radio (LRR) reporting events to the Indigo Event log as WARNING messages. An LRR message is considered "unknown" if there is no existing Trigger Event is defined by this Plugin for that message.
 - **Indigo Event Log Level**: See Logging section.
 - **Plugin Log Level**: See Logging section.
 - **Log Panel Messages**: See Logging section.

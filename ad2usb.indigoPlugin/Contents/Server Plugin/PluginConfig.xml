@@ -93,11 +93,12 @@
 
 	<Field type="checkbox" id="logArmingEvents">
 		<Label>Log Arm/Disarm events:</Label>
-		<Description>(includes event, user number and partition)</Description>.
+		<Description>(includes event, user number and partition)</Description>
 	</Field>
 
 	<Field type="checkbox" id="logUnknownLRRMessages" defaultValue="true">
 		<Label>Log Unknown LRR Messages:</Label>
+		<Description>(logs these messages as WARNINGS)</Description>
 	</Field>
 
 	<Field id="indigoLoggingLevel" type="menu" defaultValue="INFO">

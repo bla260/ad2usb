@@ -757,6 +757,7 @@ class Message(object):
             self.messageDetails['LR2']['isUserEvent'] = False
             self.messageDetails['LR2']['isZoneEvent'] = False
             self.messageDetails['LR2']['isAllPartitions'] = False
+            self.messageDetails['LR2']['isMappedToEvent'] = False
 
             self.messageDetails['LR2']['cid_message'] = ''
             self.messageDetails['LR2']['report_code'] = ''
@@ -847,22 +848,22 @@ class Message(object):
             if cid_code in SAIC_EventCodes.cid_code_to_event:
                 if cid_event_qualifier in SAIC_EventCodes.cid_code_to_event[cid_code]:
                     self.messageDetails['LR2']['eventType'] = SAIC_EventCodes.cid_code_to_event[cid_code][cid_event_qualifier]
+
                     self.logger.debug("message:{},{} mapped to:{}".format(
                         cid_code, cid_event_qualifier, self.messageDetails['LR2']['eventType']))
+
+                    self.messageDetails['LR2']['isMappedToEvent'] = True
+
                 else:
                     # log that we don't have an event qualified mapping
                     self.logger.debug("LR2 message code found but event qualifier not mapped to event")
-                    if self.logUnknownLRRMessages:
-                        self.logger.info(
-                            "Unknown LRR Message Event Qualifier for known Code:{}".format(self.messageString))
 
             else:
                 # log that we don't have code a mapping
                 self.logger.debug("LR2 message code not mapped to event")
-                if self.logUnknownLRRMessages:
-                    self.logger.info("Unknown LRR Message Code:{}".format(self.messageString))
 
             # pass back to process the message
+            # even if not mapped we assume its valid so we can log it
             self.needsProcessing = True
             self.logger.debug('LRR (v2.2a.8.8) LR2 message parsed:{}'.format(self.messageDetails['LR2']))
 
@@ -1040,6 +1041,12 @@ class Message(object):
             return self.messageDetails[self.messageType]
         else:
             return None
+
+    def getMessageType(self):
+        """
+        Returns the type of message - typically 3 letters
+        """
+        return self.messageType
 
     def getMessageAttribute(self, attributeName=''):
         """

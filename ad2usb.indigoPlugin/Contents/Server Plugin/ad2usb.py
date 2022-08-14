@@ -1724,6 +1724,20 @@ class ad2usb(object):
         # eg. !LRR:002,1,OPEN
 
         try:
+            # look if new LRR message has a valid mapping first
+            if messageObject.getMessageType() == 'LR2':
+                if messageObject.getMessageAttribute('isMappedToEvent'):
+                    # do nothing and process in the next section
+                    pass
+
+                else:
+                    if self.plugin.logUnknownLRRMessages:
+                        self.logger.warning("Unknown LRR Message - please post this message in User Forum: {}".format(
+                            messageObject.messageString))
+
+                    # no need to process
+                    return
+
             # message parsed:{'eventData': '008', 'partition': 1, 'eventType': 'ACLOSS', 'eventDataAsInt': 8, 'isKnownLRR': True}
 
             # get some shorter variable names from the message object

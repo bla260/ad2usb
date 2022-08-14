@@ -8,7 +8,7 @@ v 3.2.0 Planned around August 19, 2022
 - Changes to the Configure Dialog
   - Renamed the section "Log Configuration" to "Logging Options".
   - Moved "Log Arm/Disarm events" option to the "Logging Options" section.
-  - Added new setting option: "Log Unknown LRR Messages." This setting has been added to help identify all the different panel messages with the newer AlarmDecoder firmware. It is turned on by default. It will log unknown Long Range Radio (LRR) reporting events to the Indigo Event log as INFO events. An LRR message is considered "unknown" if there is no existing Trigger Event defined for that message.
+  - Added new setting option: "Log Unknown LRR Messages." This setting has been added to help identify all the different panel messages with the newer AlarmDecoder firmware. It is turned on by default. It will log unknown Long Range Radio (LRR) reporting events to the Indigo Event log as WARNING messages. An LRR message is considered "unknown" if there is no existing Trigger Event is defined by this Plugin for that message.
 - Updated README provides a more detailed explanation of Trigger Events.
 
 v 3.1.0 August 6, 2022
