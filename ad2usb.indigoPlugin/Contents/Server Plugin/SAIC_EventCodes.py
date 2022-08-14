@@ -1,4 +1,8 @@
-# this is from APPENDIX C: EVENT CODES in SIA DC-05-1999.09
+# Two parts to this file:
+#
+# First part is a mapping from newer firmware 2.2a.8.8 LRR messages to older 2.2a.6
+#
+# Second part is from APPENDIX C: EVENT CODES in SIA DC-05-1999.09
 # fields are key=code, [ event, data type: zone or user ]
 #
 # 100 - ALARMS
@@ -8,28 +12,58 @@
 # 500 - BYPASSES/DISABLES
 # 600 - TEST/MISC
 #
-# Mapping to old LRR messages
-# ACLOSS - 1,301
-# AC_RESTORE - 3,301
-# LOWBAT - 1,302
-# LOWBAT_RESTORE - 3,302
-# RFLOWBAT - 1,384
-# RFLOWBAT_RESTORE - 3,384
-# TROUBLE - 1,300
-# TROUBLE_RESTORE - 3,300
-
-# ALARM_PANIC - 1,120
-# ALARM_FIRE - 1,110
-# ALARM_AUDIBLE - 1,123
-# ALARM_SILENT - 1,122
-# ALARM_ENTRY - 1,134
-# ALARM_AUX -
+######################################
+#
+# Mapping to old LRR messages / 19 Events
+# ? = just a guess for now
+#
+# OPEN - ?
+# ARM_AWAY - 3,408
+# ARM_STAY - 3,441
+#
+# ACLOSS - ? - 1,301
+# AC_RESTORE - ? - 3,301
+# LOWBAT - ? - 1,302
+# LOWBAT_RESTORE - ? - 3,302
+# RFLOWBAT - ? - 1,384
+# RFLOWBAT_RESTORE - ? - 3,384
+# TROUBLE - ? - 1,300
+# TROUBLE_RESTORE - ? - 3,300
+#
+# ALARM_PANIC - ? - 1,120
+# ALARM_FIRE - ? - 1,110
+# ALARM_AUDIBLE - ? _ 1,123
+# ALARM_SILENT - ? - 1,122
+# ALARM_ENTRY - ? - 1,134
+# ALARM_AUX - ?
 # ALARM_PERIMETER - 1,131
-# ALARM_TRIPPED -
+# ALARM_TRIPPED - N/A - this is a keypad change event
+#
+# No Events defined
+# BYPASS - 1,570 - enable bypass
 
-# OPEN
-# ARM_AWAY
-# ARM_STAY - 441
+# Mapping to old LRR messages and Events
+# map the code to a valid Event - the events were defined as old LRR message types
+# the current pluging only uses 19 events
+# OPEN (Disarm), ALARM_AUX - not sure what codes
+# ALARM_TRIPPED - N/A
+# 16 codes below
+#
+# '110': {'1': 'ALARM_FIRE'},
+# '120': {'1': 'ALARM_PANIC'},
+# '122': {'1': 'ALARM_SILENT'},
+# '123': {'1': 'ALARM_AUDIBLE'},
+# '131': {'1': 'ALARM_PERIMETER'},
+# '134': {'1': 'ALARM_ENTRY'},
+# '300': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},
+# '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},
+# '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},
+# '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'},
+#
+cid_code_to_event = {
+    '408': {'3': 'ARM_AWAY'},  # verified
+    '441': {'3': 'ARM_STAY'}  # verified
+}
 
 kCODE = {'100': ['Medical', 'zone'],
          '101': ['Personal Emergency', 'zone'],

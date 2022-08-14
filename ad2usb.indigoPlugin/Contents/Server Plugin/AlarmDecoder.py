@@ -782,7 +782,7 @@ class Message(object):
             if self.messageDetails['LR2']['partition'] == 0:
                 self.messageDetails['LR2']['isAllPartitions'] = True
 
-            progressMessage = 'Paritions checked'
+            progressMessage = 'Partitions checked'
 
             # additional parsing of CID string
             # check that it starts with CID_ chars 0-3
@@ -838,28 +838,29 @@ class Message(object):
                 self.setMessageToInvalid('Code {} not found in SAIC List'.format(cid_code))
                 return
 
-            # map the code to a valid Event - the events were defined as old LRR message types
-            cid_code_to_event = {
-                '110': {'1': 'ALARM_FIRE'},
-                '120': {'1': 'ALARM_PANIC'},
-                '122': {'1': 'ALARM_SILENT'},
-                '123': {'1': 'ALARM_AUDIBLE'},
-                '131': {'1': 'ALARM_PERIMETER'},
-                '134': {'1': 'ALARM_ENTRY'},
-                '300': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},
-                '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},
-                '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},
-                '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'},
-                '408': {'3': 'ARM_AWAY'},
-                '441': {'3': 'ARM_STAY'},
-            }
+            # if we made it here we have a valid and parsed LR2 message so log it
+            self.logger.debug("valid LR2 message parsed:{}".format(self.messageDetails['LR2']))
 
+            # map the code to a valid Event - the events were defined as old LRR message types
+            # see the SAIC_EventCodes file for mapping
             # and set the event type property which matches Events.xml triggers
-            if cid_code in cid_code_to_event:
-                if cid_event_qualifier in cid_code_to_event[cid_code]:
-                    self.messageDetails['LR2']['eventType'] = cid_code_to_event[cid_code][cid_event_qualifier]
+            if cid_code in SAIC_EventCodes.cid_code_to_event:
+                if cid_event_qualifier in SAIC_EventCodes.cid_code_to_event[cid_code]:
+                    self.messageDetails['LR2']['eventType'] = SAIC_EventCodes.cid_code_to_event[cid_code][cid_event_qualifier]
                     self.logger.debug("message:{},{} mapped to:{}".format(
                         cid_code, cid_event_qualifier, self.messageDetails['LR2']['eventType']))
+                else:
+                    # log that we don't have an event qualified mapping
+                    self.logger.debug("LR2 message code found but event qualifier not mapped to event")
+                    if self.logUnknownLRRMessages:
+                        self.logger.info(
+                            "Unknown LRR Message Event Qualifier for known Code:{}".format(self.messageString))
+
+            else:
+                # log that we don't have code a mapping
+                self.logger.debug("LR2 message code not mapped to event")
+                if self.logUnknownLRRMessages:
+                    self.logger.info("Unknown LRR Message Code:{}".format(self.messageString))
 
             # pass back to process the message
             self.needsProcessing = True

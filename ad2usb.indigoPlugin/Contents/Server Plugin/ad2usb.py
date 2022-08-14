@@ -1762,7 +1762,7 @@ class ad2usb(object):
             # log event
             if self.plugin.logArmingEvents:
                 if messageObject.getMessageAttribute('isUserEvent'):
-                    self.logger.info("Alarm partition {} set to {} by {}".format(partition, eventType, user))
+                    self.logger.info("Alarm partition:{} set to:{} by:{}".format(partition, eventType, user))
                 if messageObject.getMessageAttribute('isZoneEvent'):
                     self.logger.info("Alarm partition:{} zone:{} had event:{}".format(partition, zone, eventType))
 

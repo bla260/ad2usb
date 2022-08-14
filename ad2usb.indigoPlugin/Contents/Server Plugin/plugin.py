@@ -571,6 +571,7 @@ class Plugin(indigo.PluginBase):
             self.ad2usbIsAdvanced = valuesDict["isAdvanced"]
             self.logUnknownDevices = valuesDict["logUnknownDevices"]
             self.logArmingEvents = valuesDict["logArmingEvents"]
+            self.logUnknownLRRMessages = valuesDict["logUnknownLRRMessages"]
             self.clearAllOnRestart = valuesDict["restartClear"]
             self.numPartitions = int(valuesDict.get("panelPartitionCount", '1'))
 
@@ -1941,13 +1942,14 @@ class Plugin(indigo.PluginBase):
         self.ad2usbIsAdvanced = pluginPrefs.get("isAdvanced", False)
         self.logUnknownDevices = pluginPrefs.get("logUnknownDevices", False)
 
-        self.logArmingEvents = pluginPrefs.get("logArmingEvents", True)
         self.clearAllOnRestart = pluginPrefs.get("restartClear", True)
         self.numPartitions = int(pluginPrefs.get("panelPartitionCount", '1'))
 
         # TO DO: this is part of AlarmDecoder CONFIG - do we need it here ?
         self.ad2usbKeyPadAddress = pluginPrefs.get("ad2usbKeyPadAddress", '18')
 
+        self.logArmingEvents = pluginPrefs.get("logArmingEvents", True)
+        self.logUnknownLRRMessages = pluginPrefs.get("logUnknownLRRMessages", True)
         self.indigoLoggingLevel = pluginPrefs.get("indigoLoggingLevel", "INFO")  # 20 = INFO
         self.pluginLoggingLevel = pluginPrefs.get("pluginLoggingLevel", "INFO")  # 20 = INFO
         self.isPanelLoggingEnabled = pluginPrefs.get("isPanelLoggingEnabled", False)

@@ -1,7 +1,15 @@
 **IMPORTANT:** Version 3.0 and higher requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
-v 3.1.1 Planned August 18, 2022
-- AlarmDecoder Firmware version V2.2a.8.8 is now supported. Added processing for LRR messages with the newer AlarmDecoder firmware.
+v 3.2.0 Planned around August 19, 2022
+- AlarmDecoder Firmware version 2.2a.8.8 is now supported but with some caveats. Please read these release notes carefully before upgrading.
+  - Long Range Radio (LRR) message formats were changed from firmware version 2.2a.6 to the newer version 2.2a.8.8. The older firmware 2.2a.6 had 25 different LRR message types of which 18 are used by this plugin for Trigger Events (see the updated README). The new LRR message format in version 2.2a.8.8 firmware is now based on the SIA DC-05-1999.09 standard. This standard includes over 200 report codes/message types.
+  - At present only two (2) of the (18) Trigger Events in this plugin have been mapped to the newer LRR message formats. The updated README identifies which events are mapped and which are not.
+  - **IMPORTANT:** If you upgrade to the newer firmware version any Triggers you have for events not yet identified and mapped to the new codes will **NOT** be executed. A new logging option has been introduced with this version that will log these unknown messages to the Indigo Event Log Console to help facilitate the capture of unknown LRR messages that can be added to future releases of this plugin to eventually address all the possible LRR message types.
+- Changes to the Configure Dialog
+  - Renamed the section "Log Configuration" to "Logging Options".
+  - Moved "Log Arm/Disarm events" option to the "Logging Options" section.
+  - Added new setting option: "Log Unknown LRR Messages." This setting has been added to help identify all the different panel messages with the newer AlarmDecoder firmware. It is turned on by default. It will log unknown Long Range Radio (LRR) reporting events to the Indigo Event log as INFO events. An LRR message is considered "unknown" if there is no existing Trigger Event defined for that message.
+- Updated README provides a more detailed explanation of Trigger Events.
 
 v 3.1.0 August 6, 2022
 - Changes to Alarm Keypad (ad2usb Keypad) device.

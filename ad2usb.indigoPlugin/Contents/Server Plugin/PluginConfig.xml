@@ -68,11 +68,6 @@
 		<Label>Log unknown wireless devices</Label>
 	</Field>
 
-	<Field type="checkbox" id="logArmingEvents">
-		<Label>Log arm/disarm events:</Label>
-		<Description>(Includes event, user number and partition.)</Description>.
-	</Field>
-
 	<Field type="checkbox" id="restartClear">
 		<Label>Clear all Zone devices on plugin restart:</Label>
 	</Field>
@@ -93,7 +88,16 @@
 	<Field id="simpleSeparator3" type="separator" />
 
 	<Field id="sectionLabel4" type="label">
-		<Label>Log Configuration</Label>
+		<Label>Logging Options</Label>
+	</Field>
+
+	<Field type="checkbox" id="logArmingEvents">
+		<Label>Log Arm/Disarm events:</Label>
+		<Description>(includes event, user number and partition)</Description>.
+	</Field>
+
+	<Field type="checkbox" id="logUnknownLRRMessages" defaultValue="true">
+		<Label>Log Unknown LRR Messages:</Label>
 	</Field>
 
 	<Field id="indigoLoggingLevel" type="menu" defaultValue="INFO">
