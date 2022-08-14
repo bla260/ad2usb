@@ -1,8 +1,8 @@
-**IMPORTANT:** Version 3.0 and higher requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
+**IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
 v 3.2.0 Planned around August 19, 2022
 - AlarmDecoder Firmware version 2.2a.8.8 is now supported but with some caveats. Please read these release notes carefully before upgrading.
-  - Long Range Radio (LRR) message formats were changed from firmware version 2.2a.6 to the newer version 2.2a.8.8. The older firmware 2.2a.6 had 25 different LRR message types of which 18 are used by this plugin for Trigger Events (see the updated README). The new LRR message format in version 2.2a.8.8 firmware is now based on the SIA DC-05-1999.09 standard. This standard includes over 200 report codes/message types.
+  - Long Range Radio (LRR) message formats were changed from firmware version 2.2a.6 to the newer version 2.2a.8.8. The older firmware 2.2a.6 had 25 different LRR message types of which 18 are used by this plugin for Trigger Events (see the updated README section: Trigger Events). The new LRR message format in version 2.2a.8.8 firmware is now based on the SIA DC-05-1999.09 standard. This standard includes over 200 report codes/message types.
   - At present only two (2) of the (18) Trigger Events in this plugin have been mapped to the newer LRR message formats. The updated README identifies which events are mapped and which are not.
   - **IMPORTANT:** If you upgrade to the newer firmware version any Triggers you have for events not yet identified and mapped to the new codes will **NOT** be executed. A new logging option has been introduced with this version that will log these unknown messages to the Indigo Event Log Console to help facilitate the capture of unknown LRR messages that can be added to future releases of this plugin to eventually address all the possible LRR message types.
 - Changes to the Configure Dialog
