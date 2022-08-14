@@ -845,6 +845,7 @@ class Plugin(indigo.PluginBase):
         if typeId == 'userEvents':
             try:
                 # foo = str(int(valuesDict[u'userNumber']))  # Throw an error if not an int
+                # TO DO: fix this validation from 01-49
                 valuesDict[u'userNumber'] = str(valuesDict[u'userNumber'])
             except:
                 errorMsgDict[u'userNumber'] = 'User number must be an integer.'

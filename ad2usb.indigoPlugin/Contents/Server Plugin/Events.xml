@@ -115,7 +115,7 @@
             </Field>
 
             <Field id="userNumber" type="textfield">
-              <Label>User Number:</Label>
+              <Label>User Number (01-49):</Label>
             </Field>
 
             <Field id="indigoTrigger" type="list">

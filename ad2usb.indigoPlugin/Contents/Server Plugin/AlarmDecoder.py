@@ -84,29 +84,12 @@ class Message(object):
 
     def __processMessage(self):
 
+        # order these by most common messages for some efficiency
         if ((self.messageString[0:4] == '!KPM') or (self.messageString[0:1] == '[')):
             self.isValidMessage = True
             self.messageType = 'KPM'
             self.logger.debug('read {} message type - starting parsing'.format(self.messageType))
             self.parseMessage_KPM()
-
-        elif (self.messageString[0:2] == '!>') or (self.messageString[0:8] == '!Sending') or (self.messageString[0:8] == '!setting'):
-            self.isValidMessage = True
-            self.messageType = 'PROMPT'
-            self.needsProcessing = False
-            self.logger.debug('read {} message type - no parsing needed'.format(self.messageType))
-
-        elif self.messageString[0:4] == '!VER':
-            self.isValidMessage = True
-            self.messageType = 'VER'
-            self.logger.debug('read {} message type - starting parsing'.format(self.messageType))
-            self.parseMessage_VER()
-
-        elif self.messageString[0:4] == '!RFX':
-            self.isValidMessage = True
-            self.messageType = 'RFX'
-            self.logger.debug('read {} message type - starting parsing'.format(self.messageType))
-            self.parseMessage_RFX()
 
         elif self.messageString[0:7] == '!CONFIG':
             self.isValidMessage = True
@@ -114,11 +97,29 @@ class Message(object):
             self.logger.debug('read {} message type - starting parsing'.format(self.messageType))
             self.parseMessage_CONFIG()
 
+        elif self.messageString[0:4] == '!VER':
+            self.isValidMessage = True
+            self.messageType = 'VER'
+            self.logger.debug('read {} message type - starting parsing'.format(self.messageType))
+            self.parseMessage_VER()
+
+        elif (self.messageString[0:2] == '!>'):
+            self.isValidMessage = True
+            self.messageType = 'PROMPT'
+            self.needsProcessing = False
+            self.logger.debug('read {} message type - no parsing needed'.format(self.messageType))
+
         elif self.messageString[0:4] == '!AUI':
             self.isValidMessage = True
             self.messageType = 'AUI'
             self.logger.debug('read {} message type - starting parsing'.format(self.messageType))
             self.parseMessage_AUI()
+
+        elif self.messageString[0:4] == '!RFX':
+            self.isValidMessage = True
+            self.messageType = 'RFX'
+            self.logger.debug('read {} message type - starting parsing'.format(self.messageType))
+            self.parseMessage_RFX()
 
         elif self.messageString[0:4] == '!EXP':
             self.isValidMessage = True
@@ -154,6 +155,12 @@ class Message(object):
                 self.logger.error(
                     'Cannot read {} message type - unsupported firmware version:{}. Only V2.2a.6 or V2.2a.8.8 versions are supported.'.format(self.messageType, self.firmwareVersion))
                 self.setMessageToInvalid('Unsupported firmware')
+
+        elif (self.messageString[0:8] == '!Sending') or (self.messageString[0:8] == '!setting') or (self.messageString[0:8] == '!Reading') or (self.messageString[0:5] == '!UART'):
+            self.isValidMessage = True
+            self.messageType = 'PROMPT'
+            self.needsProcessing = False
+            self.logger.debug('read {} message type - no parsing needed'.format(self.messageType))
 
         elif self.messageString[0:4] == '!KPE':
             self.isValidMessage = True
@@ -741,6 +748,7 @@ class Message(object):
             return
 
         try:
+            progressMessage = 'started...'
             self.messageDetails['LR2'] = {}
             self.messageDetails['LR2']['eventData'] = ''
             self.messageDetails['LR2']['partition'] = 0
@@ -756,8 +764,11 @@ class Message(object):
             self.messageDetails['LR2']['cid_event_qualifier'] = ''
             self.messageDetails['LR2']['cid_event_code'] = ''
 
+            progressMessage = 'Values initialized'
+
             # strip first 5 chars from the message - !LRR:
             messageText = self.messageString[5:]
+            progressMessage = 'LRR stripped'
 
             # eventData, partition, cid_message, report_code = split on comma
             messageItems = re.split(',', messageText)
@@ -765,16 +776,19 @@ class Message(object):
             self.messageDetails['LR2']['partition'] = int(messageItems[1])
             self.messageDetails['LR2']['cid_message'] = messageItems[2]
             self.messageDetails['LR2']['report_code'] = messageItems[3]
+            self.logger.debug("message split:{}".format(self.messageDetails))
 
             # if parition == 0 then partition is ALL
             if self.messageDetails['LR2']['partition'] == 0:
                 self.messageDetails['LR2']['isAllPartitions'] = True
 
+            progressMessage = 'Paritions checked'
+
             # additional parsing of CID string
             # check that it starts with CID_ chars 0-3
             # CID event qualifier is char 4
             # CID event code is chars 5-7
-            if self.messageDetails['LR2']['cid_message'][0:5] == 'CID_':
+            if self.messageDetails['LR2']['cid_message'][0:4] == 'CID_':
                 self.messageDetails['LR2']['cid_event_qualifier'] = self.messageDetails['LR2']['cid_message'][4]
                 self.messageDetails['LR2']['cid_event_code'] = self.messageDetails['LR2']['cid_message'][5:8]
             else:
@@ -782,26 +796,34 @@ class Message(object):
                 self.logger.warning('LR2 message failed to parse - CID not found:{}'.format(self.messageDetails['LR2']))
                 return
 
+            progressMessage = 'CID portion parsed'
+
             # a 3 digit code ex: 570
             cid_code = self.messageDetails['LR2']['cid_event_code']
             cid_event_qualifier = self.messageDetails['LR2']['cid_event_qualifier']
+            self.logger.debug("SAIC code:{} and qualifier:{}".format(cid_code, cid_event_qualifier))
 
             # check if code exists in SAIC_EventCodes file
+            progressMessage = 'Checking code...'
             if cid_code in SAIC_EventCodes.kCODE:
 
+                self.logger.debug("found valid SAIC code:{}".format(cid_code))
                 self.messageDetails['LR2']['isKnownCode'] = True
 
                 # event description from SIA DC-05-1999.09
                 self.messageDetails['LR2']['cid_event_string'] = SAIC_EventCodes.kCODE[cid_code][0]
+                progressMessage = 'description found'
 
                 # check if zone or user event
                 if SAIC_EventCodes.kCODE[cid_code][1] == 'user':
                     self.messageDetails['LR2']['userCode'] = int(self.messageDetails['LR2']['eventData'])
                     self.messageDetails['LR2']['isUserEvent'] = True
+                    progressMessage = 'user event found'
 
                 elif SAIC_EventCodes.kCODE[cid_code][1] == 'zone':
                     self.messageDetails['LR2']['zoneNumber'] = int(self.messageDetails['LR2']['eventData'])
                     self.messageDetails['LR2']['isZoneEvent'] = True
+                    progressMessage = 'zone event found'
 
                 else:
                     self.logger.error('Unable to find user or zone setting in SAIC message file:{}'.format(
@@ -828,13 +850,16 @@ class Message(object):
                 '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},
                 '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},
                 '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'},
-                '441': {'1': 'ARM_STAY'},
+                '408': {'3': 'ARM_AWAY'},
+                '441': {'3': 'ARM_STAY'},
             }
 
             # and set the event type property which matches Events.xml triggers
             if cid_code in cid_code_to_event:
                 if cid_event_qualifier in cid_code_to_event[cid_code]:
-                    self.messageDetails['LR2']['eventType'] = cid_code_to_event[cid_code[cid_event_qualifier]]
+                    self.messageDetails['LR2']['eventType'] = cid_code_to_event[cid_code][cid_event_qualifier]
+                    self.logger.debug("message:{},{} mapped to:{}".format(
+                        cid_code, cid_event_qualifier, self.messageDetails['LR2']['eventType']))
 
             # pass back to process the message
             self.needsProcessing = True
@@ -843,7 +868,7 @@ class Message(object):
         except Exception as err:
             self.setMessageToInvalid('error parsing LR2 message')
             self.logger.warning(
-                'error processing LRR/LR2 (v2.2a.8.8) message:{} - error:{}'.format(self.messageString, str(err)))
+                'Error processing LRR/LR2 (v2.2a.8.8) after:{} - message:{} - error:{}'.format(progressMessage, self.messageString, str(err)))
 
     def parseMessage_AUI(self):
         """
