@@ -5,6 +5,7 @@
 # Originally developed Richard Perlman -- indigo AT perlman DOT com
 
 import logging  # needed for CONSTANTS
+from datetime import datetime
 import re
 import time
 import serial
@@ -120,7 +121,7 @@ class Plugin(indigo.PluginBase):
     def shutdown(self):
         self.logger.debug(u"Called")
 
-        self.ad2usb.stopComm()
+        self.ad2usb.stopAD2USBComm()
 
         self.logger.info("Plugin shutdown completed")
 
@@ -138,9 +139,11 @@ class Plugin(indigo.PluginBase):
             self.advancedBuildDevDict(dev, 'add', self.ad2usbKeyPadAddress)
 
         # migrate for version 1.8.0 state from old displayState to zoneState
+        # migrate for version 3.2.0 to add lastFaultTime
         if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'zoneGroup')
                 or (dev.deviceTypeId == 'alarmZoneVirtual')):
 
+            # migrate for version 1.8.0 state from old displayState to zoneState
             if dev.displayStateId == 'displayState':
                 # refresh from updated Devices.xml
                 self.logger.info(u"Upgrading states on device:{}".format(dev.name))
@@ -148,6 +151,11 @@ class Plugin(indigo.PluginBase):
                 dev.stateListOrDisplayStateIdChanged()
                 self.setDeviceState(dev, AD2USB_Constants.k_CLEAR)
                 self.logger.debug(u"revised device:{}".format(dev))
+
+            # migrate for version 3.2.0 to add lastFaultTime
+            localStates = dev.states
+            if 'lastFaultTime' not in localStates:
+                dev.stateListOrDisplayStateIdChanged()
 
         # migrate for version 3.1.0 state from old displayState to panelState
         if dev.deviceTypeId == 'ad2usbInterface':
@@ -265,7 +273,7 @@ class Plugin(indigo.PluginBase):
                     if not self.ad2usb.setSerialConnection(True):
                         # next try to start comms again with VER and CONFIG
                         self.logger.error('Unable to re-establish communications - resetting communications...')
-                        if not self.ad2usb.newStartComm():
+                        if not self.ad2usb.startAD2USBComm():
                             self.logger.error(
                                 'Unable to re-establish communications - check AlarmDecoder and Plugin Configure settings')
 
@@ -301,10 +309,10 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"Called")
         self.logger.debug('do nothing')
 
-        # TO DO: remove some of these log entry once startComm and stopComm has logging
+        # TO DO: remove some of these log entry once startComm and stopAD2USBComm has logging
         # self.logger.info(u"Stopping")
 
-        # self.ad2usb.stopComm()
+        # self.ad2usb.stopAD2USBComm()
         # self.sleep(5)
 
         # self.logger.info(u"Starting")
@@ -1588,6 +1596,13 @@ class Plugin(indigo.PluginBase):
 
                 forDevice.updateStateOnServer(key='onOffState', value=True)
 
+                # update the last Fault datetime
+                localState = forDevice.states
+                if 'lastFaultTime' in localState:
+                    now = datetime.now()
+                    timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
+                    forDevice.updateStateOnServer(key='lastFaultTime', value=timeStamp)
+
             elif newState == AD2USB_Constants.k_ERROR:
                 forDevice.setErrorStateOnServer('Error')
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.Error)
@@ -2075,19 +2090,24 @@ class Plugin(indigo.PluginBase):
                     if device.pluginProps['ad2usbZoneType'] == 'zoneTypeEXP':
                         self.logger.debug("looking for address:{}, channel:{} in:{}".format(
                             address, channel, device.pluginProps))
+
                         # just the match of the address and channel
                         # ad2usbZoneTypeEXP_Board, ad2usbZoneTypeEXP_Device
                         if (int(device.pluginProps['ad2usbZoneTypeEXP_Board']) == int(address)) and (int(device.pluginProps['ad2usbZoneTypeEXP_Device']) == int(channel)):
+
                             # only if enabled of the includeDisabled flag is True
                             if device.enabled or (includeDisabled is True):
                                 return device
 
-            # if we get here device was not found
+            # if we are here the device was not found or was disabled
             if includeDisabled:
-                self.logger.warning("Indigo EXP Device for address:{}, channel:{} not found".format(address, channel))
+                self.logger.warning(
+                    "Indigo EXP Device for address:{}, channel:{} was not found".format(address, channel))
+                return None
             else:
                 self.logger.warning(
                     "Indigo EXP Device for address:{}, channel:{} not found or disabled.".format(address, channel))
+                return None
 
         except Exception as err:
             self.logger.error("Error retrieving Indigo EXP Device for address:{}, channel:{} msg:{}".format(

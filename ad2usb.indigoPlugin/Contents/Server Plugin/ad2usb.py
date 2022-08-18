@@ -70,11 +70,11 @@ class ad2usb(object):
         # set the firmware to unknown and the serial connection to None
         self.firmwareVersion = ''
         self.serialConnection = None
-        self.isCommStarted = False  # this property is set in newStartComm
+        self.isCommStarted = False  # this property is set in startAD2USBComm
 
         # this code executes before runConcurrentThread so no open reading is happening
         # send a VER and CONFIG message and read the output
-        if self.newStartComm():
+        if self.startAD2USBComm():
             self.logger.info('AlarmDecoder initialized and communication started...')
         else:
             self.logger.critical('AlarmDecoder initilization communiation error...')
@@ -124,6 +124,16 @@ class ad2usb(object):
                             indigo.trigger.execute(int(self.plugin.triggerDict[user][partition]['tid']))
                 except:
                     pass
+
+        # new logic - we have event, user or zone, and parition from panel
+        # if event exists
+        #   if partition matches
+        #       if user is not defined or is any user (000)
+        #           if zone is not defined or zone matches
+        #               execute
+        #       else
+        #           if user matches
+        #               execute
 
         self.logger.debug(u"completed")
 
@@ -982,7 +992,7 @@ class ad2usb(object):
 
         self.logger.debug(u"completed")
 
-    def newStartComm(self):
+    def startAD2USBComm(self):
         """
         Initiates serial port open call and sends C and V commands and read CONFIG and VER.
         The reading of the output of these two messages will happen in runConcurrentThread.
@@ -1043,7 +1053,7 @@ class ad2usb(object):
             return False
 
     ########################################
-    def stopComm(self):
+    def stopAD2USBComm(self):
         """
         This method is called by the plugin shutdown. It will close serial connection and
         set the 'isCommStarted' property to False
@@ -1732,7 +1742,7 @@ class ad2usb(object):
 
                 else:
                     if self.plugin.logUnknownLRRMessages:
-                        self.logger.warning("Unknown LRR Message - please post this message in User Forum: {}".format(
+                        self.logger.warning("Unknown LRR Message - please post this message in User Forum \"Unknown LRR Messages\": {}".format(
                             messageObject.messageString))
 
                     # no need to process

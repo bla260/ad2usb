@@ -17,7 +17,7 @@
 # Mapping to old LRR messages / 19 Events
 # ? = just a guess for now
 #
-# OPEN - ?
+# OPEN - 1,441 and 1,408
 # ARM_AWAY - 3,408
 # ARM_STAY - 3,441
 #
@@ -45,24 +45,25 @@
 # Mapping to old LRR messages and Events
 # map the code to a valid Event - the events were defined as old LRR message types
 # the current pluging only uses 19 events
-# OPEN (Disarm), ALARM_AUX - not sure what codes
+# ALARM_AUX - not sure what codes
 # ALARM_TRIPPED - N/A
-# 16 codes below
+# 16 codes below - these are just guesses
 #
-# '110': {'1': 'ALARM_FIRE'},
-# '120': {'1': 'ALARM_PANIC'},
-# '122': {'1': 'ALARM_SILENT'},
-# '123': {'1': 'ALARM_AUDIBLE'},
-# '131': {'1': 'ALARM_PERIMETER'},
-# '134': {'1': 'ALARM_ENTRY'},
+# '110': {'3': 'ALARM_FIRE'},
+# '120': {'3': 'ALARM_PANIC'},
+# '122': {'3': 'ALARM_SILENT'},
+# '123': {'3': 'ALARM_AUDIBLE'},
+# '131': {'3': 'ALARM_PERIMETER'},
+# '134': {'3': 'ALARM_ENTRY'},
 # '300': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},
 # '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},
 # '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},
 # '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'},
 #
 cid_code_to_event = {
+    '401': {'1': 'OPEN'},  # verified DISARM Away
     '408': {'3': 'ARM_AWAY'},  # verified
-    '441': {'3': 'ARM_STAY'}  # verified
+    '441': {'3': 'ARM_STAY', '1': 'OPEN'}  # verified
 }
 
 kCODE = {'100': ['Medical', 'zone'],

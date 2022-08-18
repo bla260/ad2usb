@@ -162,6 +162,11 @@
 				<TriggerLabel>Bypass state</TriggerLabel>
 				<ControlPageLabel>Bypass state</ControlPageLabel>
 			</State>
+			<State id="lastFaultTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Fault</TriggerLabel>
+				<ControlPageLabel>Last Fault</ControlPageLabel>
+			</State>
 		</States>
 	</Device>
 
@@ -203,6 +208,13 @@
 				<TriggerLabel>Zone Group On/Off state</TriggerLabel>
 				<ControlPageLabel>Zone Group On/Off state</ControlPageLabel>
 			</State>
+
+			<State id="lastFaultTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Fault</TriggerLabel>
+				<ControlPageLabel>Last Fault</ControlPageLabel>
+			</State>
+
 		</States>
 	</Device>
 
@@ -321,6 +333,11 @@
 				<ValueType boolType="onOff">Boolean</ValueType>
 				<TriggerLabel>Bypass state</TriggerLabel>
 				<ControlPageLabel>Bypass state</ControlPageLabel>
+			</State>
+			<State id="lastFaultTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Fault</TriggerLabel>
+				<ControlPageLabel>Last Fault</ControlPageLabel>
 			</State>
 		</States>
 	</Device>

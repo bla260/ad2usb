@@ -1,13 +1,51 @@
-# ad2usb Indigo Plugin
+# ad2usb Indigo Plugin Documentation
+
+##### Version 3.2.0
+
+# Table of Contents
+1. [About](#about)
+2. [Required Hardware](#Required-Hardware)
+3. [Features](#Features)
+4. [Devices](#Devices)
+  1. [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions)
+  2. [Bypass Rules for Indigo Devices](#Bypass-Rules-for-Indigo-Devices)
+5. [Actions](#Actions)
+  1. [Keypad Actions](#keypad-actions)
+  2. [Alarm Zone Actions](#Alarm-Zone-Actions)
+6. [Trigger Events](#trigger-events)
+  1. [Panel Arming Trigger Events](#panel-arming-trigger-events)
+  2. [System Status Trigger Events](#system-status-trigger-events)
+  3. [Alarm Trigger Events](#alarm-trigger-events)
+  4. [User Trigger Events](#user-trigger-events)
+7. [Indigo Client UI](#indigo-client-ui)
+  1. [General](#general)
+  2. [Device States](#device-states)
+    1. [Clear and Fault](#clear-and-fault)
+    2. [Bypass](#bypass)
+8. [Configuration and Setup](#configuration-and-setup)
+  1. [General](#general)
+    1. [Alarm Panel](#alarm-panel)
+    2. [AlarmDecoder](#alarmdecoder)
+    3. [Indigo Plugins](#indigo-plugins)
+  2. [Quick Start - First Install](#quick-start---first-install)
+  3. [Quick Start - Upgrading the ad2usb plugin](#quick-start---upgrading-the-ad2usb-plugin)
+  4. [Plugin Configuration Details](#plugin-configuration-details)
+    1. [AD2USB connection settings](#ad2usb-connection-settings)
+    2. [Operating parameters](#operating-parameters)
+    3. [Logging Options](#logging-options)
+  5. [AlarmDecoder Configuration](#alarmdecoder-configuration)
+    1. [AlarmDecoder Configuration Dialog Box Fields](#alarmdecoder-configuration-dialog-box-fields)
+  6. [Logging](#logging)
+4. [Helpful Troubleshooting Techniques](#helpful-troubleshooting-techniques)
+  1. [Plugin and AlarmDecoder Version and Settings](#plugin-and-alarmdecoder-version-and-settings)
+  2. [Enabling the log files](#enabling-the-log-files)
+  3. [Getting Help and Reporting Bugs](#getting-help-and-reporting-bugs)
 
 ## About
 **ad2usb** is a plugin interface to the NuTech AD2* alarm system interface for Honeywell's Ademco Vista line of alarm panels. It allows you to create Indigo devices for each of your alarm panel's sensors (e.g. door sensor, motion sensor, window sensor, ...) which can then take advantage of many of Indigo's features available for devices. It also allows you to read and send alarm messages by emulating an alarm panel keypad. There are addition features described in this document.
 
-## About "*TBP*" in this README
-There are still several items marked "To Be Published" (*TBP*) in this document. Each subsequent release will attempt to replace these *TBP* sections with more complete documentation for the plugin.
-
 ## Required Hardware
-This plugin requires both a [NuTech AlarmDecoder](https://www.alarmdecoder.com) (AD2) alarm interface and an alarm panel. Both the NuTech AD2USB and AD2Pi are supported (see Note 1). This interface supports a broad range of alarm panels manufactured by **Honeywell** and sold under the **ADEMCO VISTA** brand name and similar panels sold by First Alert. The list of supported panels includes (see Note 2):
+This plugin requires both a [NuTech AlarmDecoder](https://www.alarmdecoder.com) (AD2) alarm interface and an alarm panel. Both the NuTech AD2USB and AD2Pi are supported (see Note 1 for firmware specifics). This interface supports a broad range of alarm panels manufactured by **Honeywell** and sold under the **ADEMCO VISTA** brand name and similar panels sold by First Alert. The list of supported panels includes (see Note 2):
 
 - VISTA-4110XM
 - VISTA-15P
@@ -24,15 +62,16 @@ This plugin requires both a [NuTech AlarmDecoder](https://www.alarmdecoder.com) 
 
 A more complete list is available from NuTech on their website. While the NuTech AlarmDecoder AD2* interface also supports alarm panels sold by DSC, this plugin is not tested with those panels. Users with DSC panels should look at the DSC Alarm plugin.
 
-**Important Notes** :
-1. Requires AlarmDecoder firmware version 2.2a.8.8 or 2.2a.6. The Plugin may not start or run with any other version.
+**Requirement Notes** :
+1. Requires AlarmDecoder firmware version 2.2a.8.8 (requires Plugin version 3.2.0 and above) or 2.2a.6 (works with any Plugin version). For firmware version 2.2a.8.8 there are some temporary limitations on what Trigger Events can be processed by the Plugin as of Plugin version 3.2.0 (see the Trigger Events section of this README). The Plugin may not start or run with any other firmware version besides the two listed above.
 2. While the panels listed should work, the developer testing for each release is limited to only on a VISTA-20P. Leverage the [Indigo ad2usb User Forum](https://forums.indigodomo.com/viewtopic.php?f=22&t=7584) to ask other users about their experience with your specific alarm panel model. Since I can test any panel message, I may ask in the Support Forum for parts of your panel message log to test.
+3. Works only in the plugin's basic mode
 
 ## Features
 
-This plugin adds new Indigo options for **Devices**, **Actions**, and **Trigger Events**. See the [Indigo Overview](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:overview) for more information about Devices, Actions, and Triggers.
+This plugin adds new Indigo options for **Devices**, **Actions**, and **Trigger Events**. See the [Indigo Overview](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:overview) for more information about Devices, Actions, and Triggers. Devices will represent all of your Alarm Zones and Keypads. Actions allow you to interact with your Alarm Keypad. Triggers can be defined for various alarm panel events.
 
-### Devices
+## Devices
 
 The ad2usb plugin adds the following device options to Indigo.
 
@@ -74,11 +113,11 @@ Not Bypassed | Clear | Clear | Green Icon | Clear | Green Icon | Both the Alarm 
 Not Bypassed | Fault | Fault | Red Icon | Fault | Red Icon | When an Alarm Zone device change to Fault, the Keypad Device will also change to Fault for the Keypad Device that is on the same partition as the Alarm Zone device. If you have multiple partitions, Keypad Devices with a partition number different from the Alarm Zone will not change state based on Alarm Zone devices on other partitions.
 
 
-### Actions
+## Actions
 
 The ad2usb plugin adds several Actions for **ad2usb Keypad** and **Alarm Zone** devices.
 
-#### Keypad Actions
+### Keypad Actions
 You can use Indigo Actions to Arm & Disarm your panel and invoke panel events. Four types of Arm Actions are available. Refer to your Alarm Users Guide for description of each. You can also writes an arbitrary message to the panel via the keypad. By default panel messages are being sent ***from*** the keypad number and partition of the NuTech AlarmDecoder (e.g. Partition 1, Keypad address 18).  **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring the Write to Panel action.
 
 Keypad Actions | Description (refer to you Alarm Panel Users Guide)
@@ -89,7 +128,7 @@ Arm-Away | Performs the keypad function AWAY. Arms the entire burglary system, p
 Arm-Max | Performs the keypad function MAX. Same as AWAY, except entry delay is off.
 Write To Panel | Writes an arbitrary message to the panel via the keypad. By default panel messages are being sent ***from*** the keypad number and partition of the NuTech AlarmDecoder (e.g. Partition 1, Keypad address 18). You can prefix the message with 'K' to send the message from a specific keypad. See the [AlarmDecoder Protocol page](https://www.alarmdecoder.com/wiki/index.php/Protocol#Addressed_Message) for more details. **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring this action.
 
-#### Alarm Zone Actions
+### Alarm Zone Actions
 Alarm Zone actions are less likely to be used but available since most Alarm Zone devices simply change state based on data being sent from your alarm panel.
 
 Alarm Zone Actions | Description
@@ -97,25 +136,25 @@ Alarm Zone Actions | Description
 Force Alarm Zone state change | This Action can be called to force an Alarm Zone's state in Indigo to either Clear or Fault. The Indigo device state is changed but no messages are sent to the AlarmDecoder. It is provided for any special use cases that are needed; but in general is not needed for normal operation.
 Change a Virtual Zone's state | Zone Expander Emulation allows the AlarmDecoder to act in place of a physical expander board and make use of virtual zones with your panel. After enabling it on both the panel and the AlarmDecoder you can begin opening and closing zones, which will be relayed back to the panel. This Action will send `Clear (Closed)` or `Faulted (Open)` to your alarm panel for defined zone. [See the AlarmDecoder Protocol Documentation for more details](https://www.alarmdecoder.com/wiki/index.php/Protocol#Zone_Emulation)
 
-### Trigger Events
+## Trigger Events
 
 In addition to the ability to add Triggers for Indigo Device state changes, the ad2usb plugin can detect various alarm panel events that you can create Indigo triggers for. All of the Events listed below, except `Alarm Tripped: Countdown started`, require all of the following:
 * Either a Long Range Radio or emulation of LRR via the AlarmDecoder
-* Enabling of Long Range Radio (LRR) messages on your alarm panel
-* Enabling of the respective reporting event on your alarm panel. For VISTA-15P and VISTA-20P refer to panel programming fields \*29 and \*59 through \*76 for the programming fields. Each of these fields is also listed below for each event.
+* Enabling of Long Range Radio (LRR) messages on your alarm panel (panel programming field \*29)
+* Enabling of the respective reporting event on your alarm panel. For VISTA-15P and VISTA-20P refer to panel programming fields \*59 through \*76 for the programming fields. Each of these fields is also listed below for each event.
 
-#### Panel Arming Trigger Events
+### Panel Arming Trigger Events
 Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
 ----- | ----------- | --------- | -------- |
 Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)
 Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)
-Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be enabled | No
+Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be enabled | Yes (3.2.0 and above)
 
-#### System Status Trigger Events
+### System Status Trigger Events
 Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
 ----- | ----------- | --------- | --- |
-AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62 | No
-AC Power Restore | Indicates that AC power was restored | \*73 | No
+AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62 |  No
+AC Power Restore | Indicates that AC power was restored | \*73 |  No
 Panel Battery Low | Alarm panel low battery indication | \*63 | No
 Panel Battery Restore | Alarm panel low battery indication | \*74 | No
 RF Battery Low | Low battery indication for the RF transmitter | \*67 | No
@@ -123,45 +162,45 @@ RF Battery Restore | Low battery indication for the RF transmitter restored | \*
 Trouble| Indicates that a zone is reporting a tamper or failure |  \*60 | No
 Trouble Restore | Indicates that the trouble event was restored | \*71 | No
 
-#### Alarm Trigger Events
+### Alarm Trigger Events
 Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
 ----- | ----------- | --------- | ----- |
-Panic Alarm | Indicates that there is a panic | ***TBD*** | No
-Fire Alarm | Indicates that there is a fire | ***TBD*** | No
-Audible Alarm |Indicates that an audible alarm is in progress |***TBD*** | No
-Silent Alarm | Indicates that there was a silent alarm | ***TBD*** | No
-Entry Alarm | Indicates that there was an entry alarm |***TBD*** | No
-Aux Alarm | Indicates that an auxiliary alarm type was triggered |***TBD*** | No
-Perimeter Alarm | Indicates that there was a perimeter alarm |***TBD*** | No
+Panic Alarm | Indicates that there is a panic | ***TBD or N/A*** | No
+Fire Alarm | Indicates that there is a fire | ***TBD or N/A***  | No
+Audible Alarm |Indicates that an audible alarm is in progress |***TBD or N/A***  | No
+Silent Alarm | Indicates that there was a silent alarm | ***TBD or N/A***  | No
+Entry Alarm | Indicates that there was an entry alarm |***TBD or N/A***  | No
+Aux Alarm | Indicates that an auxiliary alarm type was triggered |***TBD or N/A***  | No
+Perimeter Alarm | Indicates that there was a perimeter alarm |***TBD or N/A***  | No
 Alarm Tripped: Countdown started | The alarm has been tripped and the countdown to Disarm has started | N/A - this event is detected from changes in the Keypad message | Yes (3.2.0 and above)
 
-#### User Trigger Events
+### User Trigger Events
 While similar to Panel Arming Events, with User events you can detect when a specific user ID you specify has initiated any these events: Disarmed, Armed Stay, or Armed Away. Note that if you have Triggers enabled for both a Panel Arming event and a User event both triggers will execute. For example if a Panel Disarmed Trigger is defined **AND** a User Trigger is defined for when user number 07 disarms the panel then when user 07 disarms the panel the **BOTH** of these triggers will execute.
 
 Event | Description | VISTA-15P and VISTA-20P Programming Fields |Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
 ----- | ----------- | --------- | ---- |
 Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)
 Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)
-Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be  | No
+Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be  | Yes (3.2.0 and above)
 
 
-### Indigo Client UI
-#### General
+## Indigo Client UI
+### General
 After you configure the plugin and add your alarm devices to Indigo, the Indigo Client UI will show alarm panel device zone states than alarm panel device address (i.e. the alarm zone number).
-#### Device States
-##### Clear and Fault
+### Device States
+#### Clear and Fault
 The Indigo Client UI will show the Clear or Fault state of the zone. The green circle icon represents Clear and the red circle icon represents Fault.
-##### Bypass
+#### Bypass
 When an Alarm Zone is set to Bypass = On it will display the generic Indigo "Sensor Off" icon (grey circle) and the text "Bypass" in the Indigo Client UI. Bypassed zones do not Fault on the panel and thus will not change state even if the sensor is tripped.
 
-## Configuration and Setup
+# Configuration and Setup
 
-### General
+## General
 
-#### Alarm Panel
+### Alarm Panel
 You need to be familiar with how to program your Alarm panel to add a new keypad address. Refer to your Alarm panel programming guide on how to add a keypad device.
 
-#### AlarmDecoder
+### AlarmDecoder
 You should familiarize yourself with the setup and configuration of your AlarmDecoder. See [NuTech's AlarmDecoder website](https://www.alarmdecoder.com/index.php) for details on how to install and configure your AlarmDecoder. This plugin can manage certain configuration parameters of your AlarmDecoder. Use the **AlarmDecoder Configuration** item from the Plugin's pull-down menu to view and change these settings. Only those AlarmDecoder configuration settings controlled by this plugin will be changed. Other AlarmDecoder configuration settings not managed by this plugin will not be changed. If you will be changing any AlarmDecoder configuration options not managed by this plugin (MASK or CONFIGBITS), it is recommended that you stop the plugin first and restart it after you have made your changes.
 
 When using the **AlarmDecoder Configuration** menu, you should first use the "Read Config" button to read the AlarmDecoder's current settings. This button will log the current setting to the Indigo event log and update the **AlarmDecoder Configuration** dialog to match the current AlarmDecoder settings. Configuration settings managed by this plugin should be changed through the Plugin. The AlarmDecoder configuration settings managed by this plugin are below:
@@ -171,10 +210,10 @@ When using the **AlarmDecoder Configuration** menu, you should first use the "Re
 - LRR - Emulation of Long Range Radio expander
 - DEDUPLICATE - If enabled, removes duplicate alphanumeric keypad messages
 
-#### Indigo Plugins
+### Indigo Plugins
 You should be familiar with installing and configuring Indigo plugins.See Indigo's [Managing Plugins](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:getting_started#managing_plugins) documentation for details on installing and upgrading plugins.
 
-### Quick Start - First Install
+## Quick Start - First Install
 1. Program your alarm panel to support the [NuTech AlarmDecoder](https://www.alarmdecoder.com/wiki/index.php/Panel_Configuration) as a new keypad device (default from NuTech is "18").
 2. Install and configure your NuTech AlarmDecoder. Use a terminal program or other supported method to configure the AlarmDecoder per [NuTech's instructions](https://www.alarmdecoder.com/index.php). For network devices make sure you know the IP address and port (default is 10000) to communicate with the AlarmDecoder. If you're not going to use the default keypad address of "18" change it now. Advanced users should make any additional configuration changes to your AlarmDecoder. In most cases the default settings of the AlarmDecoder are fine and no additional configuration is needed. After this initial setup, many AlarmDecoder settings can be managed from within the plugin. See the [AlarmDecoder Configuration](#alarmdecoder-configuration) section of this document.
 3. Download this plugin from the Indigo Plugin Store.
@@ -187,7 +226,7 @@ You should be familiar with installing and configuring Indigo plugins.See Indigo
 8. Add Zone Devices.
 
 
-### Quick Start - Upgrading the ad2usb plugin
+## Quick Start - Upgrading the ad2usb plugin
 1. Refer to Indigo's [Plugins Menu](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:getting_started#plugin_menus_in_indigo) documentation.
 2. Go to Indigo's Plugins -> Manage Plugins menu
 3. Look to see if ad2usb plugin has an upgrade and if it is compatible with your version of Indigo. If it has an upgrade:
@@ -197,14 +236,14 @@ You should be familiar with installing and configuring Indigo plugins.See Indigo
   - Verify the new version of the plugin is running via the Plugins -> Manage Plugins menu. The running version number is shown after the plugin name.
 
 
-### Plugin Configuration Details
+## Plugin Configuration Details
 It is recommended that you Disable and then Enable the Plugin after making Configure changes. A future release should resolve this issue.
 
-#### AD2USB connection settings
+### AD2USB connection settings
 - Select Local USB Port (for the AD2USB) or IP Network (for the AD2PI Network Appliance).
 - For IP Network enter your IP address and port.
 
-#### Operating parameters
+### Operating parameters
 - **Operate in advanced mode:** Most users will be fine with Basic Mode (the default). If Advanced Mode is needed enable it here.
   - Basic Mode - The AlarmDecoder is capable of reading numerous message types. Refer to the [Protocol dcoumentation](https://www.alarmdecoder.com/wiki/index.php/Protocol) for details (note: the online documentation refers to the latest firmaware of the AlarmDecoder). Basic mode limits your device configuration to Zone Numbers and the Plugin will only process Keypad messages.
   - Advanced Mode - Advanced mode allows you to configure Relay, Expander, and Wireless devices (note: advanced mode is not needed if you have these devices so long as your keypad messages include the zone numbers for these devices).
@@ -212,19 +251,19 @@ It is recommended that you Disable and then Enable the Plugin after making Confi
 - **Clear all Zone devices on plugin restart:** When selected all devices are set to Clear on restart of the plugin **or** when enabling communication of a device. This is the recommended setting. When set, if Indigo and your alarm panel are reporting not in sync then you can clear the faults on your alarm panel for the zone in question and then disable and re-enable communications in the Indigo Client UI. You can also restart the plugin to clear all ad2usb devices.
 - **Number of Partitions:** Select the number of partitions for your alarm system. Refer to your alarm setup. The default of "1" is typical for most home installations.
 
-#### Logging Options
+### Logging Options
 - **Log Arm/Disarm events:** Choose whether to log arm/disarm events. These events are logged with the log level of INFO and will only be visible in the logs if you log level setting are INFO or DEBUG.
 - **Log Unknown LRR Messages:** This setting has been added to help identify all the different panel messages with the newer AlarmDecoder firmware v2.2a.8.8. It is turned on by default. It will log unknown Long Range Radio (LRR) reporting events to the Indigo Event log as WARNING messages. An LRR message is considered "unknown" if there is no existing Trigger Event is defined by this Plugin for that message.
 - **Indigo Event Log Level**: See Logging section.
 - **Plugin Log Level**: See Logging section.
 - **Log Panel Messages**: See Logging section.
 
-### AlarmDecoder Configuration
+## AlarmDecoder Configuration
 Once communication settings have been made in the Plugin Configure dialog, you can make changes to your AlarmDecoder from within the plugin. Select "AlarmDecoder Configuration" under the Plugin menu. AlarmDecoder settings are ***not*** stored in the Plugin for versions 3.1.0 and greater, however, each time a "CONFIG" message is read from the AlarmDecoder the current settings will be stored in memory while the plugin is running. These ***last read*** settings will be shown in the AlarmDecoder Configuration dialog window when it opens. Because AlarmDecoder settings can be made outside of the plugin the AlarmDecoder Configuration dialog is divided into two (2) sections or steps. The first section/step, "Step 1 - Retrieve the current AlarmDecoder configuration from the device", allows you to attempt to read the current configuration from the AlarmDecoder by pressing the button titled "Read Config". Once the configuration is read the dialog will be updated with a status message and the settings in Step 2 will be updated with the current values from the AlarmDecoder. You should always press the button in this first step before making changes to your AlarmDecoder configuration.
 
 The section titled, "Step 2 - Update the AlarmDecoder configuration" allows you to change some of the AlarmDecoder CONFIG settings [(see NuTech documentation)](https://www.alarmdecoder.com/wiki/index.php/Protocol). If the "Update" button is pressed, these configuration parameters will be written to the AlarmDecoder and overwrite the respective settings you have on your AlarmDecoder. AlarmDecoder settings ADDRESS, EXP, REL, LRR, and DEDUPLICATE can be changed.
 
-#### AlarmDecoder Configuration Dialog Box Fields
+### AlarmDecoder Configuration Dialog Box Fields
 
 - Step 1 - Retrieve the current AlarmDecoder configuration from the device:
   - **Read Config (button):** Pressing this button will attempt to read the current configuration parameters from the AlarmDecoder. It will replace the current settings in the AlarmDecoder Configure Dialog with the settings read from the AlarmDecoder.
@@ -234,11 +273,11 @@ The section titled, "Step 2 - Update the AlarmDecoder configuration" allows you 
   - **Keypad Address (ADDRESS):** Required. The keypad address assigned to the AlarmDecoder. Ensure to set this to the address you programmed on your alarm panel. This is also the keypad address you will normally use for your Indigo ad2usb Keypad device for basic single partition systems.
   - **Remove duplicate messages (DEDUPLICATE):** If enabled, removes duplicate alphanumeric keypad messages.
   - **Virtual Zone Expanders(s) (EXP)** (Max 2): Zone Expander Emulation allows the AlarmDecoder to act in place of a physical expander board and make use of virtual zones with your panel. After enabling it on both the panel and the AlarmDecoder you can begin opening and closing zones, which will be relayed back to the panel.
-  - **Virtual Relay Module(s) (REL):** *TBP*
+  - **Virtual Relay Module(s) (REL):** Allow the alarm panel to open/close a virtual relay managed by a home automation system.
   - **Virtual Long Range Radio (LRR):** The AlarmDecoder can emulate a Long Range Radio (LRR) expander and then receive LRR messages from your alarm panel. Enabling this feature may require enabling Long Range Radio output on your alarm panel. Consult your alarm panel's programming guide. AlarmDecoder firmware versions V2.2a.6 and V2.2a.8.8 differ in how LRR messages are structured. The current version of the plugin can only process LRR messages from firmware version V2.2a.6. The newer V2.2a.8.8 firmware's LRR messages will be supported in a future release.
 
 
-### Logging
+## Logging
 There are three log files in the standard Indigo Library directory. Each has its own purpose and is described below.
 1. **Indigo Event Log**: The first log is Indigo's event log file with file name format `YYYY-MM-DD Events`. The Indigo event log is used to log standard Indigo device events, actions, triggers, and plugins. It is configured and managed via Indigo and the plugin can write to it.
 2. **Plugin Log**: The second log is the plugin's log file which is in a subdirectory with the same name as the plugin: `com.berkinet.ad2usb`. The log files are named using the format `plugin.log.YYYY-MM-DD`. The plugin log can be used to record detailed debug info for panel messages, AD2USB configuration details, and other panel and plugin specific information.
@@ -254,12 +293,12 @@ WARNING | In addition to critical and non-fatal errors, warnings will be logged.
 INFO | In addition to critical and non-fatal errors and warnings, this setting will log verbose information about the Indigo objects, the plugin, and the alarm panel. Startup, shutdown, and changes to Indigo devices, actions, and triggers will be logged. This log setting **is required** to log arm/disarm events. It is recommended this is the minimum log level for the plugin log and may be desired setting for the Indigo log for many users. |
 DEBUG | In addition to all messages above, detailed debug messages will be logged. These messages are primarily used to understand the changes of internal variables, logic flow, and other details that can aid in the debugging process.|
 
-## Helpful Troubleshooting Techniques
+# Helpful Troubleshooting Techniques
 
-### Plugin and AlarmDecoder Version and Settings
+## Plugin and AlarmDecoder Version and Settings
 Version 3.0.0 will log the Plugin and AlarmDecoder version and settings to the Indigo log window on startup. Please provide these details with any post on the User Forum.
 
-### Enabling the log files
+## Enabling the log files
 To be able to be supported you'll need to have some level of logging enabled. The recommended settings are:
 1. Indigo Event Log - set to Errors, Warning, or Informational - any of those 3 settings will show any plugin errors in the Indigo Log
 2. Plugin Log Level - set to "Verbose Debugging", this produces about +/-50MB log daily on a typical system but is essential. The filename is plugin.log.
@@ -267,7 +306,7 @@ To be able to be supported you'll need to have some level of logging enabled. Th
 
 The path for logs is `/Library/Application Support/Perceptive Automation/<Indigo Version Number>/Logs/com.berkinet.ad2usb`. Note that part of the file path is dependent on your version of Indigo.
 
-### Getting Help and Reporting Bugs
+## Getting Help and Reporting Bugs
 Start by asking on the support forum. If more info is needed, I'll typically ask for this via a private message or email:
 
 - Specify if it is a a USB or IP based AlarmDecoder
