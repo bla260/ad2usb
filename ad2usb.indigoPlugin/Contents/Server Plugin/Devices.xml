@@ -419,8 +419,8 @@
 			<State id="panelState">
 				<ValueType>
 					<List>
-						<Option value="ready">Ready to Arm</Option>
-						<Option value="Fault">Faulted</Option>
+						<Option value="ready">Ready</Option>
+						<Option value="Fault">Fault</Option>
 						<Option value="armedStay">Armed Stay</Option>
 						<Option value="armedNightStay">Armed Night Stay</Option>
 						<Option value="armedAway">Armed Away</Option>

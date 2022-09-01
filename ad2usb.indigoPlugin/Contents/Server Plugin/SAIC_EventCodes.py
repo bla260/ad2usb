@@ -1,4 +1,4 @@
-# Two parts to this file:
+# Two parts to this data structure - dictionary:
 #
 # First part is a mapping from newer firmware 2.2a.8.8 LRR messages to older 2.2a.6
 #
@@ -12,17 +12,23 @@
 # 500 - BYPASSES/DISABLES
 # 600 - TEST/MISC
 #
+# Event qualifiers
+# 1 = New Event or Opening (Open = Disarm)
+# 3 = New Restore or Closing (Close = The manual or automatic arming of a security system.)
+# 6 = Previously reported condition still present (Status report)
+#
 ######################################
 #
 # Mapping to old LRR messages / 19 Events
 # ? = just a guess for now
 #
 # OPEN - 1,441 and 1,408
-# ARM_AWAY - 3,408
+# ARM_AWAY - 3,408 - Quick mode
 # ARM_STAY - 3,441
 #
-# ACLOSS - ? - 1,301
-# AC_RESTORE - ? - 3,301
+# ACLOSS - 1,301  # this trouble report is randomized with up to a (4) hour delay from initial power loss
+# AC_RESTORE - 3,301
+#
 # LOWBAT - ? - 1,302
 # LOWBAT_RESTORE - ? - 3,302
 # RFLOWBAT - ? - 1,384
@@ -39,15 +45,17 @@
 # ALARM_PERIMETER - 1,131
 # ALARM_TRIPPED - N/A - this is a keypad change event
 #
+######################################
 # No Events defined
 # BYPASS - 1,570 - enable bypass
-
+# NBG_ZONE_ALARM - 1,150
+#
 # Mapping to old LRR messages and Events
 # map the code to a valid Event - the events were defined as old LRR message types
 # the current pluging only uses 19 events
 # ALARM_AUX - not sure what codes
 # ALARM_TRIPPED - N/A
-# 16 codes below - these are just guesses
+# 12 codes below - these are just guesses
 #
 # '110': {'3': 'ALARM_FIRE'},
 # '120': {'3': 'ALARM_PANIC'},
@@ -56,14 +64,20 @@
 # '131': {'3': 'ALARM_PERIMETER'},
 # '134': {'3': 'ALARM_ENTRY'},
 # '300': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},
-# '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},
 # '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},
 # '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'},
 #
+# Map codes to Plugin Events
+# Not all Plugin Events defined in Plugin - for future use
 cid_code_to_event = {
+    '150': {'1': 'NBG_ZONE_ALARM', '3': 'NBG_ZONE_CLEAR'},  # 24 Hour Non-Burglary zone
+    '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},  # verified
     '401': {'1': 'OPEN'},  # verified DISARM Away
+    '406': {'1': 'CANCEL'},  # zone alarm cancelled by user
     '408': {'3': 'ARM_AWAY'},  # verified
-    '441': {'3': 'ARM_STAY', '1': 'OPEN'}  # verified
+    '441': {'3': 'ARM_STAY', '1': 'OPEN'},  # verified
+    '570': {'1': 'BYPASS_ON', '3': 'BYPASS_OFF'},  # bypass
+    '602': {'1': 'PERIODIC_TEST'}
 }
 
 kCODE = {'100': ['Medical', 'zone'],

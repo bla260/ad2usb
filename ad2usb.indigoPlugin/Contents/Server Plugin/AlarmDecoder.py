@@ -817,6 +817,7 @@ class Message(object):
 
                 # check if zone or user event
                 if SAIC_EventCodes.kCODE[cid_code][1] == 'user':
+                    self.messageDetails['LR2']['user'] = self.messageDetails['LR2']['eventData']
                     self.messageDetails['LR2']['userCode'] = int(self.messageDetails['LR2']['eventData'])
                     self.messageDetails['LR2']['isUserEvent'] = True
                     progressMessage = 'user event found'
