@@ -184,10 +184,13 @@ class Plugin(indigo.PluginBase):
             try:
                 validZoneNumber = int(dev.pluginProps['zoneNumber'])
                 if self.isDeviceBypassed(dev):
-                    self.ad2usb.listOfZonesBypassed[validZoneNumber] = True
+                    # add to bypass list if not present
+                    if validZoneNumber not in self.ad2usb.listOfZonesBypassed:
+                        self.ad2usb.listOfZonesBypassed.append(validZoneNumber)
                 else:
+                    # remove from bypass list if present
                     if validZoneNumber in self.ad2usb.listOfZonesBypassed:
-                        del self.ad2usb.listOfZonesBypassed[validZoneNumber]
+                        self.ad2usb.listOfZonesBypassed.remove(validZoneNumber)
 
             except Exception as err:
                 self.logger.warning(u"unable to determine zone number for device:{}, err:{}".format(dev.name, str(err)))
