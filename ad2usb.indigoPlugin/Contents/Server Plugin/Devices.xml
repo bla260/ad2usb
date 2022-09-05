@@ -444,6 +444,11 @@
 				<TriggerLabel>LCD Line 2</TriggerLabel>
 				<ControlPageLabel>LCD Line 2</ControlPageLabel>
 			</State>
+			<State id="lastADMessage">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last AD2USB Msg Time</TriggerLabel>
+				<ControlPageLabel>Last AD2USB Msg Time</ControlPageLabel>
+			</State>
 			<State id="programMode">
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Programming Mode</TriggerLabel>
@@ -480,7 +485,7 @@
 				<ControlPageLabelPrefix>Armed State is</ControlPageLabelPrefix>
 			</State>
 			<State id="acPower">
-				<ValueType boolType="OneZero">Boolean</ValueType>
+				<ValueType boolType="OnOff">Boolean</ValueType>
 				<TriggerLabel>AC Power</TriggerLabel>
 				<ControlPageLabel>AC Power</ControlPageLabel>
 			</State>

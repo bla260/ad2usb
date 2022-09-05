@@ -168,6 +168,11 @@ class Plugin(indigo.PluginBase):
                 self.setKeypadDeviceState(dev, AD2USB_Constants.k_PANEL_READY)
                 self.logger.debug(u"revised device:{}".format(dev))
 
+            # migrate for version 3.2.1 to add lastFaultTime and acPower
+            localStates = dev.states
+            if 'lastADMessage' not in localStates:
+                dev.stateListOrDisplayStateIdChanged()
+
         # if clear all devices is set or a new device clear the devices with zoneState state
         if ((dev.deviceTypeId == 'alarmZone') or (dev.deviceTypeId == 'zoneGroup')
                 or (dev.deviceTypeId == 'alarmZoneVirtual')):

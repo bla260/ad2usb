@@ -1,6 +1,6 @@
 # ad2usb Indigo Plugin Documentation
 
-##### Version 3.2.0
+##### Version 3.2.1
 
 # Table of Contents
 - [About](#about)
@@ -63,7 +63,7 @@ This plugin requires both a [NuTech AlarmDecoder](https://www.alarmdecoder.com) 
 A more complete list is available from NuTech on their website. While the NuTech AlarmDecoder AD2* interface also supports alarm panels sold by DSC, this plugin is not tested with those panels. Users with DSC panels should look at the DSC Alarm plugin.
 
 **Requirement Notes** :
-1. Requires AlarmDecoder firmware version 2.2a.8.8 (requires Plugin version 3.2.0 and above) or 2.2a.6 (works with any Plugin version). For firmware version 2.2a.8.8 there are some temporary limitations on what Trigger Events can be processed by the Plugin as of Plugin version 3.2.0 (see the Trigger Events section of this README). The Plugin may not start or run with any other firmware version besides the two listed above.
+1. Requires AlarmDecoder firmware version 2.2a.8.8 (requires Plugin version 3.2.0 and above) or 2.2a.6 (works with any Plugin version). For firmware version 2.2a.8.8 there are some temporary limitations on what Trigger Events can be processed by the Plugin. The Trigger Events section of this README identifies which events and which versions of the plugin can process these types of events. The Plugin may not start or run with any other firmware version besides the two listed above.
 2. While the panels listed should work, the developer testing for each release is limited to only on a VISTA-20P. Leverage the [Indigo ad2usb User Forum](https://forums.indigodomo.com/viewtopic.php?f=22&t=7584) to ask other users about their experience with your specific alarm panel model. Since I can test any panel message, I may ask in the Support Forum for parts of your panel message log to test.
 3. Works only in the plugin's basic mode
 
@@ -77,7 +77,7 @@ The ad2usb plugin adds the following device options to Indigo.
 
 Device Type | Description
 ----------- | -----------
-ad2usb Keypad | The AlarmDecoder Keypad emulator. You must add at least one and can have as many Indigo ad2usb Keypad devices as there are partitions. When selecting the keypad address for your ad2usb Keypad device, it must be a keypad address that is programmed in your alarm panel (this includes the NuTech AlarmDecoder device you programmed as a keypad). For systems with a single partition, the most common setup, you can only have one ad2usb keypad device and this device will be automatically set to the NuTech AlarmDecoder keypad address. Systems with multiple partitions can have multiple ad2usb keypad devices defined: one for each partition. However, the keypad address selected for all ad2usb Keypad devices **must exist** in the alarm panel programming. See the [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions) section for some examples scenarios. <br><br>Keypads can have several states: Ready, Armed-Away, Armed-Stay, Armed-Max, Armed-Night (Night-Stay), and Fault. A Fault will display as the Keypad state when one or more Alarm Zone devices that are on the same partition as the Keypad become Faulted. One exception to this is if the Alarm Zone is Bypassed. When an Alarm Zone is Bypassed the Indigo UI icon for the Keypad and the bypassed Alarm Zone device will change to the Fault icon but the actual state will not change.
+ad2usb Keypad | The AlarmDecoder Keypad emulator. You must add at least one and can have as many Indigo ad2usb Keypad devices as there are partitions. When selecting the keypad address for your ad2usb Keypad device, it must be a keypad address that is programmed in your alarm panel (this includes the NuTech AlarmDecoder device you programmed as a keypad). For systems with a single partition, the most common setup, you can only have one ad2usb keypad device and this device will be automatically set to the NuTech AlarmDecoder keypad address. Systems with multiple partitions can have multiple ad2usb keypad devices defined: one for each partition. However, the keypad address selected for all ad2usb Keypad devices **must exist** in the alarm panel programming. See the [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions) section for some examples scenarios. <br><br>Keypads can have several states: Ready, Armed Stay, Armed Night Stay, Armed Away, Armed Instant, Armed Max and Fault. A Fault will display as the Keypad state when one or more Alarm Zone devices that are on the same partition as the Keypad become Faulted. One exception to this is if the Alarm Zone is Bypassed. When an Alarm Zone is Bypassed the Indigo UI icon for the Keypad and the bypassed Alarm Zone device will change to the Fault icon but the actual state will not change.
 Alarm Zone | Standard alarm zone such as window or door sensors. Add one Indigo Alarm Zone device for each sensor you have configured with your alarm panel that you want to integrate with Indigo. Each Alarm Zone device has these three state variables with possible values shown in parenthesis: `zoneState` (Fault or Clear), `onOffState` (On or Off), and `bypassState` (On or Off). States `zoneState` and `onOffState` are somewhat redundant since when an alarm zone changes state both change. They exist so you can create triggers on any changes of the state name of your preference.<br><br>In Basic Mode zones faults are updated from AlarmDecoder's keypad messages. This should be fine for most users. In Advanced Mode zone faults are updated from Expander, Relay, or Wireless messages received by the AlarmDecoder.
 Zone Group | Creates a group of Alarm Zones. This allows you to create a group of alarm zones devices that treated as single device within Indigo Triggers. Zone groups have the same states as Alarm Zones with the exception they do not have the `bypassState`. Zone Groups change to Fault (or On) when **ANY** of their Zone's change from Clear to Fault (or Off to On). Zone Groups change to Clear (or Off) once **ALL** of their Zones are Clear (or Off).
 Indigo Managed Virtual Zone | The AlarmDecoder's Zone Expander Emulation feature allows the AlarmDecoder to act in place of a physical expander board and make use of virtual zones with your panel. After enabling it on both the alarm panel and the AlarmDecoder you can begin opening and closing zones, which will be relayed back to the panel. [See the AlarmDecoder Protocol Documentation for more details.](https://www.alarmdecoder.com/wiki/index.php/Protocol#Zone_Emulation). You can create an Indigo Managed Virtual Zone to use this capability. After creating the Indigo Managed Virtual Zone, you call a specific Action, "Change a Virtual Zone's state", which will change the state of the device in Indigo and send Open or Close messages to your alarm panel. **CAUTION**: Do not set a trigger on a Virtual Zone's device change to call the "Change a Virtual Zone's state" or you will have an infinite loop. See the "Alarm Zone Actions" section.
@@ -100,6 +100,7 @@ Number of Partitions | NuTech AlarmDecoder Keypad Address and Partition | ad2usb
 | ![Basic Keypad Example Image](images/advanced-keypad-example.png) |
 |:--:|
 | Advanced multi-partition and multi-ad2usb Keypad setup |
+
 
 ### Bypass Rules for Indigo Devices
 
@@ -153,8 +154,8 @@ Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be 
 ### System Status Trigger Events
 Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
 ----- | ----------- | --------- | --- |
-AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62 |  No
-AC Power Restore | Indicates that AC power was restored | \*73 |  No
+AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62 |  Yes (3.2.1 and above)
+AC Power Restore | Indicates that AC power was restored | \*73 |  Yes (3.2.1 and above)
 Panel Battery Low | Alarm panel low battery indication | \*63 | No
 Panel Battery Restore | Alarm panel low battery indication | \*74 | No
 RF Battery Low | Low battery indication for the RF transmitter | \*67 | No

@@ -1,5 +1,14 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
+v 3.2.1 September 5, 2022
+- Changed Indigo ad2usb Keypad Device custom state "AC Power" (acPower) possible values from "1" or "0" to "On" or "Off". From my own testing any device change trigger you had created on this state change should migrate without any change.
+- Added more Long Range Radio (LRR) events for newer AlarmDecoder firmware version 2.2a.8.8:
+  - Now support "AC Power Lost" and "AC Power Restore" events. These LRR events will no longer log WARNING messages. (NOTE: From my own testing and research, VISTA panels will only report this LRR event after a random delay of up to 4 hours. Thus, most users may not find this feature useful. An alternative is to create a Device State Changed Trigger on the Keypad Device where the state "AC Power" becomes "Off" for loss of power; or "On" when power is restored).
+  - Events for "Zone BYPASS" On/Off and "24 Hour Non-Burglary Zone" Fault/Clear will no longer log WARNING messages; however the plugin does not yet support creating Triggers on these LRR events.
+- Added new Keypad Custom State 'Last AD2USB Msg Time' (lastADMessage) that shows the last time an AlarmDecoder message has been read. This is useful when away for extended periods to confirm the Plugin is still processing messages since other plugin device states typically do not change.
+- Updated Keypad Device states names in the Trigger dialog from "Ready to Arm" to "Ready" and from "Faulted" to "Fault" for consistency.
+- Fixed a bug preventing the Bypass state from being restored when a zone device is disabled and enabled.
+
 v 3.2.0 August 18, 2022
 - This version is the first to support both AlarmDecoder firmware versions 2.2a.6 and the newer version 2.2a.8.8. The use of the newer firmware could be considered a BETA since the Plugin isn't yet able to read all of the panel messages for Triggers Events when using the newer firmware. It has been released to allow the community to help determine all the newer panel message formats in order to ensure a timely future release can account for all of Trigger Events while using the newer firmware. Users of the older firmware should not have any concerns upgrading to this version.
 - AlarmDecoder Firmware version 2.2a.8.8 is now supported but with some caveats on what Triggers can be detected with this version. With the help of this community, future versions should be able to expand the number of events that can be processed from the panel. Please read these release notes carefully before upgrading.

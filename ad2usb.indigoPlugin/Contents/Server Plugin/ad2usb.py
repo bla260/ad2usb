@@ -804,7 +804,7 @@ class ad2usb(object):
 
                             apProgramMode = panelFlags[5]
                             apZonesBypassed = panelFlags[7]
-                            apACPower = panelFlags[8]
+                            apACPower = self.__flagToBoolean(flag=panelFlags[8], defaultValue=True)
                             apChimeMode = panelFlags[9]
                             apAlarmOccurred = panelFlags[10]
                             apAlarmBellOn = panelFlags[11]
@@ -829,10 +829,14 @@ class ad2usb(object):
                             # panelDevice = indigo.devices[self.plugin.alarmDevId]
                             # self.plugin.setKeypadDeviceState(panelDevice, panelState)
 
+                            now = datetime.now()
+                            timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
+
                             self.plugin.setKeypadDeviceState(panelDevice, newMessageObject.attr('panelState'))
 
                             panelDevice.updateStateOnServer(key='LCDLine1', value=rawData[61:77])
                             panelDevice.updateStateOnServer(key='LCDLine2', value=rawData[77:93])
+                            panelDevice.updateStateOnServer(key='lastADMessage', value=timeStamp)
                             panelDevice.updateStateOnServer(key='programMode', value=apProgramMode)
                             panelDevice.updateStateOnServer(key='zonesBypassed', value=apZonesBypassed)
                             panelDevice.updateStateOnServer(key='acPower', value=apACPower)
@@ -1879,3 +1883,21 @@ class ad2usb(object):
         except Exception as err:
             self.logger.debug("error converting keypad to zero-padded string:{}".format(str(err)))
             return ''
+
+    def __flagToBoolean(self, flag=None, defaultValue=False):
+        """
+        Takes a flag or 1 or 0 and converts it to True or False. Returns defaultValue if flag is invalid.
+        """
+        if flag is None:
+            return defaultValue
+
+        if isinstance(flag, int):
+            if flag == 1:
+                return True
+            elif flag == 0:
+                return False
+            else:
+                return defaultValue
+
+        else:
+            return defaultValue
