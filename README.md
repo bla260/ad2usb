@@ -259,6 +259,37 @@ It is recommended that you Disable and then Enable the Plugin after making Confi
 - **Plugin Log Level**: See Logging section.
 - **Log Panel Messages**: See Logging section.
 
+### One Time Password (OTP) Options
+#### Overview
+The One Time Password (OTP) features enhances security by allowing you to remotely Bypass Zones, Arm, and Disarm your panel while not passing the alarm panel code over the internet when accessing Indigo remotely or storing your alarm panel code within any Indigo configuration items (Variables, Triggers, Actions, etc.). Instead, your alarm code is stored in a text configuration file of your choosing on your Indigo Server (NOTE: the Indigo server must be able to read this file). Instead of passing the code, you update one of several Indigo Variables (see Setup below for variable details) with a six-digit one time password provided by an OTP app such as Google Authenticator, Authy, or another compatible app on your smartphone. These OTPs expire every 30 seconds and can only be used once. When the Indigo variable's value is updated with a valid OTP the Plugin reads the alarm code from the file and send it to the AlarmDecoder as part of one of the limited pre-defined functions associated with each of the variables.
+
+#### Setup
+1. Create a User Code on you alarm panel to use. Test the code on your panel to ensure it can Bypass Zones, Arm and Disarm the system. (NOTE: For this feature, you may want to use a User Code with the "Guest" attribute. Guest User Codes cannot be used to disarm the system armed by any other user code. Refer to your Alarm User Manual for more information on Guest User Codes.)
+
+2. Select “Configure…” Look for the text field `OTP Configuration Filepath`. This field should contain a valid filepath (full directory path and filename) to store a new security configuration file. You can use the default of `/Library/` or change it to another directory that Indigo can read. Note that the path/folder must exist. The Indigo AD2USB Plugin will not create any folders on you Mac if they do not exist.
+
+3. Generate a new shared key. Use the Menu option “Regenerate OTP Key.” Running this menu will update the configuration file defined in Step 2 with a new shared OTP key. If the file does not exist it will create it.
+
+4. Find and edit the file from Step 3 using a text editor. This file contains both the alarm panel User Code for Disarming and Arming your panel and the shared key you just generated in the previous step for One Time Password capabilities. Update the User Code to the alarm panel code you want to use. Codes are four (4) digits. Save the file and make sure its a plain text file.
+
+5. Download and install Google Authenticator from the App Store. Use the plus (+) button in the lower right to add a new Authenticator OTP. Choose “Enter a setup key”. For the Account field enter “Indigo AD2USB”. For the Key enter the Shared key from the configuration text file above. Choose “Time based” and finish by pressing the “Add” button.
+
+6. Create five new Indigo variables: `ArmyAwayOTP`, `ArmStayOTP`, `BypassOTP`, `ZonesToBypassOTP`, and `DisarmOTP`. If you're already running version 3.3.0 (or above) you may see some WARNING messages in the Indigo log when you add these variables but they can be safely ignored. Each of the variables is described below.
+
+Alarm Panel Function | Required Indigo Variable | Description | Example Value
+--- | -------- | ----------- | ------------
+Arm Away | ArmyAwayOTP | Update the variable value to a new OTP passcode to perform an Arm Away function on your panel. | 123456
+Army Stay | ArmStayOTP | Update the variable value to a new OTP passcode to perform an Arm Stay function on your panel.| 334122
+N/A |ZonesToBypassOTP | Enter a comma seperated list of the zones to bypass when using the BypassOTP function. Zones 1-9 should be zero-padded (e.g. 09) | 11,22,04
+Bypass | BypassOTP | Update the variable value to a new OTP passcode to perform a Bypass function on your panel. The zones to Bypass are read from the ZonesToBypassOTP variable. | 665512
+Disarm | DisarmOTP | Update the variable value to a new OTP passcode to perform a Disarm function on your panel. | 441666
+
+### How to Use OTP
+To use the OTP feature copy the OTP from your smartphone app and paste the value into the respective variable and save the variable. This will automatically invoke the respective action on the Indigo server. Be mindful of the 30 second timeout when using this feature remotely. It may take a few seconds to copy the six digit code, switch to the Indigo Touch application, paste and update the Indigo variable with the new code, update the Reflector from Indigo Touch, receive the new variable value on the Indigo server, and then validate the OTP. If the 30 seconds has timed out when the Plugin validates the OTP, it will be invalid.
+
+### Disabling OTP
+If you've setup OTP and wish to disable it simply edit the OTP Configuration File and remove both the User Code and the Shared Key. You should also remove the variables created in Step 6 above.
+
 ## AlarmDecoder Configuration
 Once communication settings have been made in the Plugin Configure dialog, you can make changes to your AlarmDecoder from within the plugin. Select "AlarmDecoder Configuration" under the Plugin menu. AlarmDecoder settings are ***not*** stored in the Plugin for versions 3.1.0 and greater, however, each time a "CONFIG" message is read from the AlarmDecoder the current settings will be stored in memory while the plugin is running. These ***last read*** settings will be shown in the AlarmDecoder Configuration dialog window when it opens. Because AlarmDecoder settings can be made outside of the plugin the AlarmDecoder Configuration dialog is divided into two (2) sections or steps. The first section/step, "Step 1 - Retrieve the current AlarmDecoder configuration from the device", allows you to attempt to read the current configuration from the AlarmDecoder by pressing the button titled "Read Config". Once the configuration is read the dialog will be updated with a status message and the settings in Step 2 will be updated with the current values from the AlarmDecoder. You should always press the button in this first step before making changes to your AlarmDecoder configuration.
 

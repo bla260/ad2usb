@@ -1,5 +1,12 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
+v 3.3.0 Expected October 2022
+- Added Time-Based One-Time Password Algorithm capability (OTP).
+  - Uses PyOTP Python module. You must install the PyOTP module to use this feature via `pip3 install pyotp`.
+  - Refer to the README on how to use this new capability to more securely disarm your alarm panel remotely using Indigo Touch or any other method that leverages the Indigo remote access capabilities via the Reflector.
+- Removed logging of leading four digit codes passed to the AlarmDecoder. This is to prevent any user codes from being in the event log and/or files. This setting can be overridden by selecting the new Configure setting `Unmask codes sent to the Alarm Panel` (unchecked by default). When masked, the log will replace the four digit code send to panel in the log with `CODE+` string. For example, when Disarming the logs will show `CODE+1`.
+
+
 v 3.2.1 September 5, 2022
 - Changed Indigo ad2usb Keypad Device custom state "AC Power" (acPower) possible values from "1" or "0" to "On" or "Off". From my own testing any device change trigger you had created on this state change should migrate without any change.
 - Added more Long Range Radio (LRR) events for newer AlarmDecoder firmware version 2.2a.8.8:

@@ -144,12 +144,33 @@ class ad2usb(object):
         Sends (writes) a message to the AlarmDecoder to be sent to the alarm panel. Messages can be
         prefixed by a keypad address to make the message come from another keypad address other than the
         AlarmDecoder. If no address is provided the message is sent from the AlarmDecoder's keypad
-        ADDRESS settings.
+        ADDRESS settings. Note that messages will not be logged literally to prevent user codes from
+        being logged. Four (4) digit codes with the message will be replaced by the word "CODE".
 
         **parameter:**
+        panelMsg - the keypad entries to send to the AlarmDecoder keypad
         address - zero-padded two digit string representing keypad address
         """
-        self.logger.debug(u"called with msg:{} for address:{}".format(panelMsg, address))
+        # strip panel codes from message
+        messageToLog = ''
+        try:
+            # log the message safely
+
+            # look for string that is Alarm User Code add and strip code
+            # Master Code + [8] + User No. + New User's Code
+            if re.search(r'^\d{4}8\d{6}', panelMsg) is None:
+                messageToLog = re.sub(r'^\d{4}', 'CODE+', panelMsg)
+            else:
+                messageToLog = re.sub(r'^\d{4}8(\d{2})\d{4}', 'CODE+8+\\1+CODE', panelMsg)
+
+            self.logger.debug(u"called with msg:{} for address:{}".format(messageToLog, address))
+
+        except Exception as err:
+            messageToLog = ''
+            self.logger.warning("Unable to safely log write panel message - not logging it.")
+
+        # TO DO: add log codes anyway setting
+        # TO DO: add optional messageToLog to panelWriteWrapper
 
         try:
             # if no keypad address specified no need to prefix the message with K##
@@ -160,11 +181,11 @@ class ad2usb(object):
                     address = "0" + address
                 panelMsg = 'K' + address + str(panelMsg)
                 self.panelWriteWrapper(self.serialConnection, panelMsg)
-                self.logger.info(u"sent panel message:{}".format(panelMsg))
+                self.logger.info(u"Panel message:{} sent to AlarmDecoder".format(messageToLog))
 
         except Exception as err:
-            self.logger.error(u"unable to write panel message:{}".format(panelMsg))
-            self.logger.error(u"error message:{}, {}".format(str(err), sys.exc_info()[0]))
+            self.logger.error(u"Unable to write panel message:{}".format(messageToLog))
+            self.logger.error(u"Error message:{}, {}".format(str(err), sys.exc_info()[0]))
 
         self.logger.debug(u"completed")
 

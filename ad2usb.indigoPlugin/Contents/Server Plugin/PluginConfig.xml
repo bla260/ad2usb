@@ -128,4 +128,16 @@
 		<Description>(logs panel messages to a seperate file)</Description>
 	</Field>
 
+	<!-- Section 5 - Logging -->
+
+	<Field id="simpleSeparator5" type="separator" />
+
+	<Field id="sectionLabel5" type="label">
+		<Label>One Time Password (OTP) Options</Label>
+	</Field>
+
+	<Field id="OTPConfigPath" type="textfield">
+		<Label>OTP Configuration Filepath:</Label>
+	</Field>
+
 </PluginConfig>
