@@ -6,12 +6,14 @@
 
 import logging  # needed for CONSTANTS
 from datetime import datetime
+import os
 import re
 import time
 import serial
 import sys
 import indigo   # Not needed. But it supresses lint errors
 from ad2usb import ad2usb
+import AD2USB_OTP
 import AD2USB_Constants  # Global Constants
 
 ################################################################################
@@ -117,6 +119,9 @@ class Plugin(indigo.PluginBase):
         # gets the firmware version and log it
         # get the current configuration of the board and log it and change the preferences in memory
         self.ad2usb = ad2usb(self)
+
+        # create an OTP object - this should work regardless of OTP module status
+        self.otp = AD2USB_OTP.OTP(folderPath=self.OTPConfigPath, logger=self.logger, isEnabled=self.isOTPEnabled)
 
         # monitor variable changes
         indigo.variables.subscribeToChanges()
@@ -610,7 +615,11 @@ class Plugin(indigo.PluginBase):
                 pass  # do not change if invalid
 
             # OTP Config file
+            self.isOTPEnabled = valuesDict.get("enableOTP", False)
             self.OTPConfigPath = valuesDict.get("OTPConfigPath", '')
+
+            # reset the OTP object
+            self.otp = AD2USB_OTP.OTP(folderPath=self.OTPConfigPath, logger=self.logger, isEnabled=self.isOTPEnabled)
 
             # logging parameters
             self.indigoLoggingLevel = valuesDict.get("indigoLoggingLevel", logging.INFO)
@@ -755,12 +764,26 @@ class Plugin(indigo.PluginBase):
 
             # we have a hidden value in Prefs for ad2usbKeyPadAddress
             currentAddress = self.getAlarmDecoderKeypadAddress()
+            self.logger.debug("Current address is:{}".format(currentAddress))
+
             if self.isValidKeypadAddress(currentAddress):
                 valuesDict['ad2usbKeyPadAddress'] = currentAddress
             else:
                 pass  # do not change if invalid
 
-            # validate the OTP Config File
+            # validate the OTP Config folder if it is enabled
+            isOTPEnabled = valuesDict.get('enableOTP', False)
+            if isOTPEnabled:
+                self.logger.debug("OTP is enabled")
+                pathToCheck = valuesDict.get('OTPConfigPath', '')
+
+                # test the path
+                isFolderValid, folderMessage = self.otp.isValidFolder(folderToCheck=pathToCheck)
+                if not isFolderValid:
+                    isPrefsValid = False
+                    errorMsgDict['OTPConfigPath'] = folderMessage
+                    debugLogMessage = debugLogMessage + ' ' + errorMsgDict['OTPConfigPath']
+
             # TO DO: add code to check readability, etc.
 
             # All other Plugin Config items are checkboxes or pull downs and are constrained
@@ -1992,6 +2015,7 @@ class Plugin(indigo.PluginBase):
         self.pluginLoggingLevel = pluginPrefs.get("pluginLoggingLevel", "INFO")  # 20 = INFO
         self.isPanelLoggingEnabled = pluginPrefs.get("isPanelLoggingEnabled", False)
 
+        self.isOTPEnabled = pluginPrefs.get("enableOTP", False)
         self.OTPConfigPath = pluginPrefs.get("OTPConfigPath", '')
 
         # computed settings
@@ -2516,7 +2540,7 @@ class Plugin(indigo.PluginBase):
         """
         # return if nothing is passed
         if address is None:
-            self.logger.debug('invalid keypad address of None:{}'.format(address))
+            self.logger.debug('invalid keypad address of:{}'.format(address))
             return False
 
         # return if not a string
@@ -2865,218 +2889,131 @@ class Plugin(indigo.PluginBase):
         self.logger.debug("Called with {}:{}".format(newVar.name, newVar.value))
         # check for variable name
         if (newVar.name == 'ArmAwayOTP') or (newVar.name == 'ArmStayOTP'):
-            # run a script
-            if self.__validateOTP(newVar.value):
-                if self.__getCode() is None:
-                    self.logger.error("Invalid alarm code configured. Check filename.")
+
+            if self.isOTPEnabled:
+                if self.otp.isValidOTP(newVar.value):
+                    code = self.otp.getCode()
+                    if code is None:
+                        self.logger.error(
+                            "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
+                    else:
+
+                        if newVar.name == 'ArmAwayOTP':
+                            self.logger.info('OTP Validated. Arming Alarm AWAY now')
+                            messageToSend = code + '2'
+                            self.ad2usb.panelMsgWrite(messageToSend)
+
+                        if newVar.name == 'ArmStayOTP':
+                            self.logger.info('OTP Validated. Arming Alarm STAY now')
+                            messageToSend = code + '3'
+                            self.ad2usb.panelMsgWrite(messageToSend)
+
+                        code = None
                 else:
-                    if newVar.name == 'ArmAwayOTP':
-                        self.logger.info('OTP Validated. Arming Alarm AWAY now')
-                        messageToSend = self.__getCode() + '2'
-                        self.ad2usb.panelMsgWrite(messageToSend)
-
-                    if newVar.name == 'ArmStayOTP':
-                        self.logger.info('OTP Validated. Arming Alarm STAY now')
-                        messageToSend = self.__getCode() + '3'
-                        self.ad2usb.panelMsgWrite(messageToSend)
-
+                    self.logger.warning('OTP for Arming Alarm is not valid.')
             else:
-                self.logger.warning('OTP for Arming Alarm not valid.')
+                self.logger.warning(
+                    "OTP is not enabled. Check that it is enabled with a valid Folder Pathin 'Configure' - or required Python Modules may be missing.")
 
         if newVar.name == 'DisarmOTP':
-            # run a script
-            if self.__validateOTP(newVar.value):
-                self.logger.info('OTP Disarming Alarm  - Validated. Disarming Alarm now')
-                if self.__getCode() is None:
-                    self.logger.error("Invalid alarm code configured. Check filename.")
-                else:
-                    messageToSend = self.__getCode() + '1'
-                    self.ad2usb.panelMsgWrite(messageToSend)
 
+            if self.isOTPEnabled:
+                if self.otp.isValidOTP(newVar.value):
+                    self.logger.info('OTP Disarming Alarm  - Validated. Disarming Alarm now')
+                    code = self.otp.getCode()
+                    if code is None:
+                        self.logger.error(
+                            "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
+                    else:
+                        messageToSend = code + '1'
+                        self.ad2usb.panelMsgWrite(messageToSend)
+                        code = None
+                else:
+                    self.logger.warning('OTP for Disarming Alarm is not valid.')
             else:
-                self.logger.warning('OTP for Disarming Alarm not valid.')
+                self.logger.warning(
+                    "OTP is not enabled. Check that it is enabled with a valid Folder Pathin 'Configure' - or required Python Modules may be missing.")
 
         if newVar.name == 'BypassOTP':
-            # validate OTP
-            if self.__validateOTP(newVar.value):
-                self.logger.info('OTP Bypass - Validated. Bypassing Zones now')
 
-                # get the code
-                if self.__getCode() is None:
-                    self.logger.error("Invalid alarm code configured. Check filename.")
+            if self.isOTPEnabled:
+                if self.otp.isValidOTP(newVar.value):
+                    self.logger.info('OTP Bypass - Validated. Bypassing Zones now')
+                    code = self.otp.getCode()
+                    if code is None:
+                        self.logger.error(
+                            "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
+                    else:
+                        # get the bypass zones from a variable
+                        zonesToBypassVar = indigo.variables["ZonesToBypassOTP"]
+                        zonesToBypass = self.__validZoneList(zonesToBypassVar.value)
+
+                        # confirm zones are valid
+                        if zonesToBypass is not None:
+                            # build a string of zones
+                            self.logger.info("Bypassing Zones:{} ({})".format(zonesToBypassVar.value, zonesToBypass))
+
+                            # send the message to the panel
+                            messageToSend = code + '6' + zonesToBypass
+                            self.ad2usb.panelMsgWrite(messageToSend)
+                            code = None
                 else:
-                    # get the bypass zones from a variable
-                    zonesToBypassVar = indigo.variables["ZonesToBypassOTP"]
-                    zonesToBypass = self.__validZoneList(zonesToBypassVar.value)
-
-                    # confirm zones are valid
-                    if zonesToBypass is not None:
-                        # build a string of zones
-                        self.logger.info("Bypassing Zones:{} ({})".format(zonesToBypassVar.value, zonesToBypass))
-
-                        # send the message to the panel
-                        messageToSend = self.__getCode() + '6' + zonesToBypass
-                        self.ad2usb.panelMsgWrite(messageToSend)
-
+                    self.logger.warning('OTP for Bypassing Zones is not valid.')
             else:
-                self.logger.warning('OTP for Disarming Alarm not valid.')
+                self.logger.warning(
+                    "OTP is not enabled. Check that it is enabled with a valid Folder Pathin 'Configure' - or required Python Modules may be missing.")
 
-    def __validateOTP(self, OTPValue):
+    def generateOTPConfig(self):
+        """
+        Menu item to create or update the OTP Conifiguration file and QR Code file.
+        """
         try:
-            # allow this number of attempts each 60 seconds
-            numberOfAttemptsAllowed = 4
+            if self.otp.writeOTPConfigFiles():
+                self.logger.info("OTP Configuration file '{}' updated with new Shared Key.".format(self.otp.fileName))
 
-            # make sure its enabled
-            try:
-                import pyotp
+                if self.otp.writeOTPQRCode():
+                    self.logger.info("OTP QR Code file updated.")
 
-            except ImportError:
-                self.logger.error(
-                    "Python3 Module pytop cannot be imported. OTP features are disabled. Try \'pip3 install pyopt\'")
+        except Exception as err:
+            self.logger.error("Unable to update OTP Configuration files. Error:{}".format(str(err)))
 
-            except Exception as err:
-                self.logger.error(
-                    "Error when importing pytop module. OTP features are disabled. Error:{}".format(str(err)))
+    def createOTPVars(self):
+        """
+        Menu item to create any missing OTP Variables.
+        """
+        try:
+            # defined the variables as a list
+            OTPVars = {'ArmAwayOTP': False, 'ArmStayOTP': False,
+                       'BypassOTP': False, 'ZonesToBypassOTP': False, 'DisarmOTP': False}
 
-            self.logger.debug("Module pytop imported.")
+            # get all the variables and see which ones exist
+            for var in indigo.variables:
+                if var.name in OTPVars:
+                    OTPVars[var.name] = True
 
-            # log the attempt as a timestamp and append it
-            currentTime = time.time()
-            self.OTPAttempts.append(currentTime)
+            # log which ones exists
+            varsThatExist = []
+            # look at each variable (the key)
+            for key in OTPVars:
 
-            # purge all timestamps older than 60 seconds
-            # we know we will always have at least one entry less than 60 since we just added it
-            timeDelta = currentTime - self.OTPAttempts[0]
-            while (timeDelta > 60.0):
-                # remove the oldest element which was used to compute timeDelta
-                self.OTPAttempts.pop(0)
+                # if its True - its exists
+                if OTPVars[key]:
+                    varsThatExist.append(key)
 
-                # get the next oldest time if there is another element in array
-                if len(self.OTPAttempts) > 0:
-                    timeDelta = currentTime - self.OTPAttempts[0]
+                # if its False we need to created it
                 else:
-                    timeDelta = 0  # no more elements left
+                    newVar = indigo.variable.create(key, value="")
+                    self.logger.info("Created variable:{}".format(key))
 
-            # if the number of attemts in 60 seconds > 4 attempts return False
-            # this prevents brute force
-            if len(self.OTPAttempts) > numberOfAttemptsAllowed:
-                self.logger.warning("OTP attempts = {} within 60 seconds exceeds the limit of {}".format(
-                    len(self.OTPAttempts), numberOfAttemptsAllowed))
-                return False
-
-            self.logger.debug("Number of attempts OK.")
-
-            # look for invalid OTPValues
-            if isinstance(OTPValue, str):
-                self.logger.debug("String check OK.")
-            else:
-                self.logger.warning("OTP value is not a string")
-                return False
-
-            if OTPValue.isdigit():
-                self.logger.debug("Digit check OK.")
-            else:
-                self.logger.warning("OTP value contains characters other than digits")
-                return False
-
-            if len(OTPValue) != 6:
-                self.logger.warning("OTP value is not 6 digits")
-                return False
-            else:
-                self.logger.debug("Length check OK.")
-
-            # check for duplicate values used and manage a list of 100 previous
-            if OTPValue in self.previousOTPValues:
-                self.logger.warning("OTP value cannot be used more than once")
-                return False
-
-            self.logger.debug("Previous values check OK.")
-
-            # get the expected OTP code
-            sharedKey = self.__getSharedKey()
-            totp = pyotp.TOTP(sharedKey)
-            sharedKey = ''
-
-            # self.logger.info("Current OTP:{}".format(totp.now()))
-
-            # finally check is the code is the right code
-            if totp.verify(OTPValue):
-                self.logger.info("OTP value valid")
-                # add it to previous codes used - keeping only last 100 values
-                self.previousOTPValues.append(OTPValue)
-                if len(self.previousOTPValues) > 100:
-                    self.previousOTPValues.pop(0)  # pop 0th element from list
-
-                self.logger.info("Appended to list - list size:{}".format(len(self.previousOTPValues)))
-
-                return True
-
-            else:
-                self.logger.info("OTP value invalid")
-                return False
+            self.logger.info("Variables {} already exist and will not be created.".format(', '.join(varsThatExist)))
 
         except Exception as err:
-            self.logger.error("Error validating OTP:{}".format(str(err)))
-            return False
-
-    def __getCode(self):
-        """
-        Reads file containing alarm panel code and returns code
-        """
-        try:
-            filename = self.OTPConfigPath
-
-            # TO DO: combine methods and do more comprehensive file test
-            if filename == '':
-                self.logger.warning("OTP Configuration Filepath not set")
-                return ''
-
-            import configparser
-            config = configparser.ConfigParser()
-            config.read(filename)
-
-            code = config['DEFAULT']['Code']
-            if code.isdigit() and len(code) == 4:
-                return code
-            else:
-                self.logger.warning("Invalid Alarm Code in config file:{}".format(filename))
-                return None
-
-        except Exception as err:
-            self.logger.error("Error reading alarm code info:{}".format(str(err)))
-            return None
-
-    def __getSharedKey(self):
-        """
-        Reads file containing alarm panel code and shared key and returns shared key
-        """
-        try:
-            filename = self.OTPConfigPath
-
-            # TO DO: combine methods and do more comprehensive file test
-            if filename == '':
-                self.logger.warning("OTP Configuration Filepath not set")
-                return ''
-
-            import configparser
-            config = configparser.ConfigParser()
-            config.read(filename)
-
-            sharedKey = config['DEFAULT']['SharedKey']
-            # self.logger.debug("Shared key:{}".format(sharedKey))
-
-            if len(sharedKey) == 32:
-                return sharedKey
-            else:
-                self.logger.warning("Invalid SharedKey in config file:{}".format(filename))
-                return ''
-
-        except Exception as err:
-            self.logger.error("Error reading OTP shared key info:{}".format(str(err)))
+            self.logger.error("Unable to created all OTP Variables. Error:{}".format(str(err)))
 
     def __validZoneList(self, zones):
         """
-        Expects a comma separated list of zones and returns and even number of digits only or None
+        Expects a comma separated list of zones and returns an even number of digits only or None.
+        Example: zones parameter = '1,14,7'; returns '011407'
         """
         try:
             # split the string on comma

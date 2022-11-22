@@ -76,13 +76,14 @@
             <Field id="indigoTrigger" type="list">
               <Label>Alarm Event</Label>
               <List>
+                <Option value="ALARM_ENTRY">Entry Alarm</Option>
+                <Option value="ALARM_INTERIOR">Interior Alarm</Option>
+                <Option value="ALARM_PERIMETER">Perimeter Alarm</Option>
+                <Option value="ALARM_AUX">Aux Alarm</Option>
                 <Option value="ALARM_PANIC">Panic Alarm</Option>
                 <Option value="ALARM_FIRE">Fire Alarm</Option>
                 <Option value="ALARM_AUDIBLE">Audible Alarm</Option>
                 <Option value="ALARM_SILENT">Silent Alarm</Option>
-                <Option value="ALARM_ENTRY">Entry Alarm</Option>
-                <Option value="ALARM_AUX">Aux Alarm</Option>
-                <Option value="ALARM_PERIMETER">Perimeter Alarm</Option>
                 <Option value="ALARM_TRIPPED">Alarm Tripped: Countdown started</Option>
               </List>
             </Field>
@@ -124,6 +125,7 @@
                 <Option value="OPEN">Disarm</Option>
                 <Option value="ARM_AWAY">Armed Away</Option>
                 <Option value="ARM_STAY">Armed Stay</Option>
+                <Option value="CANCEL">Alarm Cancelled</Option>
               </List>
             </Field>
 

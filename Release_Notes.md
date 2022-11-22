@@ -1,11 +1,19 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
-v 3.3.0 Expected October 2022
-- Added Time-Based One-Time Password Algorithm capability (OTP).
-  - Uses PyOTP Python module. You must install the PyOTP module to use this feature via `pip3 install pyotp`.
-  - Refer to the README on how to use this new capability to more securely disarm your alarm panel remotely using Indigo Touch or any other method that leverages the Indigo remote access capabilities via the Reflector.
+v 3.3.0 Expected November 2022
+- Added Time-Based One-Time Password Algorithm capability (OTP). Refer to the README on how to use this new capability for added security if you want to arm/disarm your alarm panel remotely using Indigo Touch or Indigo Client UI. This new feature requires the installation of one require and one optional (but recommended) Python module. If you don't plan on using this capability you do not need to install these modules and this release and future releases will continue to work. If you want to use the OTP feature you must install the one required module.
+  - PyOTP. Required for OTP functionality. Install via `pip3 install pyotp`.
+  - qrcode. Optional for OTP functionality but required if you plan on generating a QRCODE image for easier setup on your mobile device. Install via `pip3 install qrcode`.
+- Events. Events have been changed.
+  - New events `Interior Alarm` and `Alarm Cancelled` have been added. The `Interior Alarm` event is only supported in the newer firmware.
+  - Fixed a bug for Triggers with multiple events. The AD2USB Plugin has always allowed defining more than one event to be selected when creating a Trigger but Triggers would not recognize and would not run for all selected events. This has been corrected.
+  - User Events now support options for "Any User Code" or a single User Code entered. The User Code is either a two-digit value between `01` and `49` or an Indigo Variable in the standard Indigo format `%%v:VARID%%` where `VARID` is the unique variable ID (not the name!) as found in the UI in various places.
+- Added all the remaining Long Range Radio (LRR) events for processing triggers with the newer AlarmDecoder firmware version 2.2a.8.8. The README will indicate which of these events have been tested on an actual panel and which have not.
+  - Events "Trouble" and "Trouble Restore" were tested and are now able to be processed and will no longer log WARNING messages.
+  - New events "Interior Alarm" and "Alarm Cancelled" were tested and have been added as new Indigo Events which you can created Triggers from.
+  - All of these remaining events have been added but have not been tested on an actual panel.
 - Removed logging of leading four digit codes passed to the AlarmDecoder. This is to prevent any user codes from being in the event log and/or files. This setting can be overridden by selecting the new Configure setting `Unmask codes sent to the Alarm Panel` (unchecked by default). When masked, the log will replace the four digit code send to panel in the log with `CODE+` string. For example, when Disarming the logs will show `CODE+1`.
-
+- Renamed menu items `Get AlarmDecoder Settings` to `AlarmDecoder - Get Settings` and `Get AlarmDecoder Firmware Version` to `AlarmDecoder - Get Firmware Version`
 
 v 3.2.1 September 5, 2022
 - Changed Indigo ad2usb Keypad Device custom state "AC Power" (acPower) possible values from "1" or "0" to "On" or "Off". From my own testing any device change trigger you had created on this state change should migrate without any change.

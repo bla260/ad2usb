@@ -22,15 +22,17 @@
 # Mapping to old LRR messages / 19 Events
 # ? = just a guess for now
 #
+# 8 are mapped below:
 # OPEN - 1,441 and 1,408
 # ARM_AWAY - 3,408 - Quick mode
 # ARM_STAY - 3,441
-#
 # ACLOSS - 1,301  # this trouble report is randomized with up to a (4) hour delay from initial power loss
 # AC_RESTORE - 3,301
+# LOWBAT - 1,302 (Panel)
+# LOWBAT_RESTORE - 3,302 (Panel)
+# ALARM_ENTRY - 1,134
 #
-# LOWBAT - ? - 1,302
-# LOWBAT_RESTORE - ? - 3,302
+# 11 are still not verified:
 # RFLOWBAT - ? - 1,384
 # RFLOWBAT_RESTORE - ? - 3,384
 # TROUBLE - ? - 1,300
@@ -40,10 +42,26 @@
 # ALARM_FIRE - ? - 1,110
 # ALARM_AUDIBLE - ? _ 1,123
 # ALARM_SILENT - ? - 1,122
-# ALARM_ENTRY - ? - 1,134
 # ALARM_AUX - ?
-# ALARM_PERIMETER - 1,131
+# ALARM_PERIMETER - ? - 1,131
 # ALARM_TRIPPED - N/A - this is a keypad change event
+#
+##################################
+# ARM_STAY then alarm tripped from entry testing
+# 1. 3,441 - ARM STAY enabled
+# 2. 1,134 - Entry/Exit zone alarm started
+# 3. 1,406 - User Cancel
+# 4. 1,441 - OPEN (Disarmed)
+# 5. 3,134 - Entry/Exit zone alarm restored
+#
+##################################
+# ARM_AWAY Quick Arm then alarm tripped by motion testing
+# 1. 3,408 - ARM AWAY
+# 2. 3,459 - Recent Close(?)
+# 3. 1,401 - O/C by User
+# 4. 1,132 - Interior Zone Alarm
+# 5. 1,406 - User Cancel
+# 6. 3,132 - Interior Zone Alarm
 #
 ######################################
 # No Events defined
@@ -52,34 +70,38 @@
 #
 # Mapping to old LRR messages and Events
 # map the code to a valid Event - the events were defined as old LRR message types
-# the current pluging only uses 19 events
+# the current plugin only uses 19 events
 # ALARM_AUX - not sure what codes
 # ALARM_TRIPPED - N/A
-# 12 codes below - these are just guesses
+# 11 codes below - these are just guesses
 #
 # '110': {'3': 'ALARM_FIRE'},
 # '120': {'3': 'ALARM_PANIC'},
 # '122': {'3': 'ALARM_SILENT'},
 # '123': {'3': 'ALARM_AUDIBLE'},
 # '131': {'3': 'ALARM_PERIMETER'},
-# '134': {'3': 'ALARM_ENTRY'},
 # '300': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},
-# '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},
 # '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'},
 #
 # Map codes to Plugin Events
 # Not all Plugin Events defined in Plugin - for future use
 cid_code_to_event = {
+    '132': {'1': 'ALARM_INTERIOR'},  # verified and added this as new event in 3.3.0
+    '134': {'1': 'ALARM_ENTRY'},  # verified
     '150': {'1': 'NBG_ZONE_ALARM', '3': 'NBG_ZONE_CLEAR'},  # 24 Hour Non-Burglary zone
     '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},  # verified
+    '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},  # verified
+    '383': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},  # verified - this is a CHECK on keypad
     '401': {'1': 'OPEN'},  # verified DISARM Away
     '406': {'1': 'CANCEL'},  # zone alarm cancelled by user
     '408': {'3': 'ARM_AWAY'},  # verified
     '441': {'3': 'ARM_STAY', '1': 'OPEN'},  # verified
+    '459': {'3': 'RECENT_CLOSE'},  # verified but may not be useful
     '570': {'1': 'BYPASS_ON', '3': 'BYPASS_OFF'},  # bypass
     '602': {'1': 'PERIODIC_TEST'}
 }
 
+# the authoritative code list
 kCODE = {'100': ['Medical', 'zone'],
          '101': ['Personal Emergency', 'zone'],
          '102': ['Fail to report in', 'zone'],

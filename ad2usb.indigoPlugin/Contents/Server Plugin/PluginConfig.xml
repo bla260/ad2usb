@@ -128,7 +128,7 @@
 		<Description>(logs panel messages to a seperate file)</Description>
 	</Field>
 
-	<!-- Section 5 - Logging -->
+	<!-- Section 4 - OTP -->
 
 	<Field id="simpleSeparator5" type="separator" />
 
@@ -136,8 +136,13 @@
 		<Label>One Time Password (OTP) Options</Label>
 	</Field>
 
-	<Field id="OTPConfigPath" type="textfield">
-		<Label>OTP Configuration Filepath:</Label>
+	<Field type="checkbox" id="enableOTP">
+		<Label>Enable OTP:</Label>
+		<Description>(check to enable One Time Password feature)</Description>
+	</Field>
+
+	<Field id="OTPConfigPath" type="textfield" visibleBindingId="enableOTP" visibleBindingValue="true">
+		<Label>OTP Configuration Folder:</Label>
 	</Field>
 
 </PluginConfig>

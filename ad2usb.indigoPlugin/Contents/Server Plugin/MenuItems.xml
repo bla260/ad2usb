@@ -142,12 +142,22 @@
     </MenuItem>
 
     <MenuItem id="sendCONFIGCommand">
-        <Name>Get AlarmDecoder Settings</Name>
+        <Name>AlarmDecoder - Get Settingss</Name>
         <CallbackMethod>sendAlarmDecoderConfigCommand</CallbackMethod>
     </MenuItem>
     <MenuItem id="sendVERCommand">
-        <Name>Get AlarmDecoder Firmware Version</Name>
+        <Name>AlarmDecoder - Get Firmware Version</Name>
         <CallbackMethod>sendAlarmDecoderVersionCommand</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="generateOTPConfig">
+        <Name>OTP - Regenerate Key/Files</Name>
+        <CallbackMethod>generateOTPConfig</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="createOTPVars">
+        <Name>OTP - Create Variables</Name>
+        <CallbackMethod>createOTPVars</CallbackMethod>
     </MenuItem>
 
     <!-- Comment these out prior to release

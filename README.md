@@ -32,6 +32,7 @@
   - [Plugin Configuration Details](#plugin-configuration-details)
     - [AD2USB connection settings](#ad2usb-connection-settings)
     - [Operating parameters](#operating-parameters)
+    - [One Time Password Setup](#one-time-password-setup)
     - [Logging Options](#logging-options)
   - [AlarmDecoder Configuration](#alarmdecoder-configuration)
     - [AlarmDecoder Configuration Dialog Box Fields](#alarmdecoder-configuration-dialog-box-fields)
@@ -139,50 +140,54 @@ Change a Virtual Zone's state | Zone Expander Emulation allows the AlarmDecoder 
 
 ## Trigger Events
 
-In addition to the ability to add Triggers for Indigo Device state changes, the ad2usb plugin can detect various alarm panel events that you can create Indigo triggers for. All of the Events listed below, except `Alarm Tripped: Countdown started`, require all of the following:
-* Either a Long Range Radio or emulation of LRR via the AlarmDecoder
+In addition to the ability to add Triggers for Indigo Device state changes, the ad2usb plugin can detect various alarm panel events that you can create Indigo triggers for so long as the reporting of these events is enabled in your alarm system. The required settings below are usually already enabled for home alarm panels installed by alarm service companies and no programming changes on your panel may be necessary. All of the Events listed below, except `Alarm Tripped: Countdown started`, require all of the following:
+* Either a Long Range Radio (LRR) or emulation of LRR via the AlarmDecoder
 * Enabling of Long Range Radio (LRR) messages on your alarm panel (panel programming field \*29)
 * Enabling of the respective reporting event on your alarm panel. For VISTA-15P and VISTA-20P refer to panel programming fields \*59 through \*76 for the programming fields. Each of these fields is also listed below for each event.
 
+Because the developer of this plugin does not have a panel to test with, not all of the trigger events below have been verified with AlarmDecoder firmware version 2.2a.8.8 which changed the format of these messages. The table below indicates which plugin version supports the various Event and if the event has been verified by the developer on a VISTA-15 panel.
+
 ### Panel Arming Trigger Events
-Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
+Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
 ----- | ----------- | --------- | -------- |
-Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)
-Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)
-Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be enabled | Yes (3.2.0 and above)
+Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)<br/>[Verified]
+Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)<br/>[Verified]
+Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be enabled | Yes (3.2.0 and above)<br/>[Verified]
 
 ### System Status Trigger Events
-Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
+Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
 ----- | ----------- | --------- | --- |
-AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62 |  Yes (3.2.1 and above)
-AC Power Restore | Indicates that AC power was restored | \*73 |  Yes (3.2.1 and above)
-Panel Battery Low | Alarm panel low battery indication | \*63 | No
-Panel Battery Restore | Alarm panel low battery indication | \*74 | No
-RF Battery Low | Low battery indication for the RF transmitter | \*67 | No
-RF Battery Restore | Low battery indication for the RF transmitter restored | \*75 | No
-Trouble| Indicates that a zone is reporting a tamper or failure |  \*60 | No
-Trouble Restore | Indicates that the trouble event was restored | \*71 | No
+AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62 |  Yes (3.2.1 and above)<br/>[Verified]
+AC Power Restore | Indicates that AC power was restored | \*73 |  Yes (3.2.1 and above)<br/>[Verified]
+Panel Battery Low | Alarm panel low battery indication | \*63 | Yes (3.3.0 and above)<br/>[Verified]
+Panel Battery Restore | Alarm panel low battery indication | \*74 | Yes (3.3.0 and above)<br/>[Verified]
+RF Battery Low | Low battery indication for the RF transmitter | \*67 | Yes (3.3.0 and above)<br/>[Not Verified]
+RF Battery Restore | Low battery indication for the RF transmitter restored | \*75 | Yes (3.3.0 and above)<br/>[Not Verified]
+Trouble| Indicates that a zone is reporting a tamper or failure |  \*60 | Yes (3.3.0 and above)<br/>[Verified]
+Trouble Restore | Indicates that the trouble event was restored | \*71 | Yes (3.3.0 and above)<br/>[Verified]
 
 ### Alarm Trigger Events
-Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
+Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
 ----- | ----------- | --------- | ----- |
-Panic Alarm | Indicates that there is a panic | ***TBD or N/A*** | No
-Fire Alarm | Indicates that there is a fire | ***TBD or N/A***  | No
-Audible Alarm |Indicates that an audible alarm is in progress |***TBD or N/A***  | No
-Silent Alarm | Indicates that there was a silent alarm | ***TBD or N/A***  | No
-Entry Alarm | Indicates that there was an entry alarm |***TBD or N/A***  | No
-Aux Alarm | Indicates that an auxiliary alarm type was triggered |***TBD or N/A***  | No
-Perimeter Alarm | Indicates that there was a perimeter alarm |***TBD or N/A***  | No
-Alarm Tripped: Countdown started | The alarm has been tripped and the countdown to Disarm has started | N/A - this event is detected from changes in the Keypad message | Yes (3.2.0 and above)
+Entry Alarm | Indicates that there was an entry alarm (e.g. door) |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Verified]
+Interior Alarm | Indicates that there was an interior alarm (e.g. motion sensor) |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Verified]
+Perimeter Alarm | Indicates that there was a perimeter alarm |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
+Aux Alarm | Indicates that an auxiliary alarm type was triggered |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
+Panic Alarm | Indicates that there is a panic | ***TBD or N/A*** | Yes (3.3.0 and above)<br/>[Not Verified]
+Fire Alarm | Indicates that there is a fire | ***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
+Audible Alarm |Indicates that an audible alarm is in progress |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
+Silent Alarm | Indicates that there was a silent alarm | ***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
+Alarm Tripped: Countdown started | The alarm has been tripped and the countdown to Disarm has started | N/A - this event is detected from changes in the Keypad message | Yes (3.2.0 and above)<br/>[Verified]
 
 ### User Trigger Events
 While similar to Panel Arming Events, with User events you can detect when a specific user ID you specify has initiated any these events: Disarmed, Armed Stay, or Armed Away. Note that if you have Triggers enabled for both a Panel Arming event and a User event both triggers will execute. For example if a Panel Disarmed Trigger is defined **AND** a User Trigger is defined for when user number 07 disarms the panel then when user 07 disarms the panel the **BOTH** of these triggers will execute.
 
-Event | Description | VISTA-15P and VISTA-20P Programming Fields |Available in AlarmDecoder Firmware 2.2a.8.8 <br/>(Plugin Version) |
+Event | Description | VISTA-15P and VISTA-20P Programming Fields |Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
 ----- | ----------- | --------- | ---- |
-Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)
-Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)
-Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be  | Yes (3.2.0 and above)
+Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)<br/>[Verified]
+Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)<br/>[Verified]
+Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be  | Yes (3.2.0 and above)<br/>[Verified]
+Cancel | Detect when an alarm has been cancelled by a user. | \*68 | Yes (3.3.0 and above)<br/>[Verified]
 
 
 ## Indigo Client UI
@@ -259,36 +264,51 @@ It is recommended that you Disable and then Enable the Plugin after making Confi
 - **Plugin Log Level**: See Logging section.
 - **Log Panel Messages**: See Logging section.
 
-### One Time Password (OTP) Options
+### One Time Password Setup
 #### Overview
-The One Time Password (OTP) features enhances security by allowing you to remotely Bypass Zones, Arm, and Disarm your panel while not passing the alarm panel code over the internet when accessing Indigo remotely or storing your alarm panel code within any Indigo configuration items (Variables, Triggers, Actions, etc.). Instead, your alarm code is stored in a text configuration file of your choosing on your Indigo Server (NOTE: the Indigo server must be able to read this file). Instead of passing the code, you update one of several Indigo Variables (see Setup below for variable details) with a six-digit one time password provided by an OTP app such as Google Authenticator, Authy, or another compatible app on your smartphone. These OTPs expire every 30 seconds and can only be used once. When the Indigo variable's value is updated with a valid OTP the Plugin reads the alarm code from the file and send it to the AlarmDecoder as part of one of the limited pre-defined functions associated with each of the variables.
+This is an optional feature that requires the installation of additional Python modules and creation of several Indigo variables. Installing the additional modules is **not** required to use the rest of the features and capabilities of AD2USB; these module are only required for the OTP features.
+
+One Time Passwords (OTP):
+- Involve a shared secret, stored both on the phone and the server and, optionally, embedded in a QR Code for easier setup on the mobile phone
+- Can be generated on a phone without internet connectivity; but internet connectivity is required to connect to your Indigo server
+- Is used as a second factor of authentication; your Reflector login is still secured with a password
+- Google Authenticator and other OTP client apps allow you to store multiple OTP secrets and provision those using a QR Code
+
+The One Time Password (OTP) features enhances security by allowing you to remotely Bypass Zones, Arm, and Disarm your panel while not passing the alarm panel code over the internet when accessing Indigo remotely or requiring you to store your alarm panel code within any of Indigo configuration items (Variables, Triggers, Actions, etc.) that can be accessed by an Indigo Client UI remotely. Instead, your alarm code is stored in a text configuration file in a folder of your choosing on your Indigo Server (NOTE: this plugin running on your Indigo server must be able to read and write to this file). Instead of passing the alarm code in a variable or embedding it elsewhere; this feature allows you to update one of several Indigo Variables (see Setup below for variable details) with a six-digit one time password provided by an OTP app such as Google Authenticator, Authy, or another compatible app on your smartphone. These OTPs expire every 30 seconds and can only be used once. When the Indigo variable's value is updated with a valid OTP the Plugin reads the alarm code from the file on your Indigo server and sends it to the AlarmDecoder as part of one of the limited pre-defined functions associated with each of the variables.
 
 #### Setup
-1. Create a User Code on you alarm panel to use. Test the code on your panel to ensure it can Bypass Zones, Arm and Disarm the system. (NOTE: For this feature, you may want to use a User Code with the "Guest" attribute. Guest User Codes cannot be used to disarm the system armed by any other user code. Refer to your Alarm User Manual for more information on Guest User Codes.)
+1. Install the needed pre-requisites Python module(s):
+  - [pyotp](https://pyauth.github.io/pyotp/). This module is required to use the OTP features. Install the module via `pip3 install pyotp`.
+  - [qrode](https://pypi.org/project/qrcode/). This is optional but needed to generate a QR Code PNG image file for easier mobile device setup. Install the module via `pip3 install qrcode`. The `qrcode` module will use the `Pillow` image library which is already installed as part of [Indigo 2022.1](https://wiki.indigodomo.com/doku.php?id=indigo_2022.1_documentation:python_packages#python_3102_packages_installed_by_indigo).
 
-2. Select “Configure…” Look for the text field `OTP Configuration Filepath`. This field should contain a valid filepath (full directory path and filename) to store a new security configuration file. You can use the default of `/Library/` or change it to another directory that Indigo can read. Note that the path/folder must exist. The Indigo AD2USB Plugin will not create any folders on you Mac if they do not exist.
 
-3. Generate a new shared key. Use the Menu option “Regenerate OTP Key.” Running this menu will update the configuration file defined in Step 2 with a new shared OTP key. If the file does not exist it will create it.
+2. Create a User Code on you alarm panel to use. Test the code on your panel to ensure it can Bypass Zones, Arm and Disarm the system. (NOTE: For this feature, I would not recommend using the master or installer codes. I recommend you use a dedicated User Code for this feature. You may even want to use a User Code with the "Guest" attribute. Guest User Codes cannot be used to disarm the system armed by any other user code. Refer to your Alarm User Manual for more information on Guest User Codes.)
 
-4. Find and edit the file from Step 3 using a text editor. This file contains both the alarm panel User Code for Disarming and Arming your panel and the shared key you just generated in the previous step for One Time Password capabilities. Update the User Code to the alarm panel code you want to use. Codes are four (4) digits. Save the file and make sure its a plain text file.
+3. Choose a folder to store your alarm code information. The folder must be created before configuring the path in the next step. The Indigo AD2USB Plugin **will not** create any folders on you Mac Indigo Server.
 
-5. Download and install Google Authenticator from the App Store. Use the plus (+) button in the lower right to add a new Authenticator OTP. Choose “Enter a setup key”. For the Account field enter “Indigo AD2USB”. For the Key enter the Shared key from the configuration text file above. Choose “Time based” and finish by pressing the “Add” button.
+4. Select “Configure…” under the AD2USB Alarm Interface Plugin Menu. Select the checkbox `Enable OTP` to enable the OTP feature. A new text field `OTP Configuration Folder` will now be visible. This field should contain a valid folder (full directory path - ex: "/Users/myusername/Alarm Panel Info") to store the security configuration file and the QR Code image file. Upon closing the Configure Dialog box the OTP Config file and the QR Code image file will be automatically created. The configuration file is named `AD2USB_OTP.cfg`. This file contains the shared OTP key and your alarm code to use. The QR Code image file named `AD2USB_OTP.png`.
 
-6. Create five new Indigo variables: `ArmyAwayOTP`, `ArmStayOTP`, `BypassOTP`, `ZonesToBypassOTP`, and `DisarmOTP`. If you're already running version 3.3.0 (or above) you may see some WARNING messages in the Indigo log when you add these variables but they can be safely ignored. Each of the variables is described below.
+5. Find and edit the file `AD2USB_OTP.cfg` from Step 4 using a text editor. This file contains both the alarm panel User Code for Bypassing, Disarming and Arming your panel and a new random shared key generated during initial configuration. Update the User Code to the alarm panel code you want to use. Codes are four (4) digits. Save the file as a plain text file.
+
+6. Download and install Google Authenticator (or another OTP alternative) from the App Store. Use the plus (+) button in the lower right to add a new Authenticator OTP. You can scan the QR Code image (recommended) or you can configure it manually by choosing “Enter a setup key”. If configuring manually, enter “Indigo AD2USB” for the Account field. For the Key enter the Shared key from the configuration text file you created. Choose “Time based” and finish by pressing the “Add” button.
+
+7. Use the plugin menu `OTP - Create Variables` to create five new Indigo variables: `ArmyAwayOTP`, `ArmStayOTP`, `BypassOTP`, `ZonesToBypassOTP`, and `DisarmOTP`. Once created these variables you may want to move them to their own folder.
+
+8. You can regenerate/change the key and config files at any time using the plugin menu `OTP - Regenerate Key/Files`. After regenerating the files you will need to re-configure your Google Authenticator application with the new QR Code or manually with the shared key from the updated OTP configuration file.
 
 Alarm Panel Function | Required Indigo Variable | Description | Example Value
 --- | -------- | ----------- | ------------
 Arm Away | ArmyAwayOTP | Update the variable value to a new OTP passcode to perform an Arm Away function on your panel. | 123456
 Army Stay | ArmStayOTP | Update the variable value to a new OTP passcode to perform an Arm Stay function on your panel.| 334122
-N/A |ZonesToBypassOTP | Enter a comma seperated list of the zones to bypass when using the BypassOTP function. Zones 1-9 should be zero-padded (e.g. 09) | 11,22,04
+N/A |ZonesToBypassOTP | Enter a comma separated list of the zones to bypass when using the BypassOTP function. Zones 1-9 should be zero-padded (e.g. 09) | 11,22,04
 Bypass | BypassOTP | Update the variable value to a new OTP passcode to perform a Bypass function on your panel. The zones to Bypass are read from the ZonesToBypassOTP variable. | 665512
 Disarm | DisarmOTP | Update the variable value to a new OTP passcode to perform a Disarm function on your panel. | 441666
 
 ### How to Use OTP
-To use the OTP feature copy the OTP from your smartphone app and paste the value into the respective variable and save the variable. This will automatically invoke the respective action on the Indigo server. Be mindful of the 30 second timeout when using this feature remotely. It may take a few seconds to copy the six digit code, switch to the Indigo Touch application, paste and update the Indigo variable with the new code, update the Reflector from Indigo Touch, receive the new variable value on the Indigo server, and then validate the OTP. If the 30 seconds has timed out when the Plugin validates the OTP, it will be invalid.
+To use the OTP feature open the Google Authenticator app and copy the OTP from your smartphone app and paste the value into the respective variable in Indigo Touch (or the Indigo Client UI) and save the variable. This will automatically invoke the respective alarm function on the Indigo server. Be mindful of the 30 second timeout when using this feature remotely. It may take you a few seconds to copy the six digit code, switch to the Indigo Touch application, paste and update the Indigo variable with the new code, update the Reflector from Indigo Touch, receive the new variable value on the Indigo server, and then validate the OTP. If the 30 seconds has timed out when the Plugin validates the OTP, it will be invalid. OTPs can only be used once, so if you're performing two actions in sequence (e.g. Bypass, then Arm), you will need to wait for the OTP to change to a new code for each action.
 
 ### Disabling OTP
-If you've setup OTP and wish to disable it simply edit the OTP Configuration File and remove both the User Code and the Shared Key. You should also remove the variables created in Step 6 above.
+If you've setup OTP and wish to disable it simply edit the OTP Configuration File and remove both the User Code and the Shared Key; or remove the file entirely. You should also remove/delete the variables created in during setup.
 
 ## AlarmDecoder Configuration
 Once communication settings have been made in the Plugin Configure dialog, you can make changes to your AlarmDecoder from within the plugin. Select "AlarmDecoder Configuration" under the Plugin menu. AlarmDecoder settings are ***not*** stored in the Plugin for versions 3.1.0 and greater, however, each time a "CONFIG" message is read from the AlarmDecoder the current settings will be stored in memory while the plugin is running. These ***last read*** settings will be shown in the AlarmDecoder Configuration dialog window when it opens. Because AlarmDecoder settings can be made outside of the plugin the AlarmDecoder Configuration dialog is divided into two (2) sections or steps. The first section/step, "Step 1 - Retrieve the current AlarmDecoder configuration from the device", allows you to attempt to read the current configuration from the AlarmDecoder by pressing the button titled "Read Config". Once the configuration is read the dialog will be updated with a status message and the settings in Step 2 will be updated with the current values from the AlarmDecoder. You should always press the button in this first step before making changes to your AlarmDecoder configuration.
