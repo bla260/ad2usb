@@ -1,4 +1,5 @@
 import configparser
+import indigo
 import os
 import time
 
@@ -204,7 +205,7 @@ class OTP(object):
 
             # file is valid - continue
             # now parse the file
-            config = configparser.ConfigParser()
+            config = configparser.ConfigParser(inline_comment_prefixes=('#',';'))
             config.read(self.fileName)
 
             # read the sharedKey if we ask for it
@@ -314,7 +315,7 @@ class OTP(object):
                 if len(uri) > 0:
                     img = qrcode.make(uri)
                     type(img)  # qrcode.image.pil.PilImage
-                    # img.save(self.qrCodeFile)
+                    img.save(self.qrCodeFile)
                     self.logger.info("New QRCODE PNG file generated:{}".format(self.qrCodeFile))
                     return True
                 else:
@@ -544,7 +545,8 @@ class OTP(object):
                 return ''
 
             key = self.getSharedKey()
-            uri = pyotp.totp.TOTP(key).provisioning_uri(name='AD2USB', issuer_name='AD2SUB Plugin')
+            indigoName = indigo.server.getDbName()
+            uri = pyotp.totp.TOTP(key).provisioning_uri(name=indigoName, issuer_name='AD2SUB Plugin')
             return uri
 
         except Exception as err:
