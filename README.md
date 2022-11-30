@@ -1,6 +1,6 @@
 # ad2usb Indigo Plugin Documentation
 
-##### Version 3.2.1
+##### Version 3.3.0
 
 # Table of Contents
 - [About](#about)
@@ -8,15 +8,15 @@
 - [Features](#Features)
 - [Devices](#Devices)
   - [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions)
+  - [ad2usb Keypad Device Custom States](#ad2usb-keypad-device-custom-states)
   - [Bypass Rules for Indigo Devices](#Bypass-Rules-for-Indigo-Devices)
 - [Actions](#Actions)
   - [Keypad Actions](#keypad-actions)
   - [Alarm Zone Actions](#Alarm-Zone-Actions)
 - [Trigger Events](#trigger-events)
-  - [Panel Arming Trigger Events](#panel-arming-trigger-events)
-  - [System Status Trigger Events](#system-status-trigger-events)
-  - [Alarm Trigger Events](#alarm-trigger-events)
-  - [User Trigger Events](#user-trigger-events)
+  - [System Status Events](#system-status-events)
+  - [Alarm Events](#alarm-events)
+  - [User Actions](#user-actions)
 - [Indigo Client UI](#indigo-client-ui)
   - [General](#general)
   - [Device States](#device-states)
@@ -26,7 +26,7 @@
   - [General](#general)
     - [Alarm Panel](#alarm-panel)
     - [AlarmDecoder](#alarmdecoder)
-    - [Indigo Plugins](#indigo-plugins)
+    - [Indigo Plugin](#indigo-plugin)
   - [Quick Start - First Install](#quick-start---first-install)
   - [Quick Start - Upgrading the ad2usb plugin](#quick-start---upgrading-the-ad2usb-plugin)
   - [Plugin Configuration Details](#plugin-configuration-details)
@@ -64,13 +64,13 @@ This plugin requires both a [NuTech AlarmDecoder](https://www.alarmdecoder.com) 
 A more complete list is available from NuTech on their website. While the NuTech AlarmDecoder AD2* interface also supports alarm panels sold by DSC, this plugin is not tested with those panels. Users with DSC panels should look at the DSC Alarm plugin.
 
 **Requirement Notes** :
-1. Requires AlarmDecoder firmware version 2.2a.8.8 (requires Plugin version 3.2.0 and above) or 2.2a.6 (works with any Plugin version). For firmware version 2.2a.8.8 there are some temporary limitations on what Trigger Events can be processed by the Plugin. The Trigger Events section of this README identifies which events and which versions of the plugin can process these types of events. The Plugin may not start or run with any other firmware version besides the two listed above.
+1. Requires AlarmDecoder firmware version 2.2a.8.8 (requires Plugin version 3.2.0 and above) or 2.2a.6 (works with any Plugin version). The Trigger Events section of this README identifies which events and which versions of the plugin can process these types of events. The Plugin may not start or run with any other firmware version besides the two listed above.
 2. While the panels listed should work, the developer testing for each release is limited to only on a VISTA-20P. Leverage the [Indigo ad2usb User Forum](https://forums.indigodomo.com/viewtopic.php?f=22&t=7584) to ask other users about their experience with your specific alarm panel model. Since I can test any panel message, I may ask in the Support Forum for parts of your panel message log to test.
 3. Works only in the plugin's basic mode
 
 ## Features
 
-This plugin adds new Indigo options for **Devices**, **Actions**, and **Trigger Events**. See the [Indigo Overview](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:overview) for more information about Devices, Actions, and Triggers. Devices will represent all of your Alarm Zones and Keypads. Actions allow you to interact with your Alarm Keypad. Triggers can be defined for various alarm panel events.
+This plugin adds new Indigo options for **Devices**, **Actions**, and **Trigger Events**. See the [Indigo Overview](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:overview) for more information about Devices, Actions, and Triggers. Devices will represent all of your Alarm Zones and Keypads. Actions allow you to interact with your Alarm Keypad. Triggers can be defined for any Indigo Device, including devices created via this plugin, and various alarm panel events. 
 
 ## Devices
 
@@ -78,7 +78,7 @@ The ad2usb plugin adds the following device options to Indigo.
 
 Device Type | Description
 ----------- | -----------
-ad2usb Keypad | The AlarmDecoder Keypad emulator. You must add at least one and can have as many Indigo ad2usb Keypad devices as there are partitions. When selecting the keypad address for your ad2usb Keypad device, it must be a keypad address that is programmed in your alarm panel (this includes the NuTech AlarmDecoder device you programmed as a keypad). For systems with a single partition, the most common setup, you can only have one ad2usb keypad device and this device will be automatically set to the NuTech AlarmDecoder keypad address. Systems with multiple partitions can have multiple ad2usb keypad devices defined: one for each partition. However, the keypad address selected for all ad2usb Keypad devices **must exist** in the alarm panel programming. See the [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions) section for some examples scenarios. <br><br>Keypads can have several states: Ready, Armed Stay, Armed Night Stay, Armed Away, Armed Instant, Armed Max and Fault. A Fault will display as the Keypad state when one or more Alarm Zone devices that are on the same partition as the Keypad become Faulted. One exception to this is if the Alarm Zone is Bypassed. When an Alarm Zone is Bypassed the Indigo UI icon for the Keypad and the bypassed Alarm Zone device will change to the Fault icon but the actual state will not change.
+ad2usb Keypad | The AlarmDecoder Keypad emulator. You must add at least one and can have as many Indigo ad2usb Keypad devices as there are partitions. When selecting the keypad address for your ad2usb Keypad device, it must be a keypad address that is programmed in your alarm panel (this includes the NuTech AlarmDecoder device you programmed as a keypad). For systems with a single partition, which may be the most common setup, you can only have one ad2usb keypad device and this device will be automatically set to the NuTech AlarmDecoder keypad address. Systems with multiple partitions can have multiple ad2usb keypad devices defined: one for each partition. However, the keypad address selected for all ad2usb Keypad devices **must exist** in the alarm panel programming. See the [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions) section for some examples scenarios. <br><br>Keypads can have several states: Ready, Armed Stay, Armed Night Stay, Armed Away, Armed Instant, Armed Max and Fault. A Fault will display as the Keypad state when one or more Alarm Zone devices that are on the same partition as the Keypad become Faulted. One exception to this is if the Alarm Zone is Bypassed. When an Alarm Zone is Bypassed the Indigo UI icon for the Keypad and the bypassed Alarm Zone device will change to the Fault icon but the actual state will not change.<br><br>The Keypad Device also has several Custom States that are described in a later section.
 Alarm Zone | Standard alarm zone such as window or door sensors. Add one Indigo Alarm Zone device for each sensor you have configured with your alarm panel that you want to integrate with Indigo. Each Alarm Zone device has these three state variables with possible values shown in parenthesis: `zoneState` (Fault or Clear), `onOffState` (On or Off), and `bypassState` (On or Off). States `zoneState` and `onOffState` are somewhat redundant since when an alarm zone changes state both change. They exist so you can create triggers on any changes of the state name of your preference.<br><br>In Basic Mode zones faults are updated from AlarmDecoder's keypad messages. This should be fine for most users. In Advanced Mode zone faults are updated from Expander, Relay, or Wireless messages received by the AlarmDecoder.
 Zone Group | Creates a group of Alarm Zones. This allows you to create a group of alarm zones devices that treated as single device within Indigo Triggers. Zone groups have the same states as Alarm Zones with the exception they do not have the `bypassState`. Zone Groups change to Fault (or On) when **ANY** of their Zone's change from Clear to Fault (or Off to On). Zone Groups change to Clear (or Off) once **ALL** of their Zones are Clear (or Off).
 Indigo Managed Virtual Zone | The AlarmDecoder's Zone Expander Emulation feature allows the AlarmDecoder to act in place of a physical expander board and make use of virtual zones with your panel. After enabling it on both the alarm panel and the AlarmDecoder you can begin opening and closing zones, which will be relayed back to the panel. [See the AlarmDecoder Protocol Documentation for more details.](https://www.alarmdecoder.com/wiki/index.php/Protocol#Zone_Emulation). You can create an Indigo Managed Virtual Zone to use this capability. After creating the Indigo Managed Virtual Zone, you call a specific Action, "Change a Virtual Zone's state", which will change the state of the device in Indigo and send Open or Close messages to your alarm panel. **CAUTION**: Do not set a trigger on a Virtual Zone's device change to call the "Change a Virtual Zone's state" or you will have an infinite loop. See the "Alarm Zone Actions" section.
@@ -102,6 +102,33 @@ Number of Partitions | NuTech AlarmDecoder Keypad Address and Partition | ad2usb
 |:--:|
 | Advanced multi-partition and multi-ad2usb Keypad setup |
 
+### ad2usb Keypad Device Custom States
+
+Many of the Keypad Custom States described below come directly from the [AlarmDecoder Keypad Message bit fields](https://www.alarmdecoder.com/wiki/index.php/Protocol#Bit_field). You can use these custom states in Indigo Device Triggers.
+
+Custom State Name | Device Trigger State Name | Values | Description (AlarmDecoder Bit field number)
+------------ | ----------- | ---- | ----
+LCDLine1 | LCD Line 1 | String | Line one of the your keypad display.
+LCDLine2 | LCD Line 2 | String | Line one of the your keypad display.
+acPower | AC Power | On or Off | Indicates if the panel is on AC power. (8)
+alarmBellOn | Panel Alarm Bell On | True of False | Indicates that an alarm is currently sounding. (11)
+alarmOccurred | Alarm Occurred | True of False | Indicates that an alarm has occurred. (10)
+alarmedZone | Zone which tripped the alarm | Number or "N/A" | The Zone number which tripped the alarm or "N/A" if no alarm has been tripped.
+armedMode | Alarm Armed State | String | The alarm mode of the panel:
+batteryLow | Battery Low | True of False | Indicates the battery is low. (12)
+checkZones | Check Zones | True or False | Indicates a system issue. Check your keypad and devices. (15)
+chimeMode | Chime Mode | On or Off | Indicates if the chime is enabled. (9)
+fireAlarm | Fire Alarm On | True or False | Indicates that there is a fire issue. (14)
+lastADMessage | Last AD2USB Msg Time | Date-Time | A date-time string of the last time a message was processed by the AlarmDecoder. This is useful when away for extended periods to confirm the Plugin is still processing messages.
+lastChgBy | Last change by | Number | For LRR messages is user code of the last change of the panel.
+lastChgTo | Last change to | String | For LRR messages is the last panel state changed by the user.
+lastChgAt | Last change at | Date-Time | For LRR messages is the late change date-time by the user.
+panelReady | Panel is Ready | True of False | Indicates if the panel is READY. (1)
+panelArmed | Panel is Armed | True of False | Indicates if the panel is ARMED. (2 or 3)
+programMode | Programming Mode | On or Off | Indicates if the keypad is in programming mode. (5)
+zonesBypassed | Zones Bypassed | True of False | Indicates that one or more zone(s) have been bypassed. (7)
+zonesBypassList | Zones Bypass List | String | A list of the zone(s) that have been bypassed.
+zoneFaultList | Faulted Zones | String | A list of faulted zones.
 
 ### Bypass Rules for Indigo Devices
 
@@ -128,7 +155,7 @@ Arm-Stay | Performs the keypad function STAY. Arms perimeter zones only and entr
 Arm-Instant | Performs the keypad function INSTANT. Same as STAY, except entry delay is off.
 Arm-Away | Performs the keypad function AWAY. Arms the entire burglary system, perimeter and interior. Entry delay is on.
 Arm-Max | Performs the keypad function MAX. Same as AWAY, except entry delay is off.
-Write To Panel | Writes an arbitrary message to the panel via the keypad. By default panel messages are being sent ***from*** the keypad number and partition of the NuTech AlarmDecoder (e.g. Partition 1, Keypad address 18). You can prefix the message with 'K' to send the message from a specific keypad. See the [AlarmDecoder Protocol page](https://www.alarmdecoder.com/wiki/index.php/Protocol#Addressed_Message) for more details. **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring this action.
+Write To Panel | Writes an arbitrary message to the panel via the keypad. By default panel messages are being sent ***from*** the keypad number and partition of the NuTech AlarmDecoder (e.g. Partition 1, Keypad address 18). You can prefix the message with 'K' to send the message from a specific keypad. See the [AlarmDecoder Protocol page](https://www.alarmdecoder.com/wiki/index.php/Protocol#Addressed_Message) for more details. The field `Text to send` contains the keypad entries to send to the Alarm Panel (e.g. `12345` = Alarm Code `1234` and keypad `5` places the alarm in Test Mode); or the field can contain an Indigo variable ID (ex: `%%v:1929322623%%`) whose value contains the keypad entries. **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring this action.
 
 ### Alarm Zone Actions
 Alarm Zone actions are less likely to be used but available since most Alarm Zone devices simply change state based on data being sent from your alarm panel.
@@ -140,24 +167,20 @@ Change a Virtual Zone's state | Zone Expander Emulation allows the AlarmDecoder 
 
 ## Trigger Events
 
-In addition to the ability to add Triggers for Indigo Device state changes, the ad2usb plugin can detect various alarm panel events that you can create Indigo triggers for so long as the reporting of these events is enabled in your alarm system. The required settings below are usually already enabled for home alarm panels installed by alarm service companies and no programming changes on your panel may be necessary. All of the Events listed below, except `Alarm Tripped: Countdown started`, require all of the following:
+This plugin's built in devices (ad2usb Keypad, Alarm Zone, etc.) provide numerous ways to create Triggers from the different device state changes. In addition to the ability to add Triggers for Indigo Device state changes, the ad2usb plugin can detect various alarm panel events that you can create Indigo triggers for. These alarm panel reporting events must be enabled on your alarm system. The required settings below are usually already enabled for typical home alarm panels installed by alarm service companies and its possible that no programming changes on your panel will be necessary. When creating Triggers for these plugin events, multiple events can be specified. When multiple events are selected, ***any*** of those events will cause the Trigger to be execute. All of the Events listed below, except `Alarm Tripped: Countdown started`, require all of the following:
+
 * Either a Long Range Radio (LRR) or emulation of LRR via the AlarmDecoder
 * Enabling of Long Range Radio (LRR) messages on your alarm panel (panel programming field \*29)
 * Enabling of the respective reporting event on your alarm panel. For VISTA-15P and VISTA-20P refer to panel programming fields \*59 through \*76 for the programming fields. Each of these fields is also listed below for each event.
 
-Because the developer of this plugin does not have a panel to test with, not all of the trigger events below have been verified with AlarmDecoder firmware version 2.2a.8.8 which changed the format of these messages. The table below indicates which plugin version supports the various Event and if the event has been verified by the developer on a VISTA-15 panel.
+**IMPORTANT NOTE**: Some, but not all, of these alarm panel events and Triggers you can create from them are functionally redundant with Triggers you can create from the the ad2usb Keypad and Alarm Zone Device state changes. If you create both, then that alarm event will cause ***BOTH*** Triggers to execute since the device trigger is determined by Indigo device state change while the Events described below are sent to the plugin by your alarm panel's LRR function. Thus you should typically only create one triggers for any event that can be detected using either method. For example, the AC Power loss can be detected via a change in state of the ad2usb Keypad device or a System Status Event.
 
-### Panel Arming Trigger Events
-Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
------ | ----------- | --------- | -------- |
-Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)<br/>[Verified]
-Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)<br/>[Verified]
-Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be enabled | Yes (3.2.0 and above)<br/>[Verified]
+### System Status Events
+Because the developer of this plugin does not have a dedicated panel to test with, not all of the trigger events below have been verified with AlarmDecoder firmware version 2.2a.8.8 which changed the format of these messages. The table below indicates which plugin version supports the various Events and if the event has been verified by the developer through testing on a VISTA-15 panel.
 
-### System Status Trigger Events
 Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
 ----- | ----------- | --------- | --- |
-AC Power Loss | Indicates that AC power was lost to the alarm panel | \*62 |  Yes (3.2.1 and above)<br/>[Verified]
+AC Power Loss | Indicates that AC power was lost to the alarm panel. **NOTE**: From what I've read this alert is delayed by a random value of up to 4 hours to prevent alarm monitoring organizations from being overwhelmed. Consider creating an Indigo Device Trigger on the Keypad device as an alternative. | \*62 |  Yes (3.2.1 and above)<br/>[Verified]
 AC Power Restore | Indicates that AC power was restored | \*73 |  Yes (3.2.1 and above)<br/>[Verified]
 Panel Battery Low | Alarm panel low battery indication | \*63 | Yes (3.3.0 and above)<br/>[Verified]
 Panel Battery Restore | Alarm panel low battery indication | \*74 | Yes (3.3.0 and above)<br/>[Verified]
@@ -166,28 +189,28 @@ RF Battery Restore | Low battery indication for the RF transmitter restored | \*
 Trouble| Indicates that a zone is reporting a tamper or failure |  \*60 | Yes (3.3.0 and above)<br/>[Verified]
 Trouble Restore | Indicates that the trouble event was restored | \*71 | Yes (3.3.0 and above)<br/>[Verified]
 
-### Alarm Trigger Events
+### Alarm Events
 Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
 ----- | ----------- | --------- | ----- |
-Entry Alarm | Indicates that there was an entry alarm (e.g. door) |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Verified]
-Interior Alarm | Indicates that there was an interior alarm (e.g. motion sensor) |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Verified]
-Perimeter Alarm | Indicates that there was a perimeter alarm |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
-Aux Alarm | Indicates that an auxiliary alarm type was triggered |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
-Panic Alarm | Indicates that there is a panic | ***TBD or N/A*** | Yes (3.3.0 and above)<br/>[Not Verified]
-Fire Alarm | Indicates that there is a fire | ***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
-Audible Alarm |Indicates that an audible alarm is in progress |***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
-Silent Alarm | Indicates that there was a silent alarm | ***TBD or N/A***  | Yes (3.3.0 and above)<br/>[Not Verified]
+Entry Alarm | Indicates that there was an entry alarm (e.g. door) | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Verified]
+Interior Alarm | Indicates that there was an interior alarm (e.g. motion sensor) | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Verified]
+Perimeter Alarm | Indicates that there was a perimeter alarm |N/A - Refer to Zone Programming to determine what zones are applicable  | Yes (3.3.0 and above)<br/>[Not Verified]
+Aux Alarm | Indicates that an auxiliary alarm type was triggered |N/A - Refer to Zone Programming to determine what zones are applicable  | No
+Panic Alarm | Indicates that there is a panic |N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Not Verified]
+Fire Alarm | Indicates that there is a fire | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Not Verified]
+Audible Alarm |Indicates that an audible alarm is in progress |N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Not Verified]
+Silent Alarm | Indicates that there was a silent alarm | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Not Verified]
 Alarm Tripped: Countdown started | The alarm has been tripped and the countdown to Disarm has started | N/A - this event is detected from changes in the Keypad message | Yes (3.2.0 and above)<br/>[Verified]
 
-### User Trigger Events
-While similar to Panel Arming Events, with User events you can detect when a specific user ID you specify has initiated any these events: Disarmed, Armed Stay, or Armed Away. Note that if you have Triggers enabled for both a Panel Arming event and a User event both triggers will execute. For example if a Panel Disarmed Trigger is defined **AND** a User Trigger is defined for when user number 07 disarms the panel then when user 07 disarms the panel the **BOTH** of these triggers will execute.
+### User Actions
+User Actions can detect when a specific Alarm Panel User Number (or any User Number) has initiated any these events: Disarmed, Armed Stay, Armed Away, or Alarm Cancelled. Refer to your Alarm User Manual for information about User Numbers. The Trigger dialog box allows for the selection of multiple events; so you can create a single Trigger for one or more of these Events. You can specify `Any User` and the event will execute the Trigger regardless of the User Number associated with the event. Alternatively, you can enter a single User Number (ex: 02) or a list of User Numbers comma seperated (ex: 02,07,14). You can also use an Indigo Variable as the User Number(s) in the format:`%%v:VARID%%` where `VARID` is the variable ID (ex: `%%v:1929322623%%`). The variable's value can contain one or more User Numbers. 
 
 Event | Description | VISTA-15P and VISTA-20P Programming Fields |Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
 ----- | ----------- | --------- | ---- |
-Armed Stay | Detect when your panel is set to Armed Stay | \*66 | Yes (3.2.0 and above)<br/>[Verified]
-Armed Away | Detect when your panel is set to Armed Away | \*66 | Yes (3.2.0 and above)<br/>[Verified]
-Disarmed | Detect when your panel is Disarmed | \*65 - also requires \*66 to be  | Yes (3.2.0 and above)<br/>[Verified]
-Cancel | Detect when an alarm has been cancelled by a user. | \*68 | Yes (3.3.0 and above)<br/>[Verified]
+Armed Stay | Detect when your panel is set to Armed Stay. You can detect this for any user or a specific user. | \*66 | Yes (3.2.0 and above)<br/>[Verified]
+Armed Away | Detect when your panel is set to Armed Away. You can detect this for any user or a specific user. | \*66 | Yes (3.2.0 and above)<br/>[Verified]
+Disarmed | Detect when your panel is Disarmed. You can detect this for any user or a specific user. | \*65 - also requires \*66 to be enabled | Yes (3.2.0 and above)<br/>[Verified]
+Cancel | Detect when an alarm has been cancelled by a user. You can detect this for any user or a specific user. | \*68 | Yes (3.3.0 and above)<br/>[Verified]
 
 
 ## Indigo Client UI
@@ -216,8 +239,8 @@ When using the **AlarmDecoder Configuration** menu, you should first use the "Re
 - LRR - Emulation of Long Range Radio expander
 - DEDUPLICATE - If enabled, removes duplicate alphanumeric keypad messages
 
-### Indigo Plugins
-You should be familiar with installing and configuring Indigo plugins.See Indigo's [Managing Plugins](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:getting_started#managing_plugins) documentation for details on installing and upgrading plugins.
+### Indigo Plugin
+You should be familiar with installing and configuring Indigo plugins. See Indigo's [Managing Plugins](https://wiki.indigodomo.com/doku.php?id=indigo_2021.2_documentation:getting_started#managing_plugins) documentation for details on installing and upgrading plugins.
 
 ## Quick Start - First Install
 1. Program your alarm panel to support the [NuTech AlarmDecoder](https://www.alarmdecoder.com/wiki/index.php/Panel_Configuration) as a new keypad device (default from NuTech is "18").

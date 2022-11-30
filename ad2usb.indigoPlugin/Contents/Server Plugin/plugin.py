@@ -77,7 +77,7 @@ class Plugin(indigo.PluginBase):
         self.virtualDict = {}
         self.zoneGroup2zoneDict = {}
         self.zone2zoneGroupDevDict = {}
-        self.triggerDict = {}
+        self.triggerCache = {}
 
         self.pluginDisplayName = pluginDisplayName
         self.pluginPrefs = pluginPrefs
@@ -237,7 +237,7 @@ class Plugin(indigo.PluginBase):
     def runConcurrentThread(self):
         try:
             # add some dumps of internal dictionaries
-            self.logger.debug("Trigger Dict:{}".format(self.triggerDict))
+            self.logger.debug("Trigger Cache:{}".format(self.triggerCache))
             self.logger.debug("Advanced Device Dict:{}".format(self.advZonesDict))
 
             self.logger.info(u"AlarmDecoder message processing started")
@@ -356,7 +356,7 @@ class Plugin(indigo.PluginBase):
             # part 0 - setup - get device ID, device zone as a padded string, and device partition
             devId = pluginAction.deviceId
             virtDevice = indigo.devices[devId]
-            virtZoneNumber = self._getPaddedZone(virtDevice.pluginProps['zoneNumber'])
+            virtZoneNumber = self.__getPaddedNumber(virtDevice.pluginProps['zoneNumber'])
 
             # BUG: the property vZonePartitionNumber must have been old
             # it no longer exists in Devices.xml as of 1.6.0 and onward
@@ -476,6 +476,8 @@ class Plugin(indigo.PluginBase):
             address = pluginAction.props['keypadAddress']
 
         panelMsg = pluginAction.props['panelMessage']
+
+        # check if the message is as function key
         if panelMsg == 'F1' or panelMsg == 'f1':
             panelMsg = chr(1) + chr(1) + chr(1)
         elif panelMsg == 'F2' or panelMsg == 'f2':
@@ -485,15 +487,30 @@ class Plugin(indigo.PluginBase):
         elif panelMsg == 'F4' or panelMsg == 'f4':
             panelMsg = chr(4) + chr(4) + chr(4)
 
-        # self.logger.debug(u"created panel message: {}".format(panelMsg))
-        self.logger.debug(u"created panel message")
+        # check if the message is a variable
+        if re.search(r'^%%v:\d+%%$', panelMsg) is None:
+            # its not a variable and we just use the panel message provided
+            pass
+        # it looks like a variable, check with the method that returns a tuple: Bool, String
+        else:
+            isVariableSub = self.plugin.substituteVariable(panelMsg, True)
+            # check the tuple value
+            if isVariableSub[0]:
+                # if the tuple is true call the method again to get variables value
+                self.logger.debug('Panel Message is a variable:{}'.format(panelMsg))
+                panelMsgValue = self.plugin.substituteVariable(panelMsg, False)
+                # replace the message with the variable value
+                panelMsg = panelMsgValue
+            else:
+                # unable to parse variable and we just use the value as passed
+                self.logger.error('Value from Panel Message variable:{} cannot be determined. Panel message will not be sent.'.format(panelMsg))
+                return  # no message sent
+
+        self.logger.debug("created panel message")
 
         self.ad2usb.panelMsgWrite(panelMsg, address)
 
-        # self.logger.debug(u"sent panel message: {}".format(panelMsg))
-        self.logger.debug(u"sent panel message")
-
-        self.logger.debug(u"completed")
+        self.logger.debug("sent panel message")
 
     ########################################################
     def panelQuckArmWrite(self, pluginAction):
@@ -1749,50 +1766,62 @@ class Plugin(indigo.PluginBase):
     # Indigo Event Triggers: Start and Stop
     ########################################
     def triggerStartProcessing(self, trigger):
-        self.logger.info(u"Enabling trigger:{}".format(trigger.name))
-        self.logger.debug(u"received trigger:{}".format(trigger))
-        self.logger.debug(u"starting trigger dict:{}".format(self.triggerDict))
+        self.logger.info("Enabling trigger:{}".format(trigger.name))
+        self.logger.debug("adding trigger:{} to cache".format(trigger))
 
-        event = trigger.pluginProps['indigoTrigger'][0]
-        partition = trigger.pluginProps['panelPartitionNumber']
-        tid = trigger.id
-
+        # new trigger cache property
+        # designed to work even if triggers were not migrated
         try:
-            user = trigger.pluginProps['userNumber']
-        except:
-            user = False
+            # common to all Triggers
+            tid = trigger.id
+            triggerType = trigger.pluginTypeId
+            events = trigger.pluginProps['indigoTrigger'].to_list()
+            partition = trigger.pluginProps['panelPartitionNumber']
+            triggerName = trigger.name
 
-        if user:
-            try:
-                if user not in self.triggerDict:
-                    self.triggerDict[user] = {}
-                self.triggerDict[user][partition] = {'tid': tid, 'event': event}
-            except Exception as err:
-                self.logger.error(u"Error:{}".format(err))
-        else:
-            try:
-                if event not in self.triggerDict:
-                    self.triggerDict[event] = {}
-                self.triggerDict[event][partition] = tid
-            except Exception as err:
-                self.logger.error(u"Error:{}".format(err))
+            # set user variables to a default
+            users = ''
+            anyUser = True
+            
+            # look for these types first to process them quickly
+            if (triggerType == 'systemEvents') or (triggerType == 'alarmEvents'):
+                anyUser = True
 
-        self.logger.debug(u"updated triggerDict:{}".format(self.triggerDict))
-        self.logger.debug(u"completed")
+            # else if the event is a user event and the userOption is None - make it selectUser - for migration in v3.3.0
+            elif triggerType == 'userEvents':
+                # see if this Trigger has been updated since v3.3.0
+                userOption = trigger.pluginProps.get('userOption', None)
+                if (userOption is None) or (userOption == 'selectUser'):
+                    anyUser = False
+                    users = trigger.pluginProps.get('userNumber','')
+                elif userOption == 'anyUser':
+                    anyUser = True
+
+            # to be deprecated after version 3.3.0
+            elif triggerType == 'armDisarm':
+                anyUser = True
+                # throw deprecated warning for Panel Arming Events
+                self.logger.warn("AD2USB Plugin Triggers based on Panel Arming Events will be deprecated in a future release. Change the Trigger named:{} from a Panel Arming Event to a User Action with the 'Any User' option selected.".format(triggerName))
+
+            # build the dictionary
+            self.triggerCache[tid] = {'events': events, 'partition': partition, 'name': triggerName, 'type': triggerType, 'anyUser': anyUser, 'users': users}
+
+        except Exception as err:
+            self.logger.error("Problem updating new Trigger cache:{}".format(str(err)))
+
+        self.logger.debug(u"updated (post add) Trigger Cache:{}".format(self.triggerCache))
 
     ########################################
     def triggerStopProcessing(self, trigger):
-        self.logger.debug(u"Disabling for trigger:{}".format(trigger.name))
-        self.logger.debug(u"Received trigger:{}".format(trigger.name))
+        self.logger.info(u"Disabling trigger:{}".format(trigger.name))
 
-        event = trigger.pluginProps['indigoTrigger'][0]
+        # new cache - remove the trigger id if it exists
+        tid = trigger.id
+        if tid in self.triggerCache:
+            self.logger.debug(u"trigger:{} id:{} removed from cache".format(trigger.name, tid))
+            del self.triggerCache[tid]
 
-        if event in self.triggerDict:
-            self.logger.debug(u"trigger:{} found".format(trigger.name))
-            del self.triggerDict[event]
-
-        self.logger.debug(u"trigger:{} deleted".format(trigger.name))
-        self.logger.debug(u"Completed")
+        self.logger.debug(u"updated (post remove) Trigger Cache:{}".format(self.triggerCache))
 
     def __setURLFromConfig(self):
         """
@@ -2840,16 +2869,16 @@ class Plugin(indigo.PluginBase):
             self.logger.error("Unable to clear all devices - msg:{}".format(str(err)))
             return False
 
-    def _getPaddedZone(self, zoneNumber):
+    def __getPaddedNumber(self, zoneNumber):
         """
         Returns a 2-digit padded zone number as a string. Returns None if zoneNumber is neither
-        a string or int.
+        a string or int or not in the range of 00-99
 
         **parameters:**
         zoneNumber - integer or string of the zone number to convert to string
         """
         if isinstance(zoneNumber, int):
-            if len(str(zoneNumber)) == 1:
+            if (len(str(zoneNumber)) == 1) and (zoneNumber <= 99) and (zoneNumber >= 0):
                 return '0' + str(zoneNumber)
             else:
                 return str(zoneNumber)
@@ -2858,7 +2887,7 @@ class Plugin(indigo.PluginBase):
             if len(zoneNumber) == 1:
                 return '0' + zoneNumber
             else:
-                return zoneNumber
+                return zoneNumber[:2]
 
         else:
             self.logger.debug('Unable to generate padded zone string')

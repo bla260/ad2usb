@@ -459,6 +459,11 @@
 				<TriggerLabel>Zones Bypassed</TriggerLabel>
 				<ControlPageLabel>Zones Bypassed</ControlPageLabel>
 			</State>
+			<State id="zonesBypassList">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Zone Bypass List</TriggerLabel>
+				<ControlPageLabel>Zone Bypass List</ControlPageLabel>
+			</State>
 			<State id="panelReady">
 				<ValueType boolType="OneZero">Boolean</ValueType>
 				<TriggerLabel>Panel is Ready</TriggerLabel>

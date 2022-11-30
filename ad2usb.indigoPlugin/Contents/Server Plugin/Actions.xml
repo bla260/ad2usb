@@ -60,6 +60,11 @@
 			<Field id='panelMessage' type='textfield' defaultValue="" >
 				<Label>Text to send</Label>
 			</Field>
+
+			<Field id="panelMessageLabel" type="label" alignWithControl="true" fontSize="mini">
+	            <Label>Enter the keypad entries to send to the Alarm Panel or enter an Indigo variable ID (ex: %%v:1929322623%%) whose value contains the keypad entries.</Label>
+            </Field>
+
 			<Field id="keypadAddress" type="menu" >
 				<Label>Partition:</Label>
 				<List class="self" method="getPartitionList" dynamicReload="yes"/>

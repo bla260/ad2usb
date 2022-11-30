@@ -86,12 +86,18 @@
 # Map codes to Plugin Events
 # Not all Plugin Events defined in Plugin - for future use
 cid_code_to_event = {
+    '110': {'1': 'ALARM_FIRE'},  # not verified
+    '120': {'1': 'ALARM_PANIC'},  # not verified
+    '122': {'1': 'ALARM_SILENT'},  # not verified
+    '123': {'1': 'ALARM_AUDIBLE'},  # not verified
+    '131': {'1': 'ALARM_PERIMETER'},  # not verified
     '132': {'1': 'ALARM_INTERIOR'},  # verified and added this as new event in 3.3.0
     '134': {'1': 'ALARM_ENTRY'},  # verified
     '150': {'1': 'NBG_ZONE_ALARM', '3': 'NBG_ZONE_CLEAR'},  # 24 Hour Non-Burglary zone
     '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},  # verified
     '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},  # verified
     '383': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},  # verified - this is a CHECK on keypad
+    '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'}, # not verified - an educated guess
     '401': {'1': 'OPEN'},  # verified DISARM Away
     '406': {'1': 'CANCEL'},  # zone alarm cancelled by user
     '408': {'3': 'ARM_AWAY'},  # verified
