@@ -193,14 +193,20 @@ Trouble Restore | Indicates that the trouble event was restored | \*71 | Yes (3.
 Event | Description | VISTA-15P and VISTA-20P Programming Fields | Available in AlarmDecoder Firmware 2.2a.8.8 (Plugin Version)<br/>[Verified or Not Verified] |
 ----- | ----------- | --------- | ----- |
 Entry Alarm | Indicates that there was an entry alarm (e.g. door) | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Verified]
-Interior Alarm | Indicates that there was an interior alarm (e.g. motion sensor) | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Verified]
+Interior Alarm | Indicates that there was an interior alarm (e.g. motion sensor) | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above) (See Note 1)<br/>[Verified]
 Perimeter Alarm | Indicates that there was a perimeter alarm |N/A - Refer to Zone Programming to determine what zones are applicable  | Yes (3.3.0 and above)<br/>[Not Verified]
-Aux Alarm | Indicates that an auxiliary alarm type was triggered |N/A - Refer to Zone Programming to determine what zones are applicable  | No
+Aux Alarm | Indicates that an auxiliary alarm type was triggered |N/A - Refer to Zone Programming to determine what zones are applicable  | No (See Note 1)
 Panic Alarm | Indicates that there is a panic |N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Not Verified]
 Fire Alarm | Indicates that there is a fire | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Not Verified]
 Audible Alarm |Indicates that an audible alarm is in progress |N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Not Verified]
 Silent Alarm | Indicates that there was a silent alarm | N/A - Refer to Zone Programming to determine what zones are applicable | Yes (3.3.0 and above)<br/>[Not Verified]
 Alarm Tripped: Countdown started | The alarm has been tripped and the countdown to Disarm has started | N/A - this event is detected from changes in the Keypad message | Yes (3.2.0 and above)<br/>[Verified]
+
+Trigger Event Notes:
+1. Requires AlarmDecoder Firmware 2.2a.8.8
+2. Not supported with AlarmDecoder Firmware 2.2a.8.8
+
+<br/>
 
 ### User Actions
 User Actions can detect when a specific Alarm Panel User Number (or any User Number) has initiated any these events: Disarmed, Armed Stay, Armed Away, or Alarm Cancelled. Refer to your Alarm User Manual for information about User Numbers. The Trigger dialog box allows for the selection of multiple events; so you can create a single Trigger for one or more of these Events. You can specify `Any User` and the event will execute the Trigger regardless of the User Number associated with the event. Alternatively, you can enter a single User Number (ex: 02) or a list of User Numbers comma seperated (ex: 02,07,14). You can also use an Indigo Variable as the User Number(s) in the format:`%%v:VARID%%` where `VARID` is the variable ID (ex: `%%v:1929322623%%`). The variable's value can contain one or more User Numbers. 
