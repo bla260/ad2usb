@@ -1806,7 +1806,8 @@ class Plugin(indigo.PluginBase):
             elif triggerType == 'armDisarm':
                 anyUser = True
                 # throw deprecated warning for Panel Arming Events
-                self.logger.warn("AD2USB Plugin Triggers based on Panel Arming Events will be deprecated in a future release. Change the Trigger named:{} from a Panel Arming Event to a User Action with the 'Any User' option selected.".format(triggerName))
+                self.logger.warning("AD2USB Panel Arming Events will be deprecated in a future release.") 
+                self.logger.warning("Change the Trigger named:{} to a User Action with the 'Any User' option selected.".format(triggerName))
 
             # build the dictionary
             self.triggerCache[tid] = {'events': events, 'partition': partition, 'name': triggerName, 'type': triggerType, 'anyUser': anyUser, 'users': users}
@@ -3077,6 +3078,7 @@ class Plugin(indigo.PluginBase):
         Used to set the property to AnyUser for any existing Panel Arming Events 
         """
         try:
+            haveLoggedWarning = False
             # for this plugin's triggers
             for trigger in indigo.triggers.iter("self"):
                 # if they are the to-be-deprecated Panel Arming Events
@@ -3087,8 +3089,13 @@ class Plugin(indigo.PluginBase):
                     localPropsCopy["userOption"] = "anyUser"
                     # update the properties
                     trigger.replacePluginPropsOnServer(localPropsCopy)
-                    # log and entry
-                    self.logger.warning("Change Trigger:{} to a User Action")
+
+                    # log and warn user
+                    if not haveLoggedWarning:
+                        self.logger.warning("AD2USB Panel Arming Events will be deprecated in future release:")
+                        haveLoggedWarning = True
+
+                    self.logger.warning("Change Trigger:{} to a User Action".format(trigger.name))
 
         except Exception as err:
-            self.logger.error("Error while trying to migrate deprecated Panel Arming Triggers:P{}".format(str(err)))
+            self.logger.error("Error while trying to migrate deprecated Panel Arming Triggers:{}".format(str(err)))

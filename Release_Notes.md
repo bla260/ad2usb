@@ -1,7 +1,7 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
 v 3.3.0 December 24, 2022
-- Added Time-Based One-Time Password Algorithm capability (OTP). Refer to the README on how to use this new capability for added security if you want to arm/disarm your alarm panel remotely using Indigo Touch or Indigo Client UI. This new feature requires the installation of one required and one optional, but recommended, Python modules. If you don't plan on using this capability; you do not need to install these modules and this release and future releases will continue to work. 
+- Added Time-Based One-Time Password Algorithm capability (OTP). Refer to the README on how to use this new capability for added security if you want to arm/disarm your alarm panel remotely using Indigo Touch or Indigo Client UI. This new feature requires the installation of one required and one optional, but recommended, Python modules. If you don't plan on using this capability; you do not need to install these modules and this release and future releases will continue to work. You need to restart the Indigo server after installing these modules.
   - PyOTP. Required for OTP functionality. 
   - qrcode. Optional for OTP functionality but required if you plan on generating a QRCODE image for easier setup on your mobile device.
 - Major changes to Plugin Triggers and Events.

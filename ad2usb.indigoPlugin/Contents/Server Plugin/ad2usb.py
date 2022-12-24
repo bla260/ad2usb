@@ -143,7 +143,7 @@ class ad2usb(object):
 
                         # provide a deprecated warning for Panel Arming Events
                         if self.plugin.triggerCache[triggerId]['type'] == 'armDisarm':
-                            self.logger.warn("AD2USB Plugin Triggers based on Panel Arming Events will be deprecated in a future release. Change Trigger named:{} from a Panel Arming Event to a User Action with the 'Any User' option selected.".format(triggerName))
+                            self.logger.warning("AD2USB Plugin Triggers based on Panel Arming Events will be deprecated in a future release. Change Trigger named:{} from a Panel Arming Event to a User Action with the 'Any User' option selected.".format(triggerName))
 
                         indigo.trigger.execute(triggerId)
 
