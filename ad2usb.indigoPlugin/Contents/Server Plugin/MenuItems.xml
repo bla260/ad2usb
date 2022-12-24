@@ -142,7 +142,7 @@
     </MenuItem>
 
     <MenuItem id="sendCONFIGCommand">
-        <Name>AlarmDecoder - Get Settingss</Name>
+        <Name>AlarmDecoder - Get Settings</Name>
         <CallbackMethod>sendAlarmDecoderConfigCommand</CallbackMethod>
     </MenuItem>
     <MenuItem id="sendVERCommand">
