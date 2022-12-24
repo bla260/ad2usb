@@ -128,4 +128,26 @@
 		<Description>(logs panel messages to a seperate file)</Description>
 	</Field>
 
+	<Field id="isCodeMaskingEnabled" type="checkbox" defaultValue="true">
+		<Label>Mask Alarm Codes:</Label>
+		<Description>(hide alarm codes in logs)</Description>
+	</Field>
+
+	<!-- Section 4 - OTP -->
+
+	<Field id="simpleSeparator5" type="separator" />
+
+	<Field id="sectionLabel5" type="label">
+		<Label>One Time Password (OTP) Options</Label>
+	</Field>
+
+	<Field type="checkbox" id="enableOTP">
+		<Label>Enable OTP:</Label>
+		<Description>(check to enable One Time Password feature)</Description>
+	</Field>
+
+	<Field id="OTPConfigPath" type="textfield" visibleBindingId="enableOTP" visibleBindingValue="true">
+		<Label>OTP Configuration Folder:</Label>
+	</Field>
+
 </PluginConfig>

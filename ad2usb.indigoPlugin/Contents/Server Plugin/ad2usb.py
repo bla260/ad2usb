@@ -99,41 +99,53 @@ class ad2usb(object):
     # Event queue management and trigger initiation
     def executeTrigger(self, partition, user, event):
         self.logger.debug(u"called with partition:{}, user:{}, event:{}".format(partition, user, event))
+
         partition = str(partition)
+        user = str(user)
+        userAsInt = self.__getIntFromString(user)
 
-        if event in self.plugin.triggerDict:
-            self.logger.debug(u"found event trigger:{}".format(self.plugin.triggerDict[event]))
-            try:
-                if partition in self.plugin.triggerDict[event]:
-                    # We have a winner
-                    self.logger.debug(u"matched event trigger:{}".format(self.plugin.triggerDict[event][partition]))
-                    indigo.trigger.execute(int(self.plugin.triggerDict[event][partition]))
-            except:
-                pass
-        # TO DO: refactor to use only events - add method to catch updates of triggers
-        if isinstance(user, int):
-            user = str(int(user))  # get rid of the leading zeroes
-            if user in self.plugin.triggerDict:
-                self.logger.debug(u"found user trigger:{}".format(self.plugin.triggerDict[user]))
-                try:
-                    if partition in self.plugin.triggerDict[user]:
-                        if self.plugin.triggerDict[user][partition]['event'] == event:
-                            # We have a winner
-                            self.logger.debug(u"matched user trigger:{}".format(
-                                self.plugin.triggerDict[user][partition]))
-                            indigo.trigger.execute(int(self.plugin.triggerDict[user][partition]['tid']))
-                except:
-                    pass
+        # new logic - we have event and parition from panel and user or non-user event
+        # new cache - { event : { partition: 1, any user: True/False, user: number/variable/list } }
+        # for each event that exists in the cache and matches the event
+        for triggerId in self.plugin.triggerCache:
+            triggerName = self.plugin.triggerCache[triggerId]['name']
 
-        # new logic - we have event, user or zone, and parition from panel
-        # if event exists
-        #   if partition matches
-        #       if user is not defined or is any user (000)
-        #           if zone is not defined or zone matches
-        #               execute
-        #       else
-        #           if user matches
-        #               execute
+            # if partition matches
+            if partition == self.plugin.triggerCache[triggerId]['partition']:
+
+                # if the event is one of the events 
+                if event in self.plugin.triggerCache[triggerId]['events']:
+
+                    # if its a user event
+                    if self.plugin.triggerCache[triggerId]['type'] == 'userEvents':
+
+                        # if its any user execute it
+                        if self.plugin.triggerCache[triggerId]['anyUser'] is True:
+                            self.logger.debug("Executing Any User Trigger:{}".format(triggerName))
+                            indigo.trigger.execute(triggerId)
+
+                        # else look at user variable and figure it out
+                        else:
+                            # get the users value
+                            users = self.plugin.triggerCache[triggerId]['users']
+                            
+                            # get the users as an array of int
+                            usersToCheck = self.__convertUsersStringToList(name=triggerName, userString=users)
+
+                            # if the user from the event is in the list of users in the Trigger
+                            if userAsInt in usersToCheck:
+                                self.logger.debug("Executing User Match Trigger:{}".format(triggerName))
+                                indigo.trigger.execute(triggerId)
+
+                    else:
+                        # execute the trigger if its not a userEvent
+                        self.logger.debug("Executing Non-User Trigger:{}".format(triggerName))
+
+                        # provide a deprecated warning for Panel Arming Events
+                        if self.plugin.triggerCache[triggerId]['type'] == 'armDisarm':
+                            self.logger.warn("AD2USB Plugin Triggers based on Panel Arming Events will be deprecated in a future release. Change Trigger named:{} from a Panel Arming Event to a User Action with the 'Any User' option selected.".format(triggerName))
+
+                        indigo.trigger.execute(triggerId)
 
         self.logger.debug(u"completed")
 
@@ -144,12 +156,37 @@ class ad2usb(object):
         Sends (writes) a message to the AlarmDecoder to be sent to the alarm panel. Messages can be
         prefixed by a keypad address to make the message come from another keypad address other than the
         AlarmDecoder. If no address is provided the message is sent from the AlarmDecoder's keypad
-        ADDRESS settings.
+        ADDRESS settings. Note that messages will not be logged literally to prevent user codes from
+        being logged. Four (4) digit codes with the message will be replaced by the word "CODE".
 
         **parameter:**
+        panelMsg - the keypad entries to send to the AlarmDecoder keypad
         address - zero-padded two digit string representing keypad address
         """
-        self.logger.debug(u"called with msg:{} for address:{}".format(panelMsg, address))
+        # strip panel codes from message
+        messageToLog = ''
+        try:
+            # check if we want to log the message safely
+            if self.plugin.isCodeMaskingEnabled:
+
+                # look for string that is Alarm User Code add and strip code
+                # Master Code + [8] + User No. + New User's Code
+                if re.search(r'^\d{4}8\d{6}', panelMsg) is None:
+                    messageToLog = re.sub(r'^\d{4}', 'CODE+', panelMsg)
+                else:
+                    messageToLog = re.sub(r'^\d{4}8(\d{2})\d{4}', 'CODE+8+\\1+CODE', panelMsg)
+
+            # not recommended but allowed - message is not stripped of CODEs
+            else:
+                messageToLog = panelMsg 
+
+            self.logger.debug(u"called with msg:{} for address:{}".format(messageToLog, address))
+
+        except Exception as err:
+            messageToLog = ''
+            self.logger.warning("Unable to safely log write panel message - not logging it.")
+
+        # TO DO: add optional messageToLog to panelWriteWrapper
 
         try:
             # if no keypad address specified no need to prefix the message with K##
@@ -160,11 +197,11 @@ class ad2usb(object):
                     address = "0" + address
                 panelMsg = 'K' + address + str(panelMsg)
                 self.panelWriteWrapper(self.serialConnection, panelMsg)
-                self.logger.info(u"sent panel message:{}".format(panelMsg))
+                self.logger.info(u"Panel message:{} sent to AlarmDecoder".format(messageToLog))
 
         except Exception as err:
-            self.logger.error(u"unable to write panel message:{}".format(panelMsg))
-            self.logger.error(u"error message:{}, {}".format(str(err), sys.exc_info()[0]))
+            self.logger.error(u"Unable to write panel message:{}".format(messageToLog))
+            self.logger.error(u"Error message:{}, {}".format(str(err), sys.exc_info()[0]))
 
         self.logger.debug(u"completed")
 
@@ -937,6 +974,12 @@ class ad2usb(object):
                                     # to force display to change from the Bypass state
                                     self.plugin.setDeviceState(bIndigoDevice, bIndigoDevice.displayStateValRaw)
 
+                                    # clear the keypad state of zones bypassed
+                                    # attempt to get the keypad device
+                                    keypadDevice = self.plugin.getKeypadDeviceForDevice(forDevice=bIndigoDevice)
+                                    if keypadDevice is not None:
+                                        keypadDevice.updateStateOnServer(key='zonesBypassList', value='')
+
                                     self.logger.debug(
                                         u"clearing bypass state for zone:{}, devid:{}".format(zone, bZDevid))
                                     self.logger.debug(u"zone:{}, data:{}".format(zone, self.plugin.zonesDict[zone]))
@@ -959,6 +1002,13 @@ class ad2usb(object):
                                 # after setting bypass set the device state to itself (no change)
                                 # to force display to change from the Bypass state
                                 self.plugin.setDeviceState(indigoDevice, indigoDevice.displayStateValRaw)
+
+                                # update the keypad state of zones bypassed
+                                # attempt to get the keypad device
+                                keypadDevice = self.plugin.getKeypadDeviceForDevice(forDevice=indigoDevice)
+                                if keypadDevice is not None:
+                                    bypassZoneListString = ','.join(map(str, self.listOfZonesBypassed))
+                                    keypadDevice.updateStateOnServer(key='zonesBypassList', value=bypassZoneListString)
 
                         # OK, Now let's see if we have a zone event
                         if not ad2usbIsAdvanced and len(self.plugin.zonesDict) > 0:
@@ -1901,3 +1951,66 @@ class ad2usb(object):
 
         else:
             return defaultValue
+
+    def __convertUsersStringToList(self, name='', userString=''):
+        """
+        Takes a string or Indigo variable 'userString' and returns an array of integer that represent User Numbers
+        """
+        arrayOfUsers = []
+
+        try:
+            # strip whitespace
+            userString = userString.strip()
+
+            # is the userStringList a variable?
+            # check if the pattern is valid variable
+            if re.search(r'^%%v:\d+%%$', userString) is None:
+                # its not a variable and we just use the value as passed
+                usersValue = userString
+            else:
+                # it looks like a variable, check with the method that returns a tuple: Bool, String
+                isVariableSub = self.plugin.substituteVariable(userString, True)
+                # check the tuple value
+                if isVariableSub[0]:
+                    # if the tuple is true call the method again to get variables value
+                    self.logger.debug('User is a variable:{}'.format(userString))
+                    usersValue = self.plugin.substituteVariable(userString, False)
+                    self.logger.info('Processing Trigger:{} - converted variable:{} to:{}'.format(name, userString, usersValue))
+                else:
+                    # unable to parse variable and we just use the value as passed
+                    self.logger.error('Value from User variable:{} cannot be determined. Trigger will not be run.'.format(userString))
+                    usersValue = ''
+
+            # split the string on comma
+            for oneUserString in usersValue.split(','):
+                # try to convert to an integer
+                oneUserInt = self.__getIntFromString(oneUserString)
+                if oneUserInt is not None:
+                    arrayOfUsers.append(oneUserInt)
+
+        except Exception as err:
+            self.logger.error("Error processing Trigger:{} Users value of:{}".format(name, userString))
+            self.logger.error("Error message:{}".format(str(err)))
+            return []
+
+        return arrayOfUsers
+
+    def __getIntFromString(self, intAsString=''):
+        """
+        Converts a string to an int. Returns None if the string is not a valid integer.
+        """
+        for c in intAsString:
+            if c not in '0123456789':
+                # return None if we find an invalid character
+                return None
+            else:
+                pass
+
+        # if we get here its contains valid int characters - but lets be extra safe
+        try:
+            x = int(intAsString)
+            return x
+
+        except Exception as err:
+            self.logger.debug('Error converting:{} to integer - error:{}'.format(intAsString, str(err)))
+            return None

@@ -6,12 +6,14 @@
 
 import logging  # needed for CONSTANTS
 from datetime import datetime
+import os
 import re
 import time
 import serial
 import sys
 import indigo   # Not needed. But it supresses lint errors
 from ad2usb import ad2usb
+import AD2USB_OTP
 import AD2USB_Constants  # Global Constants
 
 ################################################################################
@@ -75,7 +77,7 @@ class Plugin(indigo.PluginBase):
         self.virtualDict = {}
         self.zoneGroup2zoneDict = {}
         self.zone2zoneGroupDevDict = {}
-        self.triggerDict = {}
+        self.triggerCache = {}
 
         self.pluginDisplayName = pluginDisplayName
         self.pluginPrefs = pluginPrefs
@@ -84,6 +86,9 @@ class Plugin(indigo.PluginBase):
         self.hasAlarmDecoderConfigBeenRead = False
         self.previousCONFIGString = ''
         self.showFirmwareVersionInLog = True
+
+        self.previousOTPValues = []
+        self.OTPAttempts = []
 
         # adding new logging object introduced in API 2.0
         self.logger.info(u"Plugin init completed")
@@ -114,6 +119,15 @@ class Plugin(indigo.PluginBase):
         # gets the firmware version and log it
         # get the current configuration of the board and log it and change the preferences in memory
         self.ad2usb = ad2usb(self)
+
+        # create an OTP object - this should work regardless of OTP module status
+        self.otp = AD2USB_OTP.OTP(folderPath=self.OTPConfigPath, logger=self.logger, isEnabled=self.isOTPEnabled)
+
+        # monitor variable changes
+        indigo.variables.subscribeToChanges()
+
+        # remove this in later version - added in 3.3.0 to help migrate Panel Arm Events:
+        self.__migratePanelArmTriggers()
 
         self.logger.info(u"Plugin startup completed. Ready to open link to the ad2usb in {} mode.".format(mode))
 
@@ -157,9 +171,9 @@ class Plugin(indigo.PluginBase):
             if 'lastFaultTime' not in localStates:
                 dev.stateListOrDisplayStateIdChanged()
 
-        # migrate for version 3.1.0 state from old displayState to panelState
         if dev.deviceTypeId == 'ad2usbInterface':
 
+            # migrate for version 3.1.0 state from old displayState to panelState
             if dev.displayStateId == 'displayState':
                 # refresh from updated Devices.xml
                 self.logger.info(u"Upgrading states on device:{}".format(dev.name))
@@ -169,8 +183,9 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(u"revised device:{}".format(dev))
 
             # migrate for version 3.2.1 to add lastFaultTime and acPower
+            # migrate for version 3.3.0 to add zonesBypassList
             localStates = dev.states
-            if 'lastADMessage' not in localStates:
+            if ('lastADMessage' not in localStates) or ('zonesBypassList' not in localStates):
                 dev.stateListOrDisplayStateIdChanged()
 
         # if clear all devices is set or a new device clear the devices with zoneState state
@@ -226,7 +241,7 @@ class Plugin(indigo.PluginBase):
     def runConcurrentThread(self):
         try:
             # add some dumps of internal dictionaries
-            self.logger.debug("Trigger Dict:{}".format(self.triggerDict))
+            self.logger.debug("Trigger Cache:{}".format(self.triggerCache))
             self.logger.debug("Advanced Device Dict:{}".format(self.advZonesDict))
 
             self.logger.info(u"AlarmDecoder message processing started")
@@ -345,7 +360,7 @@ class Plugin(indigo.PluginBase):
             # part 0 - setup - get device ID, device zone as a padded string, and device partition
             devId = pluginAction.deviceId
             virtDevice = indigo.devices[devId]
-            virtZoneNumber = self._getPaddedZone(virtDevice.pluginProps['zoneNumber'])
+            virtZoneNumber = self.__getPaddedNumber(virtDevice.pluginProps['zoneNumber'])
 
             # BUG: the property vZonePartitionNumber must have been old
             # it no longer exists in Devices.xml as of 1.6.0 and onward
@@ -456,7 +471,8 @@ class Plugin(indigo.PluginBase):
 
     ########################################################
     def panelMsgWrite(self, pluginAction):
-        self.logger.debug(u"called with:{}".format(pluginAction))
+        # self.logger.debug(u"called with:{}".format(pluginAction))
+        self.logger.debug(u"called")
 
         if pluginAction.props['keypadAddress'] == '':
             address = self.ad2usbKeyPadAddress
@@ -464,6 +480,8 @@ class Plugin(indigo.PluginBase):
             address = pluginAction.props['keypadAddress']
 
         panelMsg = pluginAction.props['panelMessage']
+
+        # check if the message is as function key
         if panelMsg == 'F1' or panelMsg == 'f1':
             panelMsg = chr(1) + chr(1) + chr(1)
         elif panelMsg == 'F2' or panelMsg == 'f2':
@@ -473,13 +491,30 @@ class Plugin(indigo.PluginBase):
         elif panelMsg == 'F4' or panelMsg == 'f4':
             panelMsg = chr(4) + chr(4) + chr(4)
 
-        self.logger.debug(u"Created panel message: {}".format(panelMsg))
+        # check if the message is a variable
+        if re.search(r'^%%v:\d+%%$', panelMsg) is None:
+            # its not a variable and we just use the panel message provided
+            pass
+        # it looks like a variable, check with the method that returns a tuple: Bool, String
+        else:
+            isVariableSub = self.plugin.substituteVariable(panelMsg, True)
+            # check the tuple value
+            if isVariableSub[0]:
+                # if the tuple is true call the method again to get variables value
+                self.logger.debug('Panel Message is a variable:{}'.format(panelMsg))
+                panelMsgValue = self.plugin.substituteVariable(panelMsg, False)
+                # replace the message with the variable value
+                panelMsg = panelMsgValue
+            else:
+                # unable to parse variable and we just use the value as passed
+                self.logger.error('Value from Panel Message variable:{} cannot be determined. Panel message will not be sent.'.format(panelMsg))
+                return  # no message sent
+
+        self.logger.debug("created panel message")
 
         self.ad2usb.panelMsgWrite(panelMsg, address)
 
-        self.logger.debug(u"Sent panel message: {}".format(panelMsg))
-
-        self.logger.debug(u"completed")
+        self.logger.debug("sent panel message")
 
     ########################################################
     def panelQuckArmWrite(self, pluginAction):
@@ -600,10 +635,18 @@ class Plugin(indigo.PluginBase):
             else:
                 pass  # do not change if invalid
 
+            # OTP Config file
+            self.isOTPEnabled = valuesDict.get("enableOTP", False)
+            self.OTPConfigPath = valuesDict.get("OTPConfigPath", '')
+
+            # reset the OTP object
+            self.otp = AD2USB_OTP.OTP(folderPath=self.OTPConfigPath, logger=self.logger, isEnabled=self.isOTPEnabled)
+
             # logging parameters
             self.indigoLoggingLevel = valuesDict.get("indigoLoggingLevel", logging.INFO)
             self.pluginLoggingLevel = valuesDict.get("pluginLoggingLevel", logging.INFO)
             self.isPanelLoggingEnabled = valuesDict.get("isPanelLoggingEnabled", False)
+            self.isCodeMaskingEnabled = valuesDict.get("isCodeMaskingEnabled", True)
 
             # reset the logging levels
             self.__setLoggingLevels()
@@ -743,10 +786,27 @@ class Plugin(indigo.PluginBase):
 
             # we have a hidden value in Prefs for ad2usbKeyPadAddress
             currentAddress = self.getAlarmDecoderKeypadAddress()
+            self.logger.debug("Current address is:{}".format(currentAddress))
+
             if self.isValidKeypadAddress(currentAddress):
                 valuesDict['ad2usbKeyPadAddress'] = currentAddress
             else:
                 pass  # do not change if invalid
+
+            # validate the OTP Config folder if it is enabled
+            isOTPEnabled = valuesDict.get('enableOTP', False)
+            if isOTPEnabled:
+                self.logger.debug("OTP is enabled")
+                pathToCheck = valuesDict.get('OTPConfigPath', '')
+
+                # test the path
+                isFolderValid, folderMessage = self.otp.isValidFolder(folderToCheck=pathToCheck)
+                if not isFolderValid:
+                    isPrefsValid = False
+                    errorMsgDict['OTPConfigPath'] = folderMessage
+                    debugLogMessage = debugLogMessage + ' ' + errorMsgDict['OTPConfigPath']
+
+            # TO DO: add code to check readability, etc.
 
             # All other Plugin Config items are checkboxes or pull downs and are constrained
             # end checking preferences
@@ -1711,50 +1771,62 @@ class Plugin(indigo.PluginBase):
     # Indigo Event Triggers: Start and Stop
     ########################################
     def triggerStartProcessing(self, trigger):
-        self.logger.info(u"Enabling trigger:{}".format(trigger.name))
-        self.logger.debug(u"received trigger:{}".format(trigger))
-        self.logger.debug(u"starting trigger dict:{}".format(self.triggerDict))
+        self.logger.info("Enabling trigger:{}".format(trigger.name))
+        self.logger.debug("adding trigger:{} to cache".format(trigger))
 
-        event = trigger.pluginProps['indigoTrigger'][0]
-        partition = trigger.pluginProps['panelPartitionNumber']
-        tid = trigger.id
-
+        # new trigger cache property
+        # designed to work even if triggers were not migrated
         try:
-            user = trigger.pluginProps['userNumber']
-        except:
-            user = False
+            # common to all Triggers
+            tid = trigger.id
+            triggerType = trigger.pluginTypeId
+            events = trigger.pluginProps['indigoTrigger'].to_list()
+            partition = trigger.pluginProps['panelPartitionNumber']
+            triggerName = trigger.name
 
-        if user:
-            try:
-                if user not in self.triggerDict:
-                    self.triggerDict[user] = {}
-                self.triggerDict[user][partition] = {'tid': tid, 'event': event}
-            except Exception as err:
-                self.logger.error(u"Error:{}".format(err))
-        else:
-            try:
-                if event not in self.triggerDict:
-                    self.triggerDict[event] = {}
-                self.triggerDict[event][partition] = tid
-            except Exception as err:
-                self.logger.error(u"Error:{}".format(err))
+            # set user variables to a default
+            users = ''
+            anyUser = True
+            
+            # look for these types first to process them quickly
+            if (triggerType == 'systemEvents') or (triggerType == 'alarmEvents'):
+                anyUser = True
 
-        self.logger.debug(u"updated triggerDict:{}".format(self.triggerDict))
-        self.logger.debug(u"completed")
+            # else if the event is a user event and the userOption is None - make it selectUser - for migration in v3.3.0
+            elif triggerType == 'userEvents':
+                # see if this Trigger has been updated since v3.3.0
+                userOption = trigger.pluginProps.get('userOption', None)
+                if (userOption is None) or (userOption == 'selectUser'):
+                    anyUser = False
+                    users = trigger.pluginProps.get('userNumber','')
+                elif userOption == 'anyUser':
+                    anyUser = True
+
+            # to be deprecated after version 3.3.0
+            elif triggerType == 'armDisarm':
+                anyUser = True
+                # throw deprecated warning for Panel Arming Events
+                self.logger.warn("AD2USB Plugin Triggers based on Panel Arming Events will be deprecated in a future release. Change the Trigger named:{} from a Panel Arming Event to a User Action with the 'Any User' option selected.".format(triggerName))
+
+            # build the dictionary
+            self.triggerCache[tid] = {'events': events, 'partition': partition, 'name': triggerName, 'type': triggerType, 'anyUser': anyUser, 'users': users}
+
+        except Exception as err:
+            self.logger.error("Problem updating new Trigger cache:{}".format(str(err)))
+
+        self.logger.debug(u"updated (post add) Trigger Cache:{}".format(self.triggerCache))
 
     ########################################
     def triggerStopProcessing(self, trigger):
-        self.logger.debug(u"Disabling for trigger:{}".format(trigger.name))
-        self.logger.debug(u"Received trigger:{}".format(trigger.name))
+        self.logger.info(u"Disabling trigger:{}".format(trigger.name))
 
-        event = trigger.pluginProps['indigoTrigger'][0]
+        # new cache - remove the trigger id if it exists
+        tid = trigger.id
+        if tid in self.triggerCache:
+            self.logger.debug(u"trigger:{} id:{} removed from cache".format(trigger.name, tid))
+            del self.triggerCache[tid]
 
-        if event in self.triggerDict:
-            self.logger.debug(u"trigger:{} found".format(trigger.name))
-            del self.triggerDict[event]
-
-        self.logger.debug(u"trigger:{} deleted".format(trigger.name))
-        self.logger.debug(u"Completed")
+        self.logger.debug(u"updated (post remove) Trigger Cache:{}".format(self.triggerCache))
 
     def __setURLFromConfig(self):
         """
@@ -1976,6 +2048,10 @@ class Plugin(indigo.PluginBase):
         self.indigoLoggingLevel = pluginPrefs.get("indigoLoggingLevel", "INFO")  # 20 = INFO
         self.pluginLoggingLevel = pluginPrefs.get("pluginLoggingLevel", "INFO")  # 20 = INFO
         self.isPanelLoggingEnabled = pluginPrefs.get("isPanelLoggingEnabled", False)
+        self.isCodeMaskingEnabled = pluginPrefs.get("isCodeMaskingEnabled", True)
+
+        self.isOTPEnabled = pluginPrefs.get("enableOTP", False)
+        self.OTPConfigPath = pluginPrefs.get("OTPConfigPath", '')
 
         # computed settings
         if self.ad2usbCommType == 'messageFile':
@@ -2499,7 +2575,7 @@ class Plugin(indigo.PluginBase):
         """
         # return if nothing is passed
         if address is None:
-            self.logger.debug('invalid keypad address of None:{}'.format(address))
+            self.logger.debug('invalid keypad address of:{}'.format(address))
             return False
 
         # return if not a string
@@ -2799,16 +2875,16 @@ class Plugin(indigo.PluginBase):
             self.logger.error("Unable to clear all devices - msg:{}".format(str(err)))
             return False
 
-    def _getPaddedZone(self, zoneNumber):
+    def __getPaddedNumber(self, zoneNumber):
         """
         Returns a 2-digit padded zone number as a string. Returns None if zoneNumber is neither
-        a string or int.
+        a string or int or not in the range of 00-99
 
         **parameters:**
         zoneNumber - integer or string of the zone number to convert to string
         """
         if isinstance(zoneNumber, int):
-            if len(str(zoneNumber)) == 1:
+            if (len(str(zoneNumber)) == 1) and (zoneNumber <= 99) and (zoneNumber >= 0):
                 return '0' + str(zoneNumber)
             else:
                 return str(zoneNumber)
@@ -2817,7 +2893,7 @@ class Plugin(indigo.PluginBase):
             if len(zoneNumber) == 1:
                 return '0' + zoneNumber
             else:
-                return zoneNumber
+                return zoneNumber[:2]
 
         else:
             self.logger.debug('Unable to generate padded zone string')
@@ -2840,3 +2916,179 @@ class Plugin(indigo.PluginBase):
     def sendAlarmDecoderVersionCommand(self):
         self.showFirmwareVersionInLog = True
         self.ad2usb.sendAlarmDecoderVersionCommand()
+
+    def variableUpdated(self, origVar, newVar):
+        """
+        Indigo's built in plugin method to detect variable changes.
+        """
+        self.logger.debug("Called with {}:{}".format(newVar.name, newVar.value))
+        # check for variable name
+        if (newVar.name == 'ArmAwayOTP') or (newVar.name == 'ArmStayOTP'):
+
+            if self.isOTPEnabled:
+                if self.otp.isValidOTP(newVar.value):
+                    code = self.otp.getCode()
+                    if code is None:
+                        self.logger.error(
+                            "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
+                    else:
+
+                        if newVar.name == 'ArmAwayOTP':
+                            self.logger.info('OTP Validated. Arming Alarm AWAY now')
+                            messageToSend = code + '2'
+                            self.ad2usb.panelMsgWrite(messageToSend)
+
+                        if newVar.name == 'ArmStayOTP':
+                            self.logger.info('OTP Validated. Arming Alarm STAY now')
+                            messageToSend = code + '3'
+                            self.ad2usb.panelMsgWrite(messageToSend)
+
+                        code = None
+                else:
+                    self.logger.warning('OTP for Arming Alarm is not valid.')
+            else:
+                self.logger.warning(
+                    "OTP is not enabled. Check that it is enabled with a valid Folder Pathin 'Configure' - or required Python Modules may be missing.")
+
+        if newVar.name == 'DisarmOTP':
+
+            if self.isOTPEnabled:
+                if self.otp.isValidOTP(newVar.value):
+                    self.logger.info('OTP Disarming Alarm  - Validated. Disarming Alarm now')
+                    code = self.otp.getCode()
+                    if code is None:
+                        self.logger.error(
+                            "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
+                    else:
+                        messageToSend = code + '1'
+                        self.ad2usb.panelMsgWrite(messageToSend)
+                        code = None
+                else:
+                    self.logger.warning('OTP for Disarming Alarm is not valid.')
+            else:
+                self.logger.warning(
+                    "OTP is not enabled. Check that it is enabled with a valid Folder Pathin 'Configure' - or required Python Modules may be missing.")
+
+        if newVar.name == 'BypassOTP':
+
+            if self.isOTPEnabled:
+                if self.otp.isValidOTP(newVar.value):
+                    self.logger.info('OTP Bypass - Validated. Bypassing Zones now')
+                    code = self.otp.getCode()
+                    if code is None:
+                        self.logger.error(
+                            "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
+                    else:
+                        # get the bypass zones from a variable
+                        zonesToBypassVar = indigo.variables["ZonesToBypassOTP"]
+                        zonesToBypass = self.__validZoneList(zonesToBypassVar.value)
+
+                        # confirm zones are valid
+                        if zonesToBypass is not None:
+                            # build a string of zones
+                            self.logger.info("Bypassing Zones:{} ({})".format(zonesToBypassVar.value, zonesToBypass))
+
+                            # send the message to the panel
+                            messageToSend = code + '6' + zonesToBypass
+                            self.ad2usb.panelMsgWrite(messageToSend)
+                            code = None
+                else:
+                    self.logger.warning('OTP for Bypassing Zones is not valid.')
+            else:
+                self.logger.warning(
+                    "OTP is not enabled. Check that it is enabled with a valid Folder Pathin 'Configure' - or required Python Modules may be missing.")
+
+    def generateOTPConfig(self):
+        """
+        Menu item to create or update the OTP Conifiguration file and QR Code file.
+        """
+        try:
+            if self.otp.writeOTPConfigFiles():
+                self.logger.info("OTP Configuration file '{}' updated with new Shared Key.".format(self.otp.fileName))
+
+                if self.otp.writeOTPQRCode():
+                    self.logger.info("OTP QR Code file updated.")
+
+        except Exception as err:
+            self.logger.error("Unable to update OTP Configuration files. Error:{}".format(str(err)))
+
+    def createOTPVars(self):
+        """
+        Menu item to create any missing OTP Variables.
+        """
+        try:
+            # defined the variables as a list
+            OTPVars = {'ArmAwayOTP': False, 'ArmStayOTP': False,
+                       'BypassOTP': False, 'ZonesToBypassOTP': False, 'DisarmOTP': False}
+
+            # get all the variables and see which ones exist
+            for var in indigo.variables:
+                if var.name in OTPVars:
+                    OTPVars[var.name] = True
+
+            # log which ones exists
+            varsThatExist = []
+            # look at each variable (the key)
+            for key in OTPVars:
+
+                # if its True - its exists
+                if OTPVars[key]:
+                    varsThatExist.append(key)
+
+                # if its False we need to created it
+                else:
+                    newVar = indigo.variable.create(key, value="")
+                    self.logger.info("Created variable:{}".format(key))
+
+            self.logger.info("Variables {} already exist and will not be created.".format(', '.join(varsThatExist)))
+
+        except Exception as err:
+            self.logger.error("Unable to created all OTP Variables. Error:{}".format(str(err)))
+
+    def __validZoneList(self, zones):
+        """
+        Expects a comma separated list of zones and returns an even number of digits only or None.
+        Example: zones parameter = '1,14,7'; returns '011407'
+        """
+        try:
+            # split the string on comma
+            myZoneList = zones.split(",")
+            # put the list back into a string
+            myZoneString = ''.join(myZoneList)
+
+            # contains only digits
+            if myZoneString.isdigit():
+                # even number of digits - 2, 4, 6, ...
+                if len(myZoneString) % 2 == 0:
+                    return myZoneString
+                else:
+                    self.logger.warning("Zone Bypass list not even number of digits")
+                    return None
+            else:
+                self.logger.warning("Zone Bypass list contains values other than digits")
+                return None
+
+        except Exception as err:
+            self.logger.warning("Error reading list of Zones:{} - msg:{}".format(zones, str(err)))
+            return None
+
+    def __migratePanelArmTriggers(self):
+        """
+        Used to set the property to AnyUser for any existing Panel Arming Events 
+        """
+        try:
+            # for this plugin's triggers
+            for trigger in indigo.triggers.iter("self"):
+                # if they are the to-be-deprecated Panel Arming Events
+                if trigger.pluginTypeId == "armDisarm":
+                    # get the properties
+                    localPropsCopy = trigger.pluginProps
+                    # set the property to Any User for easier conversion
+                    localPropsCopy["userOption"] = "anyUser"
+                    # update the properties
+                    trigger.replacePluginPropsOnServer(localPropsCopy)
+                    # log and entry
+                    self.logger.warning("Change Trigger:{} to a User Action")
+
+        except Exception as err:
+            self.logger.error("Error while trying to migrate deprecated Panel Arming Triggers:P{}".format(str(err)))

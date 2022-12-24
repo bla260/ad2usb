@@ -2,9 +2,18 @@
 <Events>
 
     <Event id="armDisarm" filter="self">
-        <Name>Panel Arming Events</Name>
+        <Name>Panel Arming Events (Deprecated)</Name>
           <ConfigUI>
-            <Field id="indigoTrigger" type="list">
+            <Field id="deprecatedWarning" type="label" alignText="center" fontColor="red">
+              <Label>These events will be deprecated in a future release and can no longer be updated. Use a 'User Actions' event instead. You should migrate this Trigger by changing this event to a 'User Actions' event with 'Any User' selected and save the Trigger.</Label>
+            </Field>
+
+            <Field type="checkbox" id="armDisarmDeprecated" defaultValue="true" hidden="true">
+              <Label>Deprecated:</Label>
+	            <Description>Panel Arming Events are deprecated</Description>
+            </Field>
+
+            <Field id="indigoTrigger" type="list" enabledBindingId="armDisarmDeprecated" enabledBindingNegate="true">
               <Label>Arming Event</Label>
               <List>
                 <Option value="OPEN">Disarmed</Option>
@@ -13,7 +22,7 @@
               </List>
             </Field>
 
-            <Field id="panelPartitionNumber" type="menu" defaultValue='1'>
+            <Field id="panelPartitionNumber" type="menu" defaultValue='1' enabledBindingId="armDisarmDeprecated" enabledBindingNegate="true">
               <Label>Partition Number:</Label>
               <List>
                 <Option value="1">1</Option>
@@ -32,6 +41,10 @@
     <Event id="systemEvents" filter="self">
         <Name>System Status Events</Name>
           <ConfigUI>
+            <Field id="caveat" type="label" alignText="center" fontColor="green">
+              <Label>These events require either a real or emulated LRR</Label>
+            </Field>
+
             <Field id="indigoTrigger" type="list">
               <Label>System Event</Label>
               <List>
@@ -76,13 +89,14 @@
             <Field id="indigoTrigger" type="list">
               <Label>Alarm Event</Label>
               <List>
+                <Option value="ALARM_ENTRY">Entry Alarm</Option>
+                <Option value="ALARM_INTERIOR">Interior Alarm</Option>
+                <Option value="ALARM_PERIMETER">Perimeter Alarm</Option>
+                <Option value="ALARM_AUX">Aux Alarm</Option>
                 <Option value="ALARM_PANIC">Panic Alarm</Option>
                 <Option value="ALARM_FIRE">Fire Alarm</Option>
                 <Option value="ALARM_AUDIBLE">Audible Alarm</Option>
                 <Option value="ALARM_SILENT">Silent Alarm</Option>
-                <Option value="ALARM_ENTRY">Entry Alarm</Option>
-                <Option value="ALARM_AUX">Aux Alarm</Option>
-                <Option value="ALARM_PERIMETER">Perimeter Alarm</Option>
                 <Option value="ALARM_TRIPPED">Alarm Tripped: Countdown started</Option>
               </List>
             </Field>
@@ -114,16 +128,13 @@
               <Label> </Label>
             </Field>
 
-            <Field id="userNumber" type="textfield">
-              <Label>User Number (01-49):</Label>
-            </Field>
-
             <Field id="indigoTrigger" type="list">
               <Label>User Initated Event</Label>
               <List>
                 <Option value="OPEN">Disarm</Option>
                 <Option value="ARM_AWAY">Armed Away</Option>
                 <Option value="ARM_STAY">Armed Stay</Option>
+                <Option value="CANCEL">Alarm Cancelled</Option>
               </List>
             </Field>
 
@@ -140,6 +151,35 @@
                 <Option value="8">8</Option>
               </List>
             </Field>
+
+            <Field id="userOption" type="menu" defaultValue="selectUser">
+              <Label>Users:</Label>
+              <List>
+                <Option value="anyUser">Any User</Option>
+                <Option value="selectUser">Specify User(s)</Option>
+              </List>
+            </Field>
+
+            <Field id="emptyUser1" type="label" visibleBindingId="userOption" visibleBindingValue="anyUser">
+              <Label></Label>
+            </Field>
+
+            <Field id="emptyUser2" type="label" visibleBindingId="userOption" visibleBindingValue="anyUser">
+              <Label></Label>
+            </Field>
+
+            <Field id="emptyUser3" type="label" alignWithControl="true" visibleBindingId="userOption" visibleBindingValue="anyUser">
+	            <Label></Label>
+            </Field>
+
+            <Field id="userNumber" type="textfield" visibleBindingId="userOption" visibleBindingValue="selectUser" defaultValue="">
+              <Label>List of User Number(s):</Label>
+            </Field>
+
+            <Field id="userNumberLabel" type="label" alignWithControl="true" fontSize="mini" visibleBindingId="userOption" visibleBindingValue="selectUser">
+	            <Label>Enter a single User Number (ex: 02); a list of Users (ex: 02,07,12); or an Indigo variable ID (ex: %%v:1929322623%%) whose value contains one or more User Numbers.</Label>
+            </Field>
+
           </ConfigUI>
       </Event>
 
