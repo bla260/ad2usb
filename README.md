@@ -292,6 +292,7 @@ It is recommended that you Disable and then Enable the Plugin after making Confi
 - **Indigo Event Log Level**: See Logging section.
 - **Plugin Log Level**: See Logging section.
 - **Log Panel Messages**: See Logging section.
+- **Mask Alarm Codes**: This setting (on by default) will attempt to replace anything that looks like an alarm code (4-digits) with `CODE` in all log files. This feature is intended to increase security of your alarm system.
 
 ### One Time Password Setup
 #### Overview

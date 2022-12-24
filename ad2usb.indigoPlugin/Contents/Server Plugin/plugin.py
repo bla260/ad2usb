@@ -126,6 +126,9 @@ class Plugin(indigo.PluginBase):
         # monitor variable changes
         indigo.variables.subscribeToChanges()
 
+        # remove this in later version - added in 3.3.0 to help migrate Panel Arm Events:
+        self.__migratePanelArmTriggers()
+
         self.logger.info(u"Plugin startup completed. Ready to open link to the ad2usb in {} mode.".format(mode))
 
     ########################################################
@@ -168,9 +171,9 @@ class Plugin(indigo.PluginBase):
             if 'lastFaultTime' not in localStates:
                 dev.stateListOrDisplayStateIdChanged()
 
-        # migrate for version 3.1.0 state from old displayState to panelState
         if dev.deviceTypeId == 'ad2usbInterface':
 
+            # migrate for version 3.1.0 state from old displayState to panelState
             if dev.displayStateId == 'displayState':
                 # refresh from updated Devices.xml
                 self.logger.info(u"Upgrading states on device:{}".format(dev.name))
@@ -180,8 +183,9 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(u"revised device:{}".format(dev))
 
             # migrate for version 3.2.1 to add lastFaultTime and acPower
+            # migrate for version 3.3.0 to add zonesBypassList
             localStates = dev.states
-            if 'lastADMessage' not in localStates:
+            if ('lastADMessage' not in localStates) or ('zonesBypassList' not in localStates):
                 dev.stateListOrDisplayStateIdChanged()
 
         # if clear all devices is set or a new device clear the devices with zoneState state
@@ -642,6 +646,7 @@ class Plugin(indigo.PluginBase):
             self.indigoLoggingLevel = valuesDict.get("indigoLoggingLevel", logging.INFO)
             self.pluginLoggingLevel = valuesDict.get("pluginLoggingLevel", logging.INFO)
             self.isPanelLoggingEnabled = valuesDict.get("isPanelLoggingEnabled", False)
+            self.isCodeMaskingEnabled = valuesDict.get("isCodeMaskingEnabled", True)
 
             # reset the logging levels
             self.__setLoggingLevels()
@@ -2043,6 +2048,7 @@ class Plugin(indigo.PluginBase):
         self.indigoLoggingLevel = pluginPrefs.get("indigoLoggingLevel", "INFO")  # 20 = INFO
         self.pluginLoggingLevel = pluginPrefs.get("pluginLoggingLevel", "INFO")  # 20 = INFO
         self.isPanelLoggingEnabled = pluginPrefs.get("isPanelLoggingEnabled", False)
+        self.isCodeMaskingEnabled = pluginPrefs.get("isCodeMaskingEnabled", True)
 
         self.isOTPEnabled = pluginPrefs.get("enableOTP", False)
         self.OTPConfigPath = pluginPrefs.get("OTPConfigPath", '')
@@ -3065,3 +3071,24 @@ class Plugin(indigo.PluginBase):
         except Exception as err:
             self.logger.warning("Error reading list of Zones:{} - msg:{}".format(zones, str(err)))
             return None
+
+    def __migratePanelArmTriggers(self):
+        """
+        Used to set the property to AnyUser for any existing Panel Arming Events 
+        """
+        try:
+            # for this plugin's triggers
+            for trigger in indigo.triggers.iter("self"):
+                # if they are the to-be-deprecated Panel Arming Events
+                if trigger.pluginTypeId == "armDisarm":
+                    # get the properties
+                    localPropsCopy = trigger.pluginProps
+                    # set the property to Any User for easier conversion
+                    localPropsCopy["userOption"] = "anyUser"
+                    # update the properties
+                    trigger.replacePluginPropsOnServer(localPropsCopy)
+                    # log and entry
+                    self.logger.warning("Change Trigger:{} to a User Action")
+
+        except Exception as err:
+            self.logger.error("Error while trying to migrate deprecated Panel Arming Triggers:P{}".format(str(err)))

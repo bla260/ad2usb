@@ -166,14 +166,19 @@ class ad2usb(object):
         # strip panel codes from message
         messageToLog = ''
         try:
-            # log the message safely
+            # check if we want to log the message safely
+            if self.plugin.isCodeMaskingEnabled:
 
-            # look for string that is Alarm User Code add and strip code
-            # Master Code + [8] + User No. + New User's Code
-            if re.search(r'^\d{4}8\d{6}', panelMsg) is None:
-                messageToLog = re.sub(r'^\d{4}', 'CODE+', panelMsg)
+                # look for string that is Alarm User Code add and strip code
+                # Master Code + [8] + User No. + New User's Code
+                if re.search(r'^\d{4}8\d{6}', panelMsg) is None:
+                    messageToLog = re.sub(r'^\d{4}', 'CODE+', panelMsg)
+                else:
+                    messageToLog = re.sub(r'^\d{4}8(\d{2})\d{4}', 'CODE+8+\\1+CODE', panelMsg)
+
+            # not recommended but allowed - message is not stripped of CODEs
             else:
-                messageToLog = re.sub(r'^\d{4}8(\d{2})\d{4}', 'CODE+8+\\1+CODE', panelMsg)
+                messageToLog = panelMsg 
 
             self.logger.debug(u"called with msg:{} for address:{}".format(messageToLog, address))
 
@@ -181,7 +186,6 @@ class ad2usb(object):
             messageToLog = ''
             self.logger.warning("Unable to safely log write panel message - not logging it.")
 
-        # TO DO: add log codes anyway setting
         # TO DO: add optional messageToLog to panelWriteWrapper
 
         try:
@@ -1003,7 +1007,7 @@ class ad2usb(object):
                                 # attempt to get the keypad device
                                 keypadDevice = self.plugin.getKeypadDeviceForDevice(forDevice=indigoDevice)
                                 if keypadDevice is not None:
-                                    bypassZoneListString = ','.join(map(str(self.listOfZonesBypassed)))
+                                    bypassZoneListString = ','.join(map(str, self.listOfZonesBypassed))
                                     keypadDevice.updateStateOnServer(key='zonesBypassList', value=bypassZoneListString)
 
                         # OK, Now let's see if we have a zone event
