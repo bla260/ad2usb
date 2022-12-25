@@ -22,7 +22,7 @@ v 3.3.1 December 24, 2022 (replaced version 3.3.0)
 - Renamed menu items `Get AlarmDecoder Settings` to `AlarmDecoder - Get Settings` and `Get AlarmDecoder Firmware Version` to `AlarmDecoder - Get Firmware Version`
 - Alarm Action "Write to Panel" can now use Indigo Variables.
 - New Keypad State `Zone Bypass List` added. The value is a string with the list of zones that are bypassed (ex: "11,17,22")
-- Replaced version 3.3.0 releases the same day which had a minor bug in OTP key generation - that version has been removed.
+- Replaced version 3.3.0 released the same day which had a minor bug in OTP key generation - that version has been removed.
 
 v 3.2.1 September 5, 2022
 - Changed Indigo ad2usb Keypad Device custom state "AC Power" (acPower) possible values from "1" or "0" to "On" or "Off". From my own testing any device change trigger you had created on this state change should migrate without any change.
