@@ -290,6 +290,10 @@ class OTP(object):
                 with open(self.fileName, 'w') as configfile:
                     config.write(configfile)
 
+                # update property and log it
+                self.sharedkey = config['DEFAULT']['sharedKey']
+                self.logger.info("OTP Config file:{} updated.".format(self.fileName))
+
             # return success if we made it this far
             return True
 
