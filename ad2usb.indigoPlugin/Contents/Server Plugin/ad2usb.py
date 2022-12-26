@@ -58,7 +58,7 @@ class ad2usb(object):
         self.zoneListInit = False
         self.zoneStateDict = {}
         self.listOfZonesBypassed = []  # array with values of zone number as int
-        self.lastApZonesBypassed = 0
+        self.lastApZonesBypassed = 0  # in KPM this needs to be an int - in legacy code convert to str
 
         self.stopReadingMessages = False
 
@@ -956,13 +956,14 @@ class ad2usb(object):
                             u"number of zones bypassed - current:{}, last:{}".format(apZonesBypassed, self.lastApZonesBypassed))
 
                         # Manage bypassed zones
-                        if apZonesBypassed != self.lastApZonesBypassed:
+                        # convert lastApZonesBypassed to str for compare
+                        if apZonesBypassed != str(self.lastApZonesBypassed):
                             self.logger.debug(
                                 u"change in zone bypass count - current:{}, last:{}".format(apZonesBypassed, self.lastApZonesBypassed))
                             # There has been a change is the bypass list
                             if apZonesBypassed == "0":
                                 self.logger.debug(u"zones bypassed is now zero")
-                                self.lastApZonesBypassed = apZonesBypassed
+                                self.lastApZonesBypassed = int(apZonesBypassed)
                                 # Clear the bypass state of all zones
                                 for zone in self.listOfZonesBypassed:
                                     bZoneData = self.plugin.zonesDict[int(zone)]
@@ -996,7 +997,7 @@ class ad2usb(object):
                                 self.listOfZonesBypassed.append(bMsgZoneNum)
                                 self.logger.info(
                                     u"Alarm zone number:{}, name:{} has been bypassed".format(bMsgZoneNum, zName))
-                                self.lastApZonesBypassed = apZonesBypassed
+                                self.lastApZonesBypassed = int(apZonesBypassed)
                                 indigoDevice.updateStateOnServer(key='bypassState', value=True)
 
                                 # after setting bypass set the device state to itself (no change)
@@ -1679,6 +1680,13 @@ class ad2usb(object):
                     # to force display to change from the Bypass state
                     self.plugin.setDeviceState(myDevice, myDevice.displayStateValRaw)
 
+                    # update the keypad state of zones bypassed
+                    # attempt to get the keypad device
+                    keypadDevice = self.plugin.getKeypadDeviceForDevice(forDevice=myDevice)
+                    if keypadDevice is not None:
+                        bypassZoneListString = ','.join(map(str, self.listOfZonesBypassed))
+                        keypadDevice.updateStateOnServer(key='zonesBypassList', value=bypassZoneListString)
+
                     self.logger.debug(
                         u"clearing bypass state for zone:{}, devid:{}".format(zone, myDevice.id))
                     self.logger.debug(u"zone:{}, data:{}".format(zone, self.plugin.zonesDict[zone]))
@@ -1706,6 +1714,14 @@ class ad2usb(object):
                             # after setting bypass set the device state to itself (no change)
                             # to force display to change from the Bypass state
                             self.plugin.setDeviceState(myDevice, myDevice.displayStateValRaw)
+
+                            # update the keypad state of zones bypassed
+                            # attempt to get the keypad device
+                            keypadDevice = self.plugin.getKeypadDeviceForDevice(forDevice=myDevice)
+                            if keypadDevice is not None:
+                                bypassZoneListString = ','.join(map(str, self.listOfZonesBypassed))
+                                keypadDevice.updateStateOnServer(key='zonesBypassList', value=bypassZoneListString)
+
                     else:
                         self.logger.warning("Indigo device does not exist for zone:{}".format(zone))
 

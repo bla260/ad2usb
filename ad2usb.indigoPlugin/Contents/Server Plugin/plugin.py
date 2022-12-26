@@ -569,6 +569,8 @@ class Plugin(indigo.PluginBase):
 
     ########################################################
     # Let us know the operating mode inside of a device configuration window
+    # TO DO: Remove when we convert from advanced mode to advanced device. This is called before the dialog is shown
+    # and by default just takes the pluginProps of the device and returns that. 
     def getDeviceConfigUiValues(self, pluginProps, typeId, devId):
         self.logger.debug(u"Called")
 
@@ -1624,7 +1626,7 @@ class Plugin(indigo.PluginBase):
 
     def setDeviceState(self, forDevice, newState='NONE', ignoreBypass=False):
         """
-        Updates the indio.device for a given device object (indigo.device) and new state (string)
+        Updates the indigo.device for a given device object (indigo.device) and new state (string)
         the state is the key - not the value in the Devices.xml. The default logic for Bypassed
         devices is to update the text display and internal state but not the icon. If ignoreBypass
         is set to True, devices will CLEAR and FAULT normally and ignore the Bypass state. This
@@ -1691,7 +1693,7 @@ class Plugin(indigo.PluginBase):
 
     def setKeypadDeviceState(self, forDevice, newState='NONE'):
         """
-        Updates the indio.device for a given ad2usb keypad device object (indigo.device) and new state (string)
+        Updates the indigo.device for a given ad2usb keypad device object (indigo.device) and new state (string)
         The state is the key - not the value in the Devices.xml.
 
         **parameters**:
