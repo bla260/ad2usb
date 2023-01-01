@@ -245,6 +245,7 @@ class Message(object):
             self.messageDetails['KPM']['isAlarmTripped'] = False
             self.messageDetails['KPM']['isCountdown'] = False
             self.messageDetails['KPM']['isFault'] = False
+            self.messageDetails['KPM']['isCheck'] = False
             self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False
             self.messageDetails['KPM']['doesMessageZoneMatchNumericCode'] = False
 
@@ -333,6 +334,24 @@ class Message(object):
             elif akm[1:6] == "FAULT":
                 # zoneNumberAsInt has bypassed zone details
                 self.messageDetails['KPM']['isFault'] = True
+                zoneAsInt = self.__getIntFromString(akm[7:9])
+                if zoneAsInt is None:
+                    self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False
+                    self.messageDetails['KPM']['zoneFromMessage'] = None
+                else:
+                    self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False
+                    self.messageDetails['KPM']['zoneFromMessage'] = zoneAsInt
+
+                # check if zone number in message text = numericCode field
+                if self.messageDetails['KPM']['zoneFromMessage'] == self.messageDetails['KPM']['zoneNumberAsInt']:
+                    self.messageDetails['KPM']['doesMessageZoneMatchNumericCode'] = True
+
+            # CHECK
+            elif akm[1:6] == "CHECK":
+                # mark the message as a CHECK message - corresponds to TROUBLE LRR message
+                self.messageDetails['KPM']['isCheck'] = True
+
+                # get the zone number as integer
                 zoneAsInt = self.__getIntFromString(akm[7:9])
                 if zoneAsInt is None:
                     self.messageDetails['KPM']['doesMessageContainZoneNumber'] = False

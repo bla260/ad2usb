@@ -426,7 +426,7 @@ class ad2usb(object):
 
         else:
             if rawData[0:8] != '!setting' and rawData[0:7] != '!CONFIG' and rawData[0:2] != '!>' and rawData[0:4] != '!KPE' and rawData[0:8] != '!Sending' and rawData[0:4] != '!VER':
-                self.logger.error(u"Unknown message received:{}".format(rawData))
+                self.logger.warning(u"Unknown message received:{}".format(rawData))
 
         self.logger.debug(u"completed")
 
@@ -613,7 +613,7 @@ class ad2usb(object):
             # the panelReadWrapper will return with an empty message when the
             # serial timeout is reached - ignore these and loop back to read
             # we do this to enable Indigo to invoke a graceful Disable/Stop of the plugin
-            if rawData == '':
+            if (rawData == '') or (len(rawData) == 0):
                 doNotProcessThisMessage = True
                 self.logger.debug('read null message or timeout reached')
                 return None
@@ -646,6 +646,11 @@ class ad2usb(object):
                 elif (newMessageObject.messageType == 'VER') and newMessageObject.needsProcessing:
                     self.setFirmware(newMessageObject.firmwareVersion)
                     skipOldMesssageProcessing = True
+
+                elif (newMessageObject.messageType == 'PROMPT'):
+                    # we don't need to do anything with PROMPT type messages
+                    skipOldMesssageProcessing = True
+                    doNotProcessThisMessage = True
 
                 elif (newMessageObject.messageType == 'KPM') and newMessageObject.needsProcessing:
                     self.logger.debug('KPM message seen:{}'.format(newMessageObject))
