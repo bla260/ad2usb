@@ -491,18 +491,18 @@ class Plugin(indigo.PluginBase):
         elif panelMsg == 'F4' or panelMsg == 'f4':
             panelMsg = chr(4) + chr(4) + chr(4)
 
-        # check if the message is a variable
-        if re.search(r'^%%v:\d+%%$', panelMsg) is None:
+        # check if the message contains a variable
+        if re.search(r'%%v:\d+%%', panelMsg) is None:
             # its not a variable and we just use the panel message provided
             pass
         # it looks like a variable, check with the method that returns a tuple: Bool, String
         else:
-            isVariableSub = self.plugin.substituteVariable(panelMsg, True)
+            isVariableSub = self.substituteVariable(panelMsg, True)
             # check the tuple value
             if isVariableSub[0]:
                 # if the tuple is true call the method again to get variables value
                 self.logger.debug('Panel Message is a variable:{}'.format(panelMsg))
-                panelMsgValue = self.plugin.substituteVariable(panelMsg, False)
+                panelMsgValue = self.substituteVariable(panelMsg, False)
                 # replace the message with the variable value
                 panelMsg = panelMsgValue
             else:

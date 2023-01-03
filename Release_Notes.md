@@ -1,5 +1,8 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
+v 3.3.3 January 3, 2023
+- Bug fix. "Write to Panel" Actions variable substitution did not work correctly. This has been fixed. Variables can be anywhere in the string/message (ex: "12346%%v:58295773%%"). 
+
 v 3.3.2 January 1, 2023
 - Bug fixes.
   - Fixed bug that prevented Keypad State `Zone Bypass List` from displaying correctly.

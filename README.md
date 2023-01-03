@@ -1,6 +1,6 @@
 # ad2usb Indigo Plugin Documentation
 
-##### Version 3.3.2
+##### Version 3.3.3
 
 # Table of Contents
 - [About](#about)
