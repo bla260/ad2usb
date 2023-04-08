@@ -167,6 +167,11 @@
 				<TriggerLabel>Last Fault</TriggerLabel>
 				<ControlPageLabel>Last Fault</ControlPageLabel>
 			</State>
+			<State id="lastBatteryRestore">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Battery Restore</TriggerLabel>
+				<ControlPageLabel>Last Battery Restore</ControlPageLabel>
+			</State>
 		</States>
 	</Device>
 

@@ -22,7 +22,7 @@
 # Mapping to old LRR messages / 19 Events
 # ? = just a guess for now
 #
-# 8 are mapped below:
+# 10 are mapped below:
 # OPEN - 1,441 and 1,408
 # ARM_AWAY - 3,408 - Quick mode
 # ARM_STAY - 3,441
@@ -31,10 +31,10 @@
 # LOWBAT - 1,302 (Panel)
 # LOWBAT_RESTORE - 3,302 (Panel)
 # ALARM_ENTRY - 1,134
+# RFLOWBAT - 1,384
+# RFLOWBAT_RESTORE - 3,384
 #
-# 11 are still not verified:
-# RFLOWBAT - ? - 1,384
-# RFLOWBAT_RESTORE - ? - 3,384
+# 9 are still not verified:
 # TROUBLE - ? - 1,300
 # TROUBLE_RESTORE - ? - 3,300
 #
@@ -47,7 +47,7 @@
 # ALARM_TRIPPED - N/A - this is a keypad change event
 #
 ##################################
-# ARM_STAY then alarm tripped from entry testing
+# Example test of ARM_STAY then alarm tripped from entry testing
 # 1. 3,441 - ARM STAY enabled
 # 2. 1,134 - Entry/Exit zone alarm started
 # 3. 1,406 - User Cancel
@@ -55,7 +55,7 @@
 # 5. 3,134 - Entry/Exit zone alarm restored
 #
 ##################################
-# ARM_AWAY Quick Arm then alarm tripped by motion testing
+# Example test of ARM_AWAY Quick Arm then alarm tripped by motion testing
 # 1. 3,408 - ARM AWAY
 # 2. 3,459 - Recent Close(?)
 # 3. 1,401 - O/C by User
@@ -80,11 +80,9 @@
 # '122': {'3': 'ALARM_SILENT'},
 # '123': {'3': 'ALARM_AUDIBLE'},
 # '131': {'3': 'ALARM_PERIMETER'},
-# '300': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},
-# '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'},
 #
 # Map codes to Plugin Events
-# Not all Plugin Events defined in Plugin - for future use
+# Not all Plugin Events defined in Plugin - some are for future use
 cid_code_to_event = {
     '110': {'1': 'ALARM_FIRE'},  # not verified
     '120': {'1': 'ALARM_PANIC'},  # not verified
@@ -97,14 +95,15 @@ cid_code_to_event = {
     '301': {'1': 'ACLOSS', '3': 'AC_RESTORE'},  # verified
     '302': {'1': 'LOWBAT', '3': 'LOWBAT_RESTORE'},  # verified
     '383': {'1': 'TROUBLE', '3': 'TROUBLE_RESTORE'},  # verified - this is a CHECK on keypad
-    '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'}, # not verified - an educated guess
+    '384': {'1': 'RFLOWBAT', '3': 'RFLOWBAT_RESTORE'}, # verified
     '401': {'1': 'OPEN'},  # verified DISARM Away
     '406': {'1': 'CANCEL'},  # zone alarm cancelled by user
     '408': {'3': 'ARM_AWAY'},  # verified
     '441': {'3': 'ARM_STAY', '1': 'OPEN'},  # verified
     '459': {'3': 'RECENT_CLOSE'},  # verified but may not be useful
     '570': {'1': 'BYPASS_ON', '3': 'BYPASS_OFF'},  # bypass
-    '602': {'1': 'PERIODIC_TEST'}
+    '602': {'1': 'PERIODIC_TEST'},
+    '607': {'1': 'TEST_MODE_ON', '3': 'TEST_MODE_OFF'}  # verified
 }
 
 # the authoritative code list

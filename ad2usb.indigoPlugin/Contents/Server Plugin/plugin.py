@@ -171,6 +171,12 @@ class Plugin(indigo.PluginBase):
             if 'lastFaultTime' not in localStates:
                 dev.stateListOrDisplayStateIdChanged()
 
+            # migrate for version 3.3.4 to add lastBatteryRestore
+            if (dev.deviceTypeId == 'alarmZone'):
+                localStates = dev.states
+                if 'lastBatteryRestore' not in localStates:
+                    dev.stateListOrDisplayStateIdChanged()
+
         if dev.deviceTypeId == 'ad2usbInterface':
 
             # migrate for version 3.1.0 state from old displayState to panelState
@@ -1623,6 +1629,40 @@ class Plugin(indigo.PluginBase):
         except Exception as err:
             self.logger.error("Error trying to update all zone groups, current zone group id:{}, error:{}".format(
                 zoneGroupDeviceId, str(err)))
+
+    def updateRFBatteryForZone(self, zoneNumber):
+        """
+        Updates the indigo.device state 'lastBatteryRestore' for a given zone number.
+
+        **parameters**:
+        zoneNumber -- a valid zone number (int)
+        """
+
+        self.logger.debug(u"called with zone number:{}".format(zoneNumber))
+
+        try:
+            # force the parameter to an int
+            zoneAsInt = int(zoneNumber)
+
+            # get the device from the zone
+            deviceToUpdate = self.getDeviceForZoneNumberAsInt(forZoneNumber=zoneAsInt)
+
+            # check if we found the device
+            if deviceToUpdate is not None:
+
+                # confirm its a device type of alarmZone
+                if (deviceToUpdate.deviceTypeId == 'alarmZone'):
+                    validDeviceStates = deviceToUpdate.states
+                    if 'lastBatteryRestore' in validDeviceStates:
+                        now = datetime.now()
+                        timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
+                        deviceToUpdate.updateStateOnServer(key='lastBatteryRestore', value=timeStamp)
+
+            else:
+                self.logger.warning(u"No device found for zone:{}. Unable to set last battery restore time.".format(zoneAsInt))
+
+        except Exception as err:
+            self.logger.error("Unable to set last battery restore on zone:{}, error:{}".format(zoneNumber, str(err)))
 
     def setDeviceState(self, forDevice, newState='NONE', ignoreBypass=False):
         """

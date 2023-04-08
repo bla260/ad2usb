@@ -135,6 +135,9 @@
                 <Option value="ARM_AWAY">Armed Away</Option>
                 <Option value="ARM_STAY">Armed Stay</Option>
                 <Option value="CANCEL">Alarm Cancelled</Option>
+                <Option value="TEST_MODE_ON">Walk Test Mode On</Option>
+                <Option value="TEST_MODE_OFF">Walk Test Mode Off</Option>
+
               </List>
             </Field>
 

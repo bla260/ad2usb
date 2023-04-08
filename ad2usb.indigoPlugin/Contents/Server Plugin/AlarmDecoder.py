@@ -267,9 +267,16 @@ class Message(object):
             if zoneAsInt is None:
                 self.messageDetails['KPM']['isValidNumericCode'] = False
                 self.messageDetails['KPM']['zoneNumberAsInt'] = 0  # should never be used
-            else:
+
+            # lets now check if the zone is 1-99 which is valid
+            elif 0 < zoneAsInt <= 99:
                 self.messageDetails['KPM']['isValidNumericCode'] = True
                 self.messageDetails['KPM']['zoneNumberAsInt'] = zoneAsInt
+
+            else:
+                self.messageDetails['KPM']['isValidNumericCode'] = False
+                self.messageDetails['KPM']['zoneNumberAsInt'] = 0
+                self.logger.warning('Invalid Numeric Code:{} found in KPM message:{}.'.format(self.messageDetails['KPM']['numericCode'], self.messageDetails['KPM']['alphanumericKeypadMessage']))
 
             # get keypad mask and determine if its a system message
             keypadMask = self.messageString[30:38]
@@ -658,6 +665,7 @@ class Message(object):
             self.messageDetails['LRR']['isUserEvent'] = False
             self.messageDetails['LRR']['isZoneEvent'] = False
             self.messageDetails['LRR']['isAllPartitions'] = False
+            self.messageDetails['LRR']['zoneNumber'] = 0  # added this to match LR2 messages for compatibility
 
             # strip first 5 chars from the message - !EXP:
             messageText = self.messageString[5:]
@@ -665,6 +673,7 @@ class Message(object):
             # serial number, data = split on comma
             messageItems = re.split(',', messageText)
             self.messageDetails['LRR']['eventData'] = messageItems[0]
+            # TO DO: remove this line below
             self.messageDetails['LRR']['eventDataAsInt'] = int(messageItems[0])
             self.messageDetails['LRR']['partition'] = int(messageItems[1])
             self.messageDetails['LRR']['eventType'] = messageItems[2]
@@ -726,6 +735,7 @@ class Message(object):
                     self.messageDetails['LRR']['user'] = self.messageDetails['LRR']['eventData']
                 elif self.messageDetails['LRR']['eventType'] in LRRZoneEvents:
                     self.messageDetails['LRR']['isZoneEvent'] = True
+                    self.messageDetails['LRR']['zoneNumber'] = self.__getIntFromString(self.messageDetails['LRR']['eventData'])
 
             else:
                 self.logger.warning('Unknown LRR (v2.2a.6) eventType:{} message parsed:{}'.format(
@@ -769,20 +779,27 @@ class Message(object):
         try:
             progressMessage = 'started...'
             self.messageDetails['LR2'] = {}
+
+            # init these in alphabetic order to help checking
+            self.messageDetails['LR2']['cid_event_code'] = ''
+            self.messageDetails['LR2']['cid_event_string'] = ''
+            self.messageDetails['LR2']['cid_event_qualifier'] = ''
+            self.messageDetails['LR2']['cid_message'] = ''
+
             self.messageDetails['LR2']['eventData'] = ''
-            self.messageDetails['LR2']['partition'] = 0
-            self.messageDetails['LR2']['user'] = ''
             self.messageDetails['LR2']['eventType'] = ''
+
+            self.messageDetails['LR2']['isAllPartitions'] = False
+            self.messageDetails['LR2']['isKnownCode'] = False
+            self.messageDetails['LR2']['isMappedToEvent'] = False
             self.messageDetails['LR2']['isUserEvent'] = False
             self.messageDetails['LR2']['isZoneEvent'] = False
-            self.messageDetails['LR2']['isAllPartitions'] = False
-            self.messageDetails['LR2']['isMappedToEvent'] = False
 
-            self.messageDetails['LR2']['cid_message'] = ''
+            self.messageDetails['LR2']['partition'] = 0
             self.messageDetails['LR2']['report_code'] = ''
-
-            self.messageDetails['LR2']['cid_event_qualifier'] = ''
-            self.messageDetails['LR2']['cid_event_code'] = ''
+            self.messageDetails['LR2']['user'] = ''
+            self.messageDetails['LR2']['userCode'] = 0
+            self.messageDetails['LR2']['zoneNumber'] = 0
 
             progressMessage = 'Values initialized'
 

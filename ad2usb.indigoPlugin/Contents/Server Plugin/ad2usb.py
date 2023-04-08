@@ -440,31 +440,39 @@ class ad2usb(object):
                 self.zoneStateDict[address] = []
             self.zoneListInit = True
 
-        zoneData = self.plugin.zonesDict[zoneIndex]
-        zDevId = zoneData['devId']
-        zLogChanges = zoneData['logChanges']
-        zName = zoneData['name']
-        indigoDevice = indigo.devices[zDevId]
+        # check to see is zone number provided is in the zonesDict cache (exists in Indigo as a device) before updating the state
+        if zoneIndex in self.plugin.zonesDict:            
 
-        panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
-        self.logger.debug(u"got address:{}".format(panelKeypadAddress))
+            zoneData = self.plugin.zonesDict[zoneIndex]
+            zDevId = zoneData['devId']
+            zLogChanges = zoneData['logChanges']
+            zName = zoneData['name']
+            indigoDevice = indigo.devices[zDevId]
 
-        if zoneState == AD2USB_Constants.k_FAULT:
-            self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, addZone=int(zoneIndex))
-            self.logger.debug(u"faulted... state list:{}".format(self.zoneStateDict))
+            panelKeypadAddress = panelDevice.pluginProps['panelKeypadAddress']
+            self.logger.debug(u"got panel address:{}".format(panelKeypadAddress))
+
+            if zoneState == AD2USB_Constants.k_FAULT:
+                self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, addZone=int(zoneIndex))
+                self.logger.debug(u"faulted... state list:{}".format(self.zoneStateDict))
+            else:
+                self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, removeZone=int(zoneIndex))
+                self.logger.debug(u"clear... State list:{}".format(self.zoneStateDict))
+
+            # update the device state - this also call the Zone Group update
+            self.plugin.setDeviceState(indigoDevice, zoneState)
+
+            # update the panel device state info
+            panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[panelKeypadAddress]))
+
+            # If we are supposed to log zone changes, this is where we do it (unless this was a supervision message)
+            if zLogChanges:
+                self.logger.info(u"Zone:{}, Name:{}, State changed to:{}".format(zoneIndex, zName, zoneState))
+
         else:
-            self.updateZoneFaultListForKeypad(keypad=panelKeypadAddress, removeZone=int(zoneIndex))
-            self.logger.debug(u"clear... State list:{}".format(self.zoneStateDict))
 
-        # update the device state - this also call the Zone Group update
-        self.plugin.setDeviceState(indigoDevice, zoneState)
+            self.logger.warning("Alarm Panel Message received for Zone:{} but Zone Device does not exist in Indigo.".format(zoneIndex))
 
-        # update the panel device state info
-        panelDevice.updateStateOnServer(key='zoneFaultList', value=str(self.zoneStateDict[panelKeypadAddress]))
-
-        # If we are supposed to log zone changes, this is where we do it (unless this was a supervision message)
-        if zLogChanges:
-            self.logger.info(u"Zone:{}, Name:{}, State changed to:{}".format(zoneIndex, zName, zoneState))
 
     ########################################
     # Read the zone messages in basic mode
@@ -1799,7 +1807,7 @@ class ad2usb(object):
         """
         For LRR messages we update all the possible keypad devices based on the parition provided
         by the LRR message. A parition of 0 = all partitions. We then call any triggers associated
-        with the LRR events.
+        with the LRR events. This method process both old (LRR) and new (LR2) messages.
         """
         self.logger.debug("called with:{}".format(messageObject.getMessageProperties()))
 
@@ -1867,6 +1875,13 @@ class ad2usb(object):
 
             # now check to see if any triggers need to be called
             self.executeTrigger(partition, user, eventType)
+
+            # if the event is an RFLOWBAT_RESTORE set the custom device state so we can track battery replacements
+            # property zoneNumber is set in both LRR and LR2 messages so this will work with both
+            if messageObject.getMessageAttribute('eventType') == 'RFLOWBAT_RESTORE':
+                # make sure zoneNumber property is not None
+                if messageObject.getMessageAttribute('zoneNumber') is not None:
+                    self.plugin.updateRFBatteryForZone(messageObject.getMessageAttribute('zoneNumber'))
 
         except Exception as err:
             self.logger.error(u"LRR Error:{}".format(str(err)))

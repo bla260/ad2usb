@@ -1,5 +1,11 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
+v 3.3.4 April 8, 2023
+- Added a new Alarm Zone device state `Last Battery Restore`. This will log the date/time when the `RF Low Battery` restore event is detected. This can be used to track the last date/time you replaced a battery in your wireless sensors.
+- Zone numbers that are not valid (not in the range of 1-99) within Keypad Messages and will now log a warning versus an error in the Indigo Event Log.
+- Zone numbers in Alarm Panel messages that are not defined as an Alarm Zone Device in Indigo will log a new warning messages in the Indigo Event Log: "Alarm Panel Message received for Zone:## but Zone Device does not exist in Indigo." This condition previous reported a non-descript error message. 
+- Added two new User Events: `Walk Test Mode On` and `Walk Test Mode Off`. You can use these to detect when the a user enters (e.g. enables) or exists TEST mode (Alarm Keypad function 5).
+
 v 3.3.3 January 3, 2023
 - Bug fix. "Write to Panel" Actions variable substitution did not work correctly. This has been fixed. Variables can be anywhere in the string/message (ex: "12346%%v:58295773%%"). 
 
