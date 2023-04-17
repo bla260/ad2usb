@@ -238,6 +238,7 @@ class Message(object):
             self.messageDetails['KPM'] = {}
             self.messageDetails['KPM']['isValidNumericCode'] = False
             self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_UNK
+            self.messageDetails['KPM']['homeKitState'] = AD2USB_Constants.k_HK_ALARM_DISARMED
 
             # text of message
             self.messageDetails['KPM']['isBypassZone'] = False
@@ -374,11 +375,21 @@ class Message(object):
             #
             # ########## END
 
-            # determine the panel state
-            if (self.getKPMattr(flag='READY') == 1) and (self.getKPMattr(flag='ARMED_AWAY') == 0) and (self.getKPMattr(flag='ARMED_HOME') == 0):
+            # determine the panel state, HomeKit State and armed state from the bits
+
+            # check for Alarm On (bit 11) first since this can happen in AWAY, STAY, etc.
+            if (self.getKPMattr(flag='ALARM_BELL_ON') == 1):
+                self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ALARM_ON
+
+            # check for Alarm Occurred (bit 10) second
+            elif (self.getKPMattr(flag='ALARM_OCCURRED') == 1):
+                self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ALARM_OCCURRED
+
+            # now check for READY
+            elif (self.getKPMattr(flag='READY') == 1) and (self.getKPMattr(flag='ARMED_AWAY') == 0) and (self.getKPMattr(flag='ARMED_HOME') == 0):
                 self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_READY
 
-            elif (self.getKPMattr(flag='READY') == 0) and (self.getKPMattr(flag='ARMED_AWAY') == 1):
+            elif (self.getKPMattr(flag='ARMED_AWAY') == 1) and (self.getKPMattr(flag='READY') == 0):
 
                 # MAX
                 if self.getKPMattr(flag='ARMED_INSTANT') == 1:
@@ -388,7 +399,7 @@ class Message(object):
                 else:
                     self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_ARMED_AWAY
 
-            elif (self.getKPMattr(flag='READY') == 0) and (self.getKPMattr(flag='ARMED_HOME') == 1):
+            elif (self.getKPMattr(flag='ARMED_HOME') == 1) and (self.getKPMattr(flag='READY') == 0):
 
                 # INSTANT
                 if (self.getKPMattr(flag='ARMED_INSTANT') == 1) and (self.getKPMattr(flag='ARMED_STAY_NIGHT') == 0):
@@ -404,7 +415,7 @@ class Message(object):
 
             elif (self.getKPMattr(flag='READY') == 0) and (self.getKPMattr(flag='ARMED_AWAY') == 0) and (self.getKPMattr(flag='ARMED_HOME') == 0):
                 # this is a fault
-                # first 3 bits are zero: READY = 0, AWAY = 0, HOME = 0
+                # first 3 bits are zero: READY = 0, AWAY = 0, HOME (STAY) = 0
                 # unless not a numeric in which case it is an error
                 if self.messageDetails['KPM']['isValidNumericCode']:
                     self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_FAULT
@@ -414,6 +425,9 @@ class Message(object):
             else:
                 # we have an error or unknown
                 self.messageDetails['KPM']['panelState'] = AD2USB_Constants.k_PANEL_UNK
+
+            # set the HomeKit state based on the panel state - - converted to string - default to DISARMED 
+            self.messageDetails['KPM']['homeKitState'] = AD2USB_Constants.k_HOMEKIT_STATES.get(self.messageDetails['KPM']['panelState'], AD2USB_Constants.k_HK_ALARM_DISARMED)
 
             self.needsProcessing = True
             self.logger.debug('KPM message parsed:{}'.format(self.messageDetails['KPM']))

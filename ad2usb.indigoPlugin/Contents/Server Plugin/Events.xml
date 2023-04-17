@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <Events>
 
+    <!-- Start comment to remove Panel Arming Events
     <Event id="armDisarm" filter="self">
         <Name>Panel Arming Events (Deprecated)</Name>
           <ConfigUI>
@@ -37,6 +38,7 @@
             </Field>
           </ConfigUI>
     </Event>
+    -->
 
     <Event id="systemEvents" filter="self">
         <Name>System Status Events</Name>

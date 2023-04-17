@@ -431,6 +431,8 @@
 						<Option value="armedAway">Armed Away</Option>
 						<Option value="armedInstant">Armed Instant</Option>
 						<Option value="armedMax">Armed Max</Option>
+						<Option value="alarmOccured">Alarm Occurred</Option>
+						<Option value="alarmOn">Alarm On</Option>
 						<Option value="error">Error</Option>
 					</List>
 				</ValueType>
@@ -484,6 +486,7 @@
 					<List>
 						<Option value="unArmed">Not Armed</Option>
 						<Option value="armedStay">Armed Stay</Option>
+						<Option value="armedNightStay">Armed Night Stay</Option>
 						<Option value="armedAway">Armed Away</Option>
 						<Option value="armedMax">Armed Max</Option>
 						<Option value="armedInstant">Armed Instant</Option>
@@ -493,6 +496,21 @@
 				<TriggerLabelPrefix>Alarm Armed State is</TriggerLabelPrefix>
 				<ControlPageLabel>Armed State</ControlPageLabel>
 				<ControlPageLabelPrefix>Armed State is</ControlPageLabelPrefix>
+			</State>
+			<State id="homeKitState">
+				<ValueType>
+					<List>
+						<Option value="armedStay">Armed Stay</Option>
+						<Option value="armedAway">Armed Away</Option>
+						<Option value="armedNightStay">Armed Night Stay</Option>
+						<Option value="disarmed">Disarmed</Option>
+						<Option value="alarmOccured">Alarm Triggered</Option>
+					</List>
+				</ValueType>
+				<TriggerLabel>HomeKit State</TriggerLabel>
+				<TriggerLabelPrefix>HomeKit State is</TriggerLabelPrefix>
+				<ControlPageLabel>HomeKit State</ControlPageLabel>
+				<ControlPageLabelPrefix>HomeKit State is</ControlPageLabelPrefix>
 			</State>
 			<State id="acPower">
 				<ValueType boolType="OnOff">Boolean</ValueType>

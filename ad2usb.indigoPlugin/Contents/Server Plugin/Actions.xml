@@ -4,7 +4,7 @@
 <!--There are three types of actions for this plugin... arming the system... -->
 
 	<Action id="writeArmAwayPanel">
-		<Name>Arm-Away</Name>
+		<Name>Quick Arm-Away</Name>
 		<CallbackMethod>panelQuckArmWrite</CallbackMethod>
 		<ConfigUI>
 			<Field id="keypadAddress" type="menu" >
@@ -16,7 +16,7 @@
 	</Action>
 
 	<Action id="writeArmStayPanel">
-		<Name>Arm-Stay</Name>
+		<Name>Quick Arm-Stay</Name>
 		<CallbackMethod>panelQuckArmWrite</CallbackMethod>
 		<ConfigUI>
 			<Field id="keypadAddress" type="menu" >
@@ -28,7 +28,7 @@
 	</Action>
 
 	<Action id="writeArmMaxPanel">
-		<Name>Arm-Max</Name>
+		<Name>Quick Arm-Max</Name>
 		<CallbackMethod>panelQuckArmWrite</CallbackMethod>
 		<ConfigUI>
 			<Field id="keypadAddress" type="menu" >
@@ -41,7 +41,7 @@
 	</Action>
 
 	<Action id="writeArmInstantPanel">
-		<Name>Arm-Instant</Name>
+		<Name>Quick Arm-Instant</Name>
 		<CallbackMethod>panelQuckArmWrite</CallbackMethod>
 		<ConfigUI>
 			<Field id="keypadAddress" type="menu" >
@@ -52,7 +52,62 @@
 		</ConfigUI>
 	</Action>
 
-<!-- ...send an arbitrary command to the panel... -->
+	<Action id="sep1"/>
+
+	<Action id="armStayCode" deviceFilter="self.ad2usbInterface">
+		<Name>Arm-Stay (CODE)</Name>
+		<CallbackMethod>panelWriteWithCode</CallbackMethod>
+	</Action>
+
+	<Action id="armNightStayCode" deviceFilter="self.ad2usbInterface">
+		<Name>Arm-Night-Stay (CODE)</Name>
+		<CallbackMethod>panelWriteWithCode</CallbackMethod>
+	</Action>
+
+	<Action id="armAwayCode" deviceFilter="self.ad2usbInterface">
+		<Name>Arm-Away (CODE)</Name>
+		<CallbackMethod>panelWriteWithCode</CallbackMethod>
+	</Action>
+
+	<Action id="armInstantCode" deviceFilter="self.ad2usbInterface">
+		<Name>Arm-Instant (CODE)</Name>
+		<CallbackMethod>panelWriteWithCode</CallbackMethod>
+	</Action>
+
+	<Action id="armMaxCode" deviceFilter="self.ad2usbInterface">
+		<Name>Arm-Max (CODE)</Name>
+		<CallbackMethod>panelWriteWithCode</CallbackMethod>
+	</Action>
+
+	<Action id="disarmPanel" deviceFilter="self.ad2usbInterface">
+		<Name>Disarm (CODE)</Name>
+		<CallbackMethod>panelWriteWithCode</CallbackMethod>
+	</Action>
+
+	<!-- HomeKit Hidden Actions -->
+	<Action id="homeKitArmStay" deviceFilter="self.ad2usbInterface" uiPath="hidden">
+		<Name>HomeKit Arm-Stay</Name>
+		<CallbackMethod>homeKitActions</CallbackMethod>
+	</Action>
+
+	<Action id="homeKitArmAway" deviceFilter="self.ad2usbInterface" uiPath="hidden">
+		<Name>HomeKit Arm-Away</Name>
+		<CallbackMethod>homeKitActions</CallbackMethod>
+	</Action>
+
+	<Action id="homeKitArmNightStay" deviceFilter="self.ad2usbInterface" uiPath="hidden">
+		<Name>HomeKit Arm-Night-Stay</Name>
+		<CallbackMethod>homeKitActions</CallbackMethod>
+	</Action>
+
+	<Action id="homeKitDisarm" deviceFilter="self.ad2usbInterface" uiPath="hidden">
+		<Name>HomeKit Disarm</Name>
+		<CallbackMethod>homeKitActions</CallbackMethod>
+	</Action>
+
+	<Action id="sep2"/>
+
+	<!-- ...send an arbitrary command to the panel... -->	
 	<Action id="writeToPanel">
 		<Name>Write To Panel</Name>
 		<CallbackMethod>panelMsgWrite</CallbackMethod>
@@ -72,7 +127,9 @@
 		</ConfigUI>
 	</Action>
 
-<!-- ...force a zone to a specific state... -->
+	<Action id="sep3"/>
+
+	<!-- ...force a zone to a specific state... -->
 	<Action id="forceZoneStateChange">
 		<Name>Force Alarm Zone state change</Name>
 		<CallbackMethod>forceZoneStateChange</CallbackMethod>
@@ -91,7 +148,7 @@
 		</ConfigUI>
 	</Action>
 
-<!--... and faulting/clearing virtual zones -->
+	<!--... and faulting/clearing virtual zones -->
 	<Action id="virtualZoneActons" deviceFilter='self.alarmZoneVirtual'>
 		<Name>Change a Virtual Zone's state</Name>
 		<CallbackMethod>virtZoneManage</CallbackMethod>
@@ -106,4 +163,5 @@
 			</Field>
 		</ConfigUI>
 	</Action>
+
 </Actions>

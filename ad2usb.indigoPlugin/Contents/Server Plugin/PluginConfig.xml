@@ -38,12 +38,11 @@
 		<Label>AlarmDecoder Keypad Address (ADDRESS):</Label>
 	</Field>
 
-
 	<!-- Section 2 - Operating Parameters -->
 
 	<Field id="simpleSeparator2" type="separator" />
 
-	<Field id="makeSpace3" type="label">
+	<Field id="makeSpace2" type="label">
 		<Label/>
 	</Field>
 
@@ -87,7 +86,7 @@
 
 	<Field id="simpleSeparator3" type="separator" />
 
-	<Field id="sectionLabel4" type="label">
+	<Field id="sectionLabel3" type="label">
 		<Label>Logging Options</Label>
 	</Field>
 
@@ -135,9 +134,9 @@
 
 	<!-- Section 4 - OTP -->
 
-	<Field id="simpleSeparator5" type="separator" />
+	<Field id="simpleSeparator4" type="separator" />
 
-	<Field id="sectionLabel5" type="label">
+	<Field id="sectionLabel4" type="label">
 		<Label>One Time Password (OTP) Options</Label>
 	</Field>
 
@@ -148,6 +147,65 @@
 
 	<Field id="OTPConfigPath" type="textfield" visibleBindingId="enableOTP" visibleBindingValue="true">
 		<Label>OTP Configuration Folder:</Label>
+	</Field>
+
+	<!-- Section 5 - Alarm Code -->
+
+	<Field id="simpleSeparator5" type="separator" />
+
+	<Field id="sectionLabel5" type="label">
+		<Label>Alarm Code Options</Label>
+	</Field>
+
+	<Field type="checkbox" id="enableCode">
+		<Label>Save Alarm Code:</Label>
+		<Description>(check to allow saving of code for disarming)</Description>
+	</Field>
+
+	<Field id="codeLocation" type="menu" visibleBindingId="enableCode" visibleBindingValue="true" defaultValue="inVariable">
+		<Label>Alarm Panel Code Stored In:</Label>
+		<List>
+			<Option value="inVariable">Indigo Variable</Option>
+			<Option value="inOTP">OTP Configuration File</Option>
+			<Option value="inPrefs">Preferences</Option>
+		</List>
+	</Field>
+
+	<Field id="alarmCode" type="textfield" visibleBindingId="codeLocation" visibleBindingValue="inPrefs" secure="true">
+		<Label>Alarm Code (4-digits):</Label>
+	</Field>
+
+	<Field id="alarmCodeVariable" type="textfield" visibleBindingId="codeLocation" visibleBindingValue="inVariable">
+		<Label>Variable ID:</Label>
+	</Field>
+
+	<Field id="variableFormatNotes" type="label" visibleBindingId="codeLocation" visibleBindingValue="inVariable" >
+		<Label fontSize="mini">Enter your variable in the in the format: %%v:VARID%% where "VARID" is the variable ID (ex: %%v:1929322623%%).</Label>
+	</Field>
+
+	<!-- Section 6 - HomeKit Integration -->
+
+	<Field id="simpleSeparator6" type="separator" />
+
+	<Field id="sectionLabel6" type="label">
+		<Label>HomeKit Integration</Label>
+	</Field>
+
+	<Field id="isHomeKitEnabled" type="checkbox">
+		<Label>Enable HomeKit Integration:</Label>
+		<Description>(check to enable integration via HomeKitLink-Siri)</Description>
+	</Field>
+
+	<Field id="hkArmMethod" type="menu" defaultValue="quickArm" visibleBindingId="isHomeKitEnabled" visibleBindingValue="true">
+		<Label>Use Quick Arm or Code:</Label>
+		<List>
+			<Option value="quickArm">Quick Arm</Option>
+			<Option value="useCode">Alarm Code</Option>
+		</List>
+	</Field>
+
+	<Field id="hkViaCodeNotes" type="label" visibleBindingId="hkArmMethod" visibleBindingValue="useCode" >
+		<Label fontSize="mini">**NOTE: Use of Alarm Code for HomeKit integration requires Save Alarm Code to be enabled.**</Label>
 	</Field>
 
 </PluginConfig>

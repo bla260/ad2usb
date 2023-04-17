@@ -103,7 +103,6 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         self.logger.debug(u"called")
 
-        self.ALARM_STATUS = AD2USB_Constants.k_PANEL_BIT_MAP
         self.zonesDict = {}
         self.advZonesDict = {}
 
@@ -127,6 +126,7 @@ class Plugin(indigo.PluginBase):
         indigo.variables.subscribeToChanges()
 
         # remove this in later version - added in 3.3.0 to help migrate Panel Arm Events:
+        # modigied in version 3.4.0 to throw and error and tell user to delete the Trigger
         self.__migratePanelArmTriggers()
 
         self.logger.info(u"Plugin startup completed. Ready to open link to the ad2usb in {} mode.".format(mode))
@@ -190,8 +190,9 @@ class Plugin(indigo.PluginBase):
 
             # migrate for version 3.2.1 to add lastFaultTime and acPower
             # migrate for version 3.3.0 to add zonesBypassList
+            # migrate for version 3.4.0 to add homeKitState
             localStates = dev.states
-            if ('lastADMessage' not in localStates) or ('zonesBypassList' not in localStates):
+            if ('lastADMessage' not in localStates) or ('zonesBypassList' not in localStates) or ('homeKitState' not in localStates):
                 dev.stateListOrDisplayStateIdChanged()
 
         # if clear all devices is set or a new device clear the devices with zoneState state
@@ -513,7 +514,7 @@ class Plugin(indigo.PluginBase):
                 panelMsg = panelMsgValue
             else:
                 # unable to parse variable and we just use the value as passed
-                self.logger.error('Value from Panel Message variable:{} cannot be determined. Panel message will not be sent.'.format(panelMsg))
+                self.logger.error('Value from Panel Message variable:{} cannot be determined. Error:{}. Panel message will not be sent.'.format(panelMsg, isVariableSub[1]))
                 return  # no message sent
 
         self.logger.debug("created panel message")
@@ -538,6 +539,280 @@ class Plugin(indigo.PluginBase):
         self.ad2usb.panelMsgWrite(panelMsg, address)
 
         self.logger.debug(u"completed")
+
+    def panelQuickArmWriteToKeypad(self, pluginAction):
+        try:
+
+            self.logger.debug("called with:{}".format(pluginAction))
+
+            # define actions we support by this method
+            k_ACTION_NAMES = {'homeKitArmStay': 'HomeKit Arm-Stay', 
+                              'homeKitArmAway': 'HomeKit Arm-Away'}            
+
+            # define keys we can pass
+            k_ACTION_QUICKARM_KEYPAD_KEYS = {'homeKitArmStay': '#3',
+                                             'homeKitArmAway': '#2'}
+
+            # get the name of the Action being called
+            actionId = pluginAction.pluginTypeId
+            actionName = k_ACTION_NAMES.get(actionId)  # default to None
+            if actionName is None:
+                self.logger.debug("Unknown Action Id:{}".format(actionId))
+                self.logger.warning("Unable to perform Action Id:{} using panelQuickArmWriteToKeypad".format(actionId))
+                return False  # no message sent
+
+            # get keypad device from ID
+            deviceId = int(pluginAction.deviceId)
+            keypadDevice = self.getKeypadDeviceForId(deviceId)
+
+            # get address of keypad (e.g. "18")
+            address = ''
+            if keypadDevice is None:
+                self.logger.warning("Keypad device not found or is disabled when attempting to run Action:{}. Update the selected Keypad Device.".format(actionName))
+                return False  # no write to panel
+
+            else:
+                address = keypadDevice.pluginProps.get('panelKeypadAddress','')
+                self.logger.debug("Using Keypad Device id:{} with address:{} to write to".format(deviceId, address))
+
+            # check if keypad address is the default address and no "K" prefix is required
+            if address == self.ad2usbKeyPadAddress:
+                self.logger.debug("Keypad address is the default address - resetting address to empty string")
+                address = ''
+            else:
+                self.logger.debug("Keypad address:{} is not the default address:{}".format(address, self.ad2usbKeyPadAddress))
+
+
+            # set the panel message based on the action id/action name
+            panelMsg = k_ACTION_QUICKARM_KEYPAD_KEYS.get(actionId)
+            if panelMsg is not None:
+                self.logger.debug("Created panel message: {}".format(panelMsg))
+                # write the message
+                self.ad2usb.panelMsgWrite(panelMsg, address)
+                self.logger.debug("completed")
+                return True
+            
+            else:
+                self.logger.warning("No valid panel message found for: {}".format(actionName))
+                return False  # no write to panel
+
+        except Exception as err:
+            self.logger.error("Error while attempting to send Quick Arm panel message - error:{}".format(str(err)))
+            return False
+
+    def panelWriteWithCode(self, pluginAction):
+        """
+        Callback for Actions that require an alarm code. Will find the alarm code based on Configure settings.
+        It must be enabled. If enabled, it can be a Variable, use the OTP Configuration file, or is entered in Preferences.
+        Actions can be: Arm-Stay (CODE), Arm-Night-Stay (CODE), Arm-Away (CODE), Arm-Night-Stay (CODE), Arm-Max (CODE), or Disarm.
+        """
+
+        try:
+            self.logger.debug("called with:{}".format(pluginAction))
+
+            # define some local constants of the plugins that may call this method
+            k_ACTION_NAMES = {'armStayCode': 'Arm-Stay (CODE)', 
+                              'armNightStayCode': 'Arm-Night-Stay (CODE)',
+                              'armAwayCode': 'Arm-Away (CODE)',
+                              'armInstantCode': 'Arm-Max (CODE)',
+                              'armMaxCode': 'Arm-Max (CODE)',
+                              'disarmPanel': 'Disarm',
+                              'homeKitArmStay': 'HomeKit Arm-Stay', 
+                              'homeKitArmNightStay': 'HomeKit Arm-Night-Stay',
+                              'homeKitArmAway': 'HomeKit Arm-Away',
+                              'homeKitDisarm': 'HomeKit Disarm'}
+
+            k_ACTION_KEYPAD_KEYS = {'armStayCode': '3',
+                                    'armNightStayCode': '33',
+                                    'armAwayCode': '2',
+                                    'armInstantCode': '7',
+                                    'armMaxCode': '8',
+                                    'disarmPanel': '1',
+                                    'homeKitArmStay': '3', 
+                                    'homeKitArmNightStay': '33',
+                                    'homeKitArmAway': '2',
+                                    'homeKitDisarm': '1'}
+            
+            # get the name of the Action being called
+            actionId = pluginAction.pluginTypeId
+            actionName = k_ACTION_NAMES.get(actionId)
+            if actionName is None:
+                self.logger.debug("Unknown Action Id:{}".format(actionId))
+                return False  # no message sent
+
+            # get device to ultimately determine the keypad address and thus partition to send to
+            address = ''  # the default
+            deviceId = int(pluginAction.deviceId)
+            keypadDevice = self.getKeypadDeviceForId(deviceId)
+
+            if keypadDevice is None:
+                self.logger.warning("Keypad device not found or is disabled when attempting to run Action:{}. Update the selected Keypad Device.".format(actionName))
+                return False  # no write to panel
+
+            else:
+                address = keypadDevice.pluginProps.get('panelKeypadAddress','')
+                self.logger.debug("Sending message to Keypad Device id:{} with address:{}".format(deviceId, address))
+
+
+            # check if keypad address is the default address and no "K" prefix is required
+            if address == self.ad2usbKeyPadAddress:
+                self.logger.debug("Keypad address is the default address - resetting address to empty string")
+                address = ''
+            else:
+                self.logger.debug("Keypad address:{} is not the default address:{}".format(address, self.ad2usbKeyPadAddress))
+
+
+            # get the keys to pass
+            keysToPass = k_ACTION_KEYPAD_KEYS.get(actionId)
+            if keysToPass is None:
+                self.logger.debug("No keypad message found for Action ID:{}".format(actionId))
+                return False  # no message sent
+            else:
+                # are keys valid
+                for c in keysToPass:
+                    if c not in '0123456789*#':
+                        self.logger.debug("Invalid keypad message found in:{}".format(keysToPass))
+                        return False  # no message sent
+
+                self.logger.debug("Keypad message for action is:{}".format(keysToPass))
+
+            # get the code if its enabled
+            code = None
+            if self.isCodeSaved:
+                code = self.__getAlarmCode()
+            else:
+                self.logger.error("Attempting to perform Action:{} that requires an alarm code but saving of an alarm code is not enabled. Check Configure settings to enable code or disable the action.".format(actionName))
+
+
+            # check ths code is valie
+            if code is None:
+                self.logger.error("Alarm code could not be found or was not valid - {} command not sent".format(actionName))
+                return False  # no message sent
+
+            else:
+                if address == '':
+                    self.logger.debug("Action:{} - sending CODE+{} to default keypad".format(actionName, keysToPass))
+                else:
+                    self.logger.debug("Action:{} - sending CODE+{} to keypad address:{}".format(actionName, keysToPass, address))
+
+                # send the message
+                self.ad2usb.panelMsgWrite(code + keysToPass, address)
+
+                code = None  # clear the code
+                return True
+
+        except Exception as err:
+            code = ''
+            self.logger.error("Unable to execute Action:{} - error:{}".format(actionName, str(err)))
+            return False  # no message sent
+
+    def homeKitActions(self, pluginAction):
+        """
+        Called by a hidden Actions for HomeKit Arm-Stay, Arm-Away, Arm-Night-Stay, and Disarm. Will verfiy HomeKit is enabled
+        and then pass the action parameter directly to the appropiate method depending on if HomeKit is setup for code use or quick arming.
+        """
+        try:
+            # to test this code:
+            # pObj = indigo.server.getPlugin("com.berkinet.ad2usb")
+            # pObj.isEnabled()
+	        # pObj.executeAction("writeArmAwayPanel", props={'keypadAddress':'', 'armingCode':'#2'})
+
+            # define some local constants of the plugins that may call this method
+            k_ACTION_NAMES = {'homeKitArmStay': 'HomeKit Arm-Stay', 
+                              'homeKitArmNightStay': 'HomeKit Arm-Night-Stay',
+                              'homeKitArmAway': 'HomeKit Arm-Away',
+                              'homeKitDisarm': 'HomeKit Disarm'}
+
+            k_QUICK_ARM_ONLY = {'homeKitArmStay': 'HomeKit Arm-Stay', 
+                              'homeKitArmAway': 'HomeKit Arm-Away'}
+
+            # get the name of the Action being called
+            actionId = pluginAction.pluginTypeId
+            actionName = k_ACTION_NAMES.get(actionId)
+            if actionName is None:
+                self.logger.debug("Unknown HomeKit Action Id:{}".format(actionId))
+                return False  # no message sent
+
+            # verify HomeKit integration is enabled
+            if not self.isHomeKitEnabled:
+                self.logger.warning("Attempting to run HomeKit Action:{} - but HomeKit is not enabled. Use Configure to enable HomeKit integration.".format(actionName))
+                return False  # no message sent
+
+            # get the flag if we will use Quick Arming or pass a Code
+            if self.hkArmMethod == 'quickArm':
+
+                # we can only run Arm-Stay and Arm-Away with Quick Arm
+                if actionId in k_QUICK_ARM_ONLY:
+                    self.panelQuickArmWriteToKeypad(pluginAction)
+                    return True
+                else:
+                    self.logger.warning("Action:{} cannot be run via Quick Arm - requires using an Alarm Code. Use Configure change HomeKit settings.".format(actionName))
+                    return False
+            
+            elif self.hkArmMethod == 'useCode':
+                self.panelWriteWithCode(pluginAction)
+                return True
+
+            else:
+                self.logger.warning("Attempting to run HomeKit Action:{} - but unable to determing method. Check Configure settings.".format(actionName))
+                return False  # no message sent
+
+        except Exception as err:
+            pass
+
+    def __getAlarmCode(self):
+        """
+        Retrieves the alarm code from an Indigo variable, OTP, or from with the preferences. It also validates that the code (string) is valid.
+        Returns the code (4 digit only string) or None if code was not found or was not valid.
+        """
+
+        try:
+            # get the code
+            code = ''
+
+            # check if we're set to an Indigo variable first
+            if self.codeLocation == AD2USB_Constants.k_CODE_USE_VARIABLE:
+
+                # validate the variable
+                isVariableSub = self.substituteVariable(self.alarmCodeVariable, True)
+
+                # check the tuple value
+                if isVariableSub[0]:
+                    # if the tuple is true call the method again to get variables value
+                    self.logger.debug('Alarm code is a variable:{}'.format(self.alarmCodeVariable))
+                    # replace the code with the variable value
+                    code = self.substituteVariable(self.alarmCodeVariable, False)
+                else:
+                    # unable to parse variable and we just use the value as passed
+                    self.logger.error('Value from Alarm code variable:{} cannot be determined. Error:{}'.format(self.alarmCodeVariable, isVariableSub[1]))
+                    return None # None is no code found
+
+            # check if stored in prefs
+            elif self.codeLocation == AD2USB_Constants.k_CODE_USE_PREFS:
+                if hasattr(self, 'alarmCode'):
+                    code = self.alarmCode
+
+            # check if stored in OTP
+            elif self.codeLocation == AD2USB_Constants.k_CODE_USE_OTP:
+                # this applies for OTP
+                code = self.otp.getAlarmCode()
+
+            else:
+                code = None
+
+            # validate the code is a 4-digit string
+            if self.isValidAlarmCodeString(code):
+                self.logger.debug("Valid alarm panel code found in:{}".format(self.codeLocation))
+                return code
+
+            else: 
+                # log error and return
+                self.logger.error("Invalid code value in setting:{}.".format(self.codeLocation))
+                return None
+
+        except Exception as err:
+            self.logger.error("Unable to get alarm code:{}".format(str(err)))
+            return None
 
     ########################################################
     def forceZoneStateChange(self, pluginAction):
@@ -607,7 +882,22 @@ class Plugin(indigo.PluginBase):
         # TO DO: need to address all parameters in this code
         if UserCancelled is False:
 
-            self.logger.info(u"Updated configuration values:{}".format(valuesDict))
+            # make a copy of the dict and only log what we want to
+            dictKeysToHide = {'alarmCode', 'ad2usbEmulationLabel', 'ad2usbEmulationSpace', 'ad2usbRelLabel', 'ad2usbZxpLabel',
+                              'ad2usbZxpLabel', 'hkViaCodeNotes', 'homeKitPartition', 'infoLabel', 'makeSpace1',
+                              'makeSpace2', 'makeSpace3', 'modeNotes1', 'msgControl', 'msgTestFail1', 'msgTestFail2',
+                              'msgTestFail4', 'msgTestSuccess', 'pcSep1', 'sectionLabel1', 'sectionLabel2', 'sectionLabel3',
+                              'sectionLabel4', 'sectionLabel5', 'sectionLabel6', 'simpleSeparator1', 'simpleSeparator2', 
+                              'simpleSeparator3', 'simpleSeparator4', 'simpleSeparator5', 'simpleSeparator6', 
+                              'variableFormatNotes'}
+
+            prettyString = ''
+            for key in valuesDict:
+                if key not in dictKeysToHide:
+                    # newDictForLog.update( { key: valuesDict[key] } )
+                    prettyString = prettyString + "\n\t{}: {}".format(key, valuesDict[key]) 
+
+            self.logger.info("Updated configuration values:{}".format(prettyString))
 
             self.ad2usbCommType = valuesDict['ad2usbCommType']
             if self.ad2usbCommType == 'IP':
@@ -649,6 +939,27 @@ class Plugin(indigo.PluginBase):
 
             # reset the OTP object
             self.otp = AD2USB_OTP.OTP(folderPath=self.OTPConfigPath, logger=self.logger, isEnabled=self.isOTPEnabled)
+
+            # Alarm Code settings
+            self.isCodeSaved = valuesDict.get("enableCode", False)
+            self.codeLocation = valuesDict.get("codeLocation", AD2USB_Constants.k_CODE_USE_VARIABLE)
+
+            if self.codeLocation == AD2USB_Constants.k_CODE_USE_VARIABLE:
+                self.alarmCodeVariable = valuesDict.get("alarmCodeVariable", None)
+                self.alarmCode = None
+
+            elif self.codeLocation == AD2USB_Constants.k_CODE_USE_PREFS:
+                self.alarmCode = valuesDict.get("alarmCode", None)
+                self.alarmCodeVariable = None
+
+            else:
+                # this applies for OTP
+                self.alarmCode = None
+                self.alarmCodeVariable = None
+
+            # HomeKit integration
+            self.isHomeKitEnabled = valuesDict.get("isHomeKitEnabled", False)
+            self.hkArmMethod = valuesDict.get("hkArmMethod", 'quickArm')
 
             # logging parameters
             self.indigoLoggingLevel = valuesDict.get("indigoLoggingLevel", logging.INFO)
@@ -814,6 +1125,69 @@ class Plugin(indigo.PluginBase):
                     errorMsgDict['OTPConfigPath'] = folderMessage
                     debugLogMessage = debugLogMessage + ' ' + errorMsgDict['OTPConfigPath']
 
+            # validate Alarm Code settings
+            isCodeSaved = valuesDict.get("enableCode", False)
+            if isCodeSaved:
+                self.logger.debug("Saving of Alarm Code is enabled")
+
+                # get location settings
+                codeLocation = valuesDict.get("codeLocation", "")
+            
+                # see if code location is valid
+                if codeLocation == AD2USB_Constants.k_CODE_USE_VARIABLE:
+                    # if selecting variable make sure its a valid variable
+                    homeKitVariable = valuesDict.get("alarmCodeVariable", '')
+
+                    if re.search(r'^%%v:\d+%%$', homeKitVariable) is None:
+                        # its not a variable 
+                        isPrefsValid = False
+                        errorMsgDict['alarmCodeVariable'] = 'Variable should be in format: %%v:VARID%%'
+                        debugLogMessage = debugLogMessage + ' ' + errorMsgDict['alarmCodeVariable']
+
+                    # it looks like a variable, check with the method that returns a tuple: Bool, String
+                    isVariableSub = self.substituteVariable(homeKitVariable, True)
+                    # check the tuple value
+                    if isVariableSub[0]:
+                        # if the tuple is true call the method again to get variables value
+                        self.logger.debug('Alarm code is a valid variable:{}'.format(homeKitVariable))
+                        # codeValue = self.plugin.substituteVariable(homeKitVariable, False)
+                        # self.logger.info('Converted HomeKit alarm code variable:{} to code'.format(homeKitVariable))
+                    else:
+                        # unable to parse variable and we just use the value as passed
+                        self.logger.error('Value from HomeKit alarm code variable:{} cannot be determined.'.format(homeKitVariable))
+                        isPrefsValid = False
+                        errorMsgDict['alarmCodeVariable'] = isVariableSub[1]  # the error message from substituteVariable method
+                        debugLogMessage = debugLogMessage + ' ' + errorMsgDict['alarmCodeVariable']
+
+                elif codeLocation == AD2USB_Constants.k_CODE_USE_OTP:
+                    # if selecting OTP just make sure OTP is enabled - OTP validation takes care of the rest
+                    if not isOTPEnabled:
+                        isPrefsValid = False
+                        errorMsgDict['codeLocation'] = 'OTP must be enabled to use for HomeKit'
+                        debugLogMessage = debugLogMessage + ' ' + errorMsgDict['codeLocation']
+
+                elif codeLocation == AD2USB_Constants.k_CODE_USE_PREFS:
+                    # if code entered in Configure just make sure its 4-digit string of only 0-9
+                    alarmCode = valuesDict.get("alarmCode", '')
+                    if not self.isValidAlarmCodeString(alarmCode):
+                        isPrefsValid = False
+                        errorMsgDict['alarmCode'] = 'Alarm code must be 4-digits'
+                        debugLogMessage = debugLogMessage + ' ' + errorMsgDict['alarmCode']
+
+                else:
+                    isPrefsValid = False
+                    errorMsgDict['codeLocation'] = 'Invalid alarm user code selection'
+                    debugLogMessage = debugLogMessage + ' ' + errorMsgDict['codeLocation']
+                
+            # check HomeKit settings
+            isHomeKitEnabled = valuesDict.get("isHomeKitEnabled", False)
+            hkArmMethod = valuesDict.get("hkArmMethod", None)
+
+            if isHomeKitEnabled and (hkArmMethod == 'useCode') and (not isCodeSaved):
+                isPrefsValid = False
+                errorMsgDict['hkArmMethod'] = 'Using a code with HomeKit requires that "Saving of Alarm Code" is enabled'
+                debugLogMessage = debugLogMessage + ' ' + errorMsgDict['hkArmMethod']
+
             # TO DO: add code to check readability, etc.
 
             # All other Plugin Config items are checkboxes or pull downs and are constrained
@@ -835,6 +1209,42 @@ class Plugin(indigo.PluginBase):
             errorMsgDict['ad2usbCommType'] = "Unexpected error. Check Indigo Event Log for more details."
             errorMsgDict['showAlertText'] = "Unexpected error. Check Indigo Event Log for more details."
             return (False, valuesDict, errorMsgDict)
+
+    def isValidAlarmCodeString(self, code):
+        """
+        Reads the code (string) and returns True is the code is a 4-digit number (zero padded is fine) or False otherwise.
+        """
+        try:
+            # check if its None
+            if code is None:
+                return False
+            
+            # is it a string
+            if not isinstance(code, str):
+                self.logger.debug('Error validating alarm code - not a string')
+                return False
+
+            # does it only contain 0-9
+            lengthOfCode = 0
+            for c in code:
+                lengthOfCode = lengthOfCode + 1
+                if c not in '0123456789':
+                    self.logger.debug('Error validating alarm code - contains character other than digits:{}'.format(c))
+                    return False
+                else:
+                    pass
+
+            # and is it only 4 digits long
+            if lengthOfCode != 4:
+                self.logger.debug('Error validating alarm code:{} is more than 4-digits'.format(lengthOfCode))
+                return False
+
+        except Exception as err:
+            self.logger.debug('Error validating alarm code - error:{}'.format(str(err)))
+            return False
+
+        # if we get here its contains valid int characters and is only 4 digits
+        return True
 
     def setAlarmDecoderConfigDictFromPrefs(self, valuesDict):
         """
@@ -1205,7 +1615,11 @@ class Plugin(indigo.PluginBase):
     ########################################################
     # ConfigUI callbacks from Actions and Devices
     def getPartitionList(self, filter="", valuesDict=None, typeId="", targetId=0):
-        self.logger.debug(u"Called")
+        """
+        Returns a list of tuples of keypad address number (string) and parition number (string) for all Keypad devices.
+        Ex: [('18', '1'), ('19', '2')]
+        """
+        self.logger.debug("Called")
 
         myArray = []
         emptyArray = []
@@ -1749,20 +2163,20 @@ class Plugin(indigo.PluginBase):
                 return False
 
             # this addresses READY and all ARMED states
-            if newState in AD2USB_Constants.k_COMMON_STATES_DISPLAYS:
+            if newState in AD2USB_Constants.k_SENSOR_ON_ICON_STATES:
                 forDevice.updateStateOnServer(key='panelState', value=newState,
-                                              uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
+                                              uiValue=AD2USB_Constants.k_PANEL_STATE_UI_VALUES[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
 
-            elif newState == AD2USB_Constants.k_PANEL_FAULT:
+            elif newState in AD2USB_Constants.k_SENSOR_TRIPPED_ICON_STATES:
                 forDevice.updateStateOnServer(key='panelState', value=newState,
-                                              uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
+                                              uiValue=AD2USB_Constants.k_PANEL_STATE_UI_VALUES[newState])
                 forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
 
-            elif (newState == AD2USB_Constants.k_ERROR) or (newState == AD2USB_Constants.k_PANEL_UNK):
+            elif newState in AD2USB_Constants.k_SENSOR_ERROR_ICON_STATES:
                 forDevice.updateStateOnServer(key='panelState', value=newState,
-                                              uiValue=AD2USB_Constants.kPanelStateUIValues[newState])
-                forDevice.updateStateImageOnServer(indigo.kStateImageSel.Error)
+                                              uiValue=AD2USB_Constants.k_PANEL_STATE_UI_VALUES[newState])
+                forDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)  # Error icon not yet implemented
 
             else:
                 self.logger.error(u"Unable to set device name:{}, id:{}, to state:{}".format(
@@ -1848,8 +2262,8 @@ class Plugin(indigo.PluginBase):
             elif triggerType == 'armDisarm':
                 anyUser = True
                 # throw deprecated warning for Panel Arming Events
-                self.logger.warning("AD2USB Panel Arming Events will be deprecated in a future release.") 
-                self.logger.warning("Change the Trigger named:{} to a User Action with the 'Any User' option selected.".format(triggerName))
+                self.logger.error("AD2USB Panel Arming Events are deprecated.") 
+                self.logger.error("Delete the Trigger named:{} and replace with a User Action with the 'Any User' option selected.".format(triggerName))
 
             # build the dictionary
             self.triggerCache[tid] = {'events': events, 'partition': partition, 'name': triggerName, 'type': triggerType, 'anyUser': anyUser, 'users': users}
@@ -2096,6 +2510,14 @@ class Plugin(indigo.PluginBase):
         self.isOTPEnabled = pluginPrefs.get("enableOTP", False)
         self.OTPConfigPath = pluginPrefs.get("OTPConfigPath", '')
 
+        self.isCodeSaved = pluginPrefs.get("enableCode", False)
+        self.codeLocation = pluginPrefs.get("codeLocation", AD2USB_Constants.k_CODE_USE_VARIABLE)
+        self.alarmCode = pluginPrefs.get("alarmCode", None)
+        self.alarmCodeVariable = pluginPrefs.get("alarmCodeVariable", None)
+
+        self.isHomeKitEnabled = pluginPrefs.get("isHomeKitEnabled", False)
+        self.hkArmMethod = pluginPrefs.get("hkArmMethod", 'quickArm')
+
         # computed settings
         if self.ad2usbCommType == 'messageFile':
             self.isPlaybackCommunicationModeSet = True
@@ -2300,7 +2722,7 @@ class Plugin(indigo.PluginBase):
 
     def getKeypadAddressFromDevice(self, keypadDevice=None):
         """
-        Returns a valid keypad address from an Indigo ad2us keypad device object. None is returned if address is
+        Returns a valid keypad address from an Indigo ad2usb keypad device object. None is returned if address is
         does not exist.
 
         **parameters**
@@ -2436,6 +2858,49 @@ class Plugin(indigo.PluginBase):
 
         except Exception as err:
             self.logger.error("error searching for ad2usb Keypad device for device, msg:{}".format(str(err)))
+            return None
+
+    def getKeypadDeviceForId(self, deviceId=None):
+        """
+        A keypad Indigo device object is returned if the device id provided is a keypad device. Otherwise None is returned.
+
+        **parameters**
+        deviceId - an Indigo device id value as an integer (e.g. 5512462)
+        """
+        try:
+            # check parameters
+            if deviceId is None:
+                return None
+
+            # ensure its an int
+            deviceIdAsInt = int(deviceId)
+            self.logger.debug("Searching for ad2usb Keypad device id:{} - int value:{}".format(deviceId, deviceIdAsInt))
+ 
+            # get all keypads
+            allKeypadDevices = self.getAllKeypadDevices()
+
+            # the case of no keypad devices
+            if len(allKeypadDevices) == 0:
+                if int(self.numPartitions) == 1:
+                    self.logger.error("No Indigo ad2usb Keypad device found; exactly one (1) should be defined")
+                else:
+                    self.logger.error("No Indigo ad2usb Keypad device found; one (1) per partition should be defined")
+
+                return None
+
+            # if we have keypad devices search for one that matches deviceId
+            else:
+                for oneKeypadDevice in allKeypadDevices:
+                    if oneKeypadDevice.id == deviceIdAsInt:
+                        self.logger.debug("found keypad:{} match for device id:{}".format(oneKeypadDevice.name, deviceId))
+                        return oneKeypadDevice
+
+            # if we get this far it does not exist
+            self.logger.debug("did not find keypad match for device id:{}".format(deviceId))
+            return None
+
+        except Exception as err:
+            self.logger.error("error searching for ad2usb Keypad device by id, msg:{}".format(str(err)))
             return None
 
     def getKeypadDeviceForPartition(self, partition=None):
@@ -2611,6 +3076,24 @@ class Plugin(indigo.PluginBase):
             self.logger.error(
                 "Error while attempting to update Keypad Device with new AlarmDecoder address:{}".format(str(err)))
 
+    def updateLastADMessageOnKeypads(self):
+        """
+        Updates all Keypad devices state 'lastADMessage' with the current date-time. The 'lastADMessage' state is used
+        as a heartbeat to confirm the AlarmDecoder is still working when the panel is armed. So far, only RFX messsages are
+        seen when panel is armed.
+        """
+        try:
+            self.logger.debug("called")
+            now = datetime.now()
+            timeStamp = now.strftime("%Y-%m-%d %H:%M:%S")
+
+            for eachKeypad in self.getAllKeypadDevices():
+                self.logger.debug("Updating lastADMessage on Keypad Device:{} with new lastADMessage:{}".format(eachKeypad.name, timeStamp))
+                eachKeypad.updateStateOnServer(key='lastADMessage', value=timeStamp)
+
+        except Exception as err:
+            self.logger.error("Error while attempting to update all Keypad Devices with new lastADMessage:{}".format(str(err)))
+
     def isValidKeypadAddress(self, address=None):
         """
         Test the provided keypad address (string) to make sure its a zero-padded string between 01 and 99.
@@ -2643,6 +3126,29 @@ class Plugin(indigo.PluginBase):
             self.logger.debug('invalid keypad address:{} not between 1 and 99'.format(address))
             return False
 
+    def isValidPartition(self, partition=None):
+        """
+        Checks if provided partition number (string) is set in a Keypad device. Returns True if it exist, False otherwise.
+        """
+        try:
+            if partition is None:
+                return False
+
+            partitionList = []
+            for keypadAndPartition in self.getPartitionList():
+                partitionList.append(keypadAndPartition[1])
+
+            if partition not in partitionList:
+                self.logger.debug('Unable to find partition:{} in list of Keypad devices:{}'.format(partition, partitionList))
+                return False
+            else:
+                # partition found in a keypad device
+                return True
+        
+        except Exception as err:
+            self.logger.debug('Unable to validate partition:{} - error:{}'.format(partition, str(err)))
+            return False
+        
     def keypadAddressFrom(self, addressToTransform=''):
         """
         Transform provided address 'addressToTransform' (string) to be a two-digit valid keypad
@@ -2970,7 +3476,7 @@ class Plugin(indigo.PluginBase):
 
             if self.isOTPEnabled:
                 if self.otp.isValidOTP(newVar.value):
-                    code = self.otp.getCode()
+                    code = self.otp.getAlarmCode()
                     if code is None:
                         self.logger.error(
                             "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
@@ -2998,7 +3504,7 @@ class Plugin(indigo.PluginBase):
             if self.isOTPEnabled:
                 if self.otp.isValidOTP(newVar.value):
                     self.logger.info('OTP Disarming Alarm  - Validated. Disarming Alarm now')
-                    code = self.otp.getCode()
+                    code = self.otp.getAlarmCode()
                     if code is None:
                         self.logger.error(
                             "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
@@ -3017,7 +3523,7 @@ class Plugin(indigo.PluginBase):
             if self.isOTPEnabled:
                 if self.otp.isValidOTP(newVar.value):
                     self.logger.info('OTP Bypass - Validated. Bypassing Zones now')
-                    code = self.otp.getCode()
+                    code = self.otp.getAlarmCode()
                     if code is None:
                         self.logger.error(
                             "Invalid alarm code configured. Check configuration file to ensure alarm code is set.")
@@ -3117,7 +3623,7 @@ class Plugin(indigo.PluginBase):
 
     def __migratePanelArmTriggers(self):
         """
-        Used to set the property to AnyUser for any existing Panel Arming Events 
+        Used to set the property to AnyUser for any existing Panel Arming Events. In a later verison it now throws an error if any Panel Arming Triggers exist.
         """
         try:
             haveLoggedWarning = False
@@ -3134,10 +3640,11 @@ class Plugin(indigo.PluginBase):
 
                     # log and warn user
                     if not haveLoggedWarning:
-                        self.logger.warning("AD2USB Panel Arming Events will be deprecated in future release:")
+                        # self.logger.warning("AD2USB Panel Arming Events will be deprecated in future release:")
+                        self.logger.error("AD2USB Panel Arming Events are deprecated as of version 3.4.0. If you still need to migrate them, revert to version 3.3.4 and migrate them to User Actions. Otherwise, please delete these Triggers:")
                         haveLoggedWarning = True
 
-                    self.logger.warning("Change Trigger:{} to a User Action".format(trigger.name))
+                    self.logger.error("Delete Trigger:{}".format(trigger.name))
 
         except Exception as err:
             self.logger.error("Error while trying to migrate deprecated Panel Arming Triggers:{}".format(str(err)))

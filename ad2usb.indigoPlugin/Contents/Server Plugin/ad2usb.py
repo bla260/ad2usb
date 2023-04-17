@@ -137,13 +137,13 @@ class ad2usb(object):
                                 self.logger.debug("Executing User Match Trigger:{}".format(triggerName))
                                 indigo.trigger.execute(triggerId)
 
+                    # old Panel Arming events no longer will be executed in 3.4.0 and higher
+                    elif self.plugin.triggerCache[triggerId]['type'] == 'armDisarm':
+                            self.logger.error("AD2USB Plugin Triggers based on Panel Arming Events are deprecated and will not be run. Delete Trigger named:{} and replace with a User Action with the 'Any User' option selected.".format(triggerName))
+
                     else:
                         # execute the trigger if its not a userEvent
                         self.logger.debug("Executing Non-User Trigger:{}".format(triggerName))
-
-                        # provide a deprecated warning for Panel Arming Events
-                        if self.plugin.triggerCache[triggerId]['type'] == 'armDisarm':
-                            self.logger.warning("AD2USB Plugin Triggers based on Panel Arming Events will be deprecated in a future release. Change Trigger named:{} from a Panel Arming Event to a User Action with the 'Any User' option selected.".format(triggerName))
 
                         indigo.trigger.execute(triggerId)
 
@@ -188,6 +188,13 @@ class ad2usb(object):
 
         # TO DO: add optional messageToLog to panelWriteWrapper
 
+        # strip any "+" from the message
+        try:
+            panelMsg = panelMsg.replace("+", "")
+
+        except Exception as err:
+            self.logger.debug("Error while stripping '+' from panel message")
+
         try:
             # if no keypad address specified no need to prefix the message with K##
             if len(address) == 0:
@@ -197,7 +204,8 @@ class ad2usb(object):
                     address = "0" + address
                 panelMsg = 'K' + address + str(panelMsg)
                 self.panelWriteWrapper(self.serialConnection, panelMsg)
-                self.logger.info(u"Panel message:{} sent to AlarmDecoder".format(messageToLog))
+                
+            self.logger.info(u"Panel message:{} sent to AlarmDecoder".format(messageToLog))
 
         except Exception as err:
             self.logger.error(u"Unable to write panel message:{}".format(messageToLog))
@@ -334,7 +342,7 @@ class ad2usb(object):
                         panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                             self.zoneStateDict[panelKeypadAddress]))
 
-                        stateMsg = 'Faulted'
+                        stateMsg = AD2USB_Constants.k_FAULT
                     elif zoneState == zoneOff:
                         self.logger.debug(u"zoneOff zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
@@ -351,7 +359,7 @@ class ad2usb(object):
                         panelDevice.updateStateOnServer(key='zoneFaultList', value=str(
                             self.zoneStateDict[panelKeypadAddress]))
 
-                        stateMsg = 'Clear'
+                        stateMsg = AD2USB_Constants.k_CLEAR
                     else:
                         self.logger.error(u"zone:{}, name:{} has an UNKNOWN zone state:{}".format(
                             zNumber, zName, rawData))
@@ -383,7 +391,7 @@ class ad2usb(object):
                         except:
                             pass  # probably a non-numeric zone
 
-                        stateMsg = 'Faulted'
+                        stateMsg = AD2USB_Constants.k_FAULT
                     elif not RFXDataBits[wirelessLoop]:
                         self.logger.debug(u"zoneOff zoneNumber:{}, and States list:{}".format(
                             zNumber, self.zoneStateDict))
@@ -398,7 +406,7 @@ class ad2usb(object):
                         except:
                             pass  # probably a non-numeric zone
 
-                        stateMsg = 'Clear'
+                        stateMsg = AD2USB_Constants.k_CLEAR
                     else:
                         self.logger.error(u"State:{} not found in:{}".format(
                             zoneState, self.plugin.advZonesDict[zoneIndex]))
@@ -414,7 +422,8 @@ class ad2usb(object):
 
                 # If we are supposed to log zone changes, this is where we do it (unless this was a supervision message)
                 if zLogChanges and not supervisionMessage:
-                    self.logger.debug(u"Zone:{}, Name:{}, State changed to:{}".format(zNumber, zName, stateMsg))
+                    stateUIName = AD2USB_Constants.kZoneStateUIValues.get(stateMsg, "Unknown")
+                    self.logger.info(u"Zone:{}, Name:{}, State changed to:{}".format(zNumber, zName, stateUIName))
 
                 try:
                     if not supervisionMessage:
@@ -467,7 +476,8 @@ class ad2usb(object):
 
             # If we are supposed to log zone changes, this is where we do it (unless this was a supervision message)
             if zLogChanges:
-                self.logger.info(u"Zone:{}, Name:{}, State changed to:{}".format(zoneIndex, zName, zoneState))
+                stateUIName = AD2USB_Constants.kZoneStateUIValues.get(zoneState, "Unknown")
+                self.logger.info(u"Zone:{}, Name:{}, State changed to:{}".format(zoneIndex, zName, stateUIName))
 
         else:
 
@@ -645,6 +655,10 @@ class ad2usb(object):
                 # set 2 values to use in Exception handler section
                 messageReadSuccessfully = True
                 messageType = newMessageObject.messageType
+
+                # we first update the 'heartbeat' state - lastADMessage on all keypad devices
+                # Note: RFX messages continue to report when alarm is armed
+                self.plugin.updateLastADMessageOnKeypads()
 
                 if (newMessageObject.messageType == 'CONFIG') and newMessageObject.needsProcessing:
                     # store the current setting in the properties
@@ -864,13 +878,6 @@ class ad2usb(object):
 
                             self.logger.debug(u"Panel message:{}".format(panelFlags))
 
-                            # TO DO: replace with a function that looks at MAX/INSTANT
-                            # if panelBitStatus in self.plugin.ALARM_STATUS:
-                            #    panelState = self.plugin.ALARM_STATUS[panelBitStatus]
-                            # else:
-                            #    self.logger.error("Unknown Keypad Panel State:{}".format(panelBitStatus))
-                            #    panelState = 'error'
-
                             lastPanelMsg = rawData
                             # panelDevice = indigo.devices[self.plugin.panelsDict[foundKeypadAddress]['devId']]
                             panelDevice = self.plugin.getKeypadDeviceForAddress(foundKeypadAddress)
@@ -899,15 +906,16 @@ class ad2usb(object):
                             panelDevice.updateStateOnServer(key='panelReady', value=apReadyMode)
                             panelDevice.updateStateOnServer(key='panelArmed', value=apArmedMode)
                             panelDevice.updateStateOnServer(key='armedMode', value=armedMode)
+                            panelDevice.updateStateOnServer(key='homeKitState', value=newMessageObject.attr('homeKitState'))
                             if apAlarmBellOn == '1' or apFireAlarm == 1:
                                 splitMsg = re.split('[\[\],]', rawData)
                                 # apAlarmedZone = int(splitMsg[3])  # try this as a string to deal with commercial panels
                                 apAlarmedZone = splitMsg[3]
                                 panelDevice.updateStateOnServer(key='alarmedZone', value=apAlarmedZone)
                                 if apAlarmBellOn == '1':
-                                    self.logger.info(u"alarm tripped by zone:{}".format(apAlarmedZone))
+                                    self.logger.info("Alarm tripped by zone:{}".format(apAlarmedZone))
                                 else:
-                                    self.logger.info(u"fire alarm tripped by zone:{}".format(apAlarmedZone))
+                                    self.logger.info("Fire alarm tripped by zone:{}".format(apAlarmedZone))
 
                             else:
                                 panelDevice.updateStateOnServer(key='alarmedZone', value='n/a')

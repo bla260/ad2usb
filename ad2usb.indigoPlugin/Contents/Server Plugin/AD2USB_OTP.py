@@ -36,7 +36,7 @@ class OTP(object):
 
         x = OTP(folderPath='/X/Y/Z', logger=loggerObject)
         x.isValidOTP(otpCode)  # checks if the the OTP is valid True or False
-        x.getCode()  # returns the code from the configuration file
+        x.getAlarmCode()  # returns the code from the configuration file
         x.writeOTPConfigFiles()  # creates or updates the OTP configuration file and the QRCode image file
     """
 
@@ -127,7 +127,7 @@ class OTP(object):
             # if the property/cached key is not None - return it - no need ot read file
             return self.sharedkey
 
-    def getCode(self):
+    def getAlarmCode(self):
         """
         Returns the alarm panel code as a string if found in the config file or 'None' if not read or found.
         """
@@ -259,7 +259,7 @@ class OTP(object):
 
             # check if we're updating the file (it exists) or creating a new one
             if configFileExists:
-                code = self.getCode()
+                code = self.getAlarmCode()
                 # if the objects code is not set = make it a default with a comment
                 if code is None:
                     config['DEFAULT']['code'] = '1234 # replace with your Alarm Code'
