@@ -1,5 +1,42 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
+v 3.4.0 (pre-release - planned for April 23, 2023)
+- **Panel Arming Events are deprecated and removed in this release**. ***Before*** upgrading, migrate any triggers using `Panel Arming Events` to `User Actions` as described in the Release Notes for version 3.3.1. To migrate your existing `Panel Arming Events` Triggers change the Event from `Panel Arming Events (deprecated)` to `User Actions`. The type of Alarm Event and Partition will be set based on the value of your Panel Arming Event setting and the new field "Any User" will be selected by default. Upon saving the Trigger as a `User Action` Trigger it will be migrated. After upgrading to version 3.4.0 an error message will show on startup if any `Panel Arming Events` are used in Triggers and those Triggers which were not migrated will need to be deleted to stop the error message.
+- Two new Keypad Device States:
+  - `Alarm On` - this is when the alarm is currently occuring (i.e. the siren is on)
+  - `Alarm Occurred` - this is immediately after the sounding alarm (`Alarm On`) is disabled via a Disarm (`OFF`). A second disarm will change the state to `Ready`
+- New feature allows you to save an alarm code (for Night-Stay, Disarming, etc.) in an Indigo Variable, directly in the Preferences, or via the OTP Configuration file (introduced in version 3.3.1). This code will be used by new Actions that were added in this release (see below). See the latest [README](https://github.com/bla260/ad2usb/blob/main/README.md) for more information on how to configure the alarm code.
+- Changes to Actions:
+  - Several Actions have been renamed to more accurately reflect their function. These Actions did not require an alarm code. The `id` (or `actionId`) for these Actions remains the same so any custom scripts you may have that called these Actions in should not require updating.
+    - `Arm-Away` has been renamed to `Quick Arm-Away`
+    - `Arm-Stay` has been renamed to `Quick Arm-Stay`
+    - `Arm-Max` has been renamed to `Quick Arm-Max`
+    - `Arm-Instant` has been renamed to `Quick Arm-Instant`
+  - New Actions. Each of the new Actions below requires the saving of the alarm code for use by the Action. If they are called and a valid alarm code is not set, the Action will not be performed and an error will be logged in the Event Log. See your Alarm Panel Users Guide for more information about each of these arming modes
+    - `Arm-Stay (CODE)`. This action uses the saved alarm code to perform `CODE + 3 (STAY)` to arm the panel in **STAY** mode. It can be used in lieu of Quick Arming if you wish to use a specific User Code. 
+    - `Arm-Night-Stay (CODE)`. This action uses the saved alarm code to perform `CODE + 3 (STAY) + 3 (STAY)` to arm the panel in **NIGHT-STAY** mode.  
+    - `Arm-Away (CODE)`. This action uses the saved alarm code to perform `CODE + 2 (AWAY)` to arm the panel in **AWAY** mode. It can be used in lieu of Quick Arming if you wish to use a specific User Code.
+    - `Arm-Instant (CODE)`. This action uses the saved alarm code to perform `CODE + 7 (INSTANT)` to arm the panel in **STAY** mode with entry delay turned off. It can be used in lieu of Quick Arming if you wish to use a specific User Code.
+    - `Arm-Max (CODE)`. This action uses the saved alarm code to perform `CODE + 4 (MAX)` to arm the panel in **AWAY** mode with entry delay turned off. It can be used in lieu of Quick Arming if you wish to use a specific User Code.
+    - `Disarm (CODE)`. This action uses the saved alarm `CODE + 1 (OFF)` to disarm the panel. 
+- HomeKit integration is now provided via [HomeKitLink-Siri](https://www.indigodomo.com/pluginstore/270/).
+  - Requires HomeKitLink-Siri version 0.60 or greater. Refer to HomeKitLink-Siri documentation or release notes to confirm requirements.
+  - Within HomeKitLink-Siri you need to select the `ad2usb Keypad` device to be associated with HomeKit actions and state. This will ensure the HomeKit alarm actions are sent to the desired alarm Keypad and Partition. 
+  - Within the plugin's `Configure` menu you need to select if you want HomeKit to use the **Quick Arm** functions (e.g. `#3` for **STAY**) or use the saved alarm code within the plugin (e.g `CODE + 3` for **STAY**).
+  - You must enable the saving of the alarm code to enable HomeKit to Disarm the panel or perform Night-Stay.
+  - Added new device state for `homeKitState` for the `ad2usb Keypad` device. The state can be one of the five (5) values below. The associated panel states are also listed:
+    - `armedStay` - Armed **STAY** or Armed **INSTANT**
+    - `armedAway` - Armed **AWAY** or Armed **MAX**
+    - `armedNightStay` - Armed **NIGHT-STAY**
+    - `disarmed` - Disarmed
+    - `alarmOccured` - Alarm has been triggered: Alarm Sounding or Alarm Occurred
+  - Added new hidden Actions for [HomeKitLink-Siri](https://www.indigodomo.com/pluginstore/270/) to use to arm and disarm the panel. HomeKitLink-Siri will be able disarm the panel (requires a code) or place the alarm in **STAY**, **AWAY**, or **NIGHT-STAY** (requires a code). 
+- Custom Panel keypad messages sent via Indigo Variables or defined Actions, etc. can contain a plus character ("+") for readablilty that will be removed before being sent to the keypad. For example "1234+1" will send "12341" to the keypad.
+- Fixed a bug where zone state changes were not logged at INFO level for advanced devices. In additio, logging of zone changes now reports zone state using the more UI friendly states: Fault, Clear, Bypass, Error, or Unknown
+- Fixed a bug where Arm Night Stay was not properly set in the `armedMode` state of the Keypad device.
+- Fixed a bug where `lastADMessage` was not getting updated when no Keypad messages are sent (e.g. while the panel was Armed).
+- Updated [README](https://github.com/bla260/ad2usb/blob/main/README.md) (documentation).
+
 v 3.3.4 April 8, 2023
 - Added a new Alarm Zone device state `Last Battery Restore`. This will log the date/time when the `RF Low Battery` restore event is detected. This can be used to track the last date/time you replaced a battery in your wireless sensors.
 - Zone numbers that are not valid (not in the range of 1-99) within Keypad Messages and will now log a warning versus an error in the Indigo Event Log.
@@ -21,7 +58,7 @@ v 3.3.1 December 24, 2022 (replaced version 3.3.0)
   - qrcode. Optional for OTP functionality but required if you plan on generating a QRCODE image for easier setup on your mobile device.
 - Major changes to Plugin Triggers and Events.
   - Triggers created for User Actions have several new features. You can now choose if the Event applies to any user or specific user(s). When listing specific users(s) you can continue to provide a single user code number (ex: `02`) or use the new feature of providing a comma seperated list of users (ex: `02,07,11,22`). The valid range for user numbers is 1 to 49. You can also provide an Indigo Variable as the user(s) in the format:`%%v:VARID%%` where `VARID` is the variable ID (ex: `%%v:1929322623%%`). The variable's value can contain one or more user codes.
-  - **Panel Arming Events will be deprecated and removed in the next release**. Use the updated User Actions instead. A User Action with the new "Any User" setting is functionally the same as the Panel Arming Events. 
+  - **Panel Arming Events will be deprecated and removed in a future release**. Use the updated User Actions instead. A User Action with the new "Any User" setting is functionally the same as the Panel Arming Events. 
     - With this release any Triggers you have based on Panel Arming Events will not allow you to make changes to the Panel Arming Events details but they will continue to work. The Event Log will warn you that these type of Trigger Events exist on startup or execution of the Trigger. In a future release these type of events will be removed and your Panel Arming Event Triggers will cease to work. You can easily migrate these triggers as described next.
     - To migrate your existing Panel Arming Event Triggers simply change the Event from "Panel Arming Events (deprecated)" to "User Actions." The type of Alarm Event and Partition will be set based on the value of your Panel Arming Event setting and the new field "Any User" will be selected by default. Upon saving the Trigger as a User Action Trigger it will be migrated.
     - While you can rollback this release of the plugin, Panel Arming Events Triggers that were migrated will remain User Action Triggers after the rollback and you will need to manually change these back to Panel Arming Events.

@@ -1,14 +1,16 @@
 # ad2usb Indigo Plugin Documentation
 
-##### Version 3.3.4
+##### Version 3.4.0
 
 # Table of Contents
 - [About](#about)
-- [Required Hardware](#Required-Hardware)
-- [Features](#Features)
-- [Devices](#Devices)
+- [Required Hardware](#required-hardware)
+- [Features](#features)
+- [Devices](#devices)
   - [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions)
-  - [ad2usb Keypad Device Custom States](#ad2usb-keypad-device-custom-states)
+  - [ad2usb Keypad Device Details](#ad2usb-keypad-device-details)
+    - [Keypad Device State](#keypad-device-state)
+    - [Keypad Device Additional States](#keypad-device-additional-states)
   - [Bypass Rules for Indigo Devices](#Bypass-Rules-for-Indigo-Devices)
 - [Actions](#Actions)
   - [Keypad Actions](#keypad-actions)
@@ -32,7 +34,9 @@
   - [Plugin Configuration Details](#plugin-configuration-details)
     - [AD2USB connection settings](#ad2usb-connection-settings)
     - [Operating parameters](#operating-parameters)
+    - [Saving the Alarm Code](#saving-the-alarm-code)
     - [One Time Password Setup](#one-time-password-setup)
+    - [HomeKit Integration](#homekit-integration)
     - [Logging Options](#logging-options)
   - [AlarmDecoder Configuration](#alarmdecoder-configuration)
     - [AlarmDecoder Configuration Dialog Box Fields](#alarmdecoder-configuration-dialog-box-fields)
@@ -78,7 +82,7 @@ The ad2usb plugin adds the following device options to Indigo.
 
 Device Type | Description
 ----------- | -----------
-ad2usb Keypad | The AlarmDecoder Keypad emulator. You must add at least one and can have as many Indigo ad2usb Keypad devices as there are partitions. When selecting the keypad address for your ad2usb Keypad device, it must be a keypad address that is programmed in your alarm panel (this includes the NuTech AlarmDecoder device you programmed as a keypad). For systems with a single partition, which may be the most common setup, you can only have one ad2usb keypad device and this device will be automatically set to the NuTech AlarmDecoder keypad address. Systems with multiple partitions can have multiple ad2usb keypad devices defined: one for each partition. However, the keypad address selected for all ad2usb Keypad devices **must exist** in the alarm panel programming. See the [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions) section for some examples scenarios. <br><br>Keypads can have several states: Ready, Armed Stay, Armed Night Stay, Armed Away, Armed Instant, Armed Max and Fault. A Fault will display as the Keypad state when one or more Alarm Zone devices that are on the same partition as the Keypad become Faulted. One exception to this is if the Alarm Zone is Bypassed. When an Alarm Zone is Bypassed the Indigo UI icon for the Keypad and the bypassed Alarm Zone device will change to the Fault icon but the actual state will not change.<br><br>The Keypad Device also has several Custom States that are described in a later section.
+ad2usb Keypad | The AlarmDecoder Keypad emulator. You must add at least one and can have as many Indigo ad2usb Keypad devices as there are partitions. When selecting the keypad address for your ad2usb Keypad device, it must be a keypad address that is programmed in your alarm panel (this includes the NuTech AlarmDecoder device you programmed as a keypad). For systems with a single partition, which may be the most common setup, you can only have one ad2usb Keypad device and this device will be automatically set to the NuTech AlarmDecoder keypad address. Systems with multiple partitions can have multiple ad2usb Keypad devices defined: one for each partition. However, the keypad address selected for all ad2usb Keypad devices **must exist** in the alarm panel programming. See the [ad2usb Keypad Addresses and Partitions](#ad2usb-keypad-addresses-and-partitions) section for some examples scenarios. <br><br>Keypads can have several states: Ready, Armed Stay, Armed Night Stay, Armed Away, Armed Instant, Armed Max and Fault. A Fault will display as the Keypad state when one or more Alarm Zone devices that are on the same partition as the Keypad become Faulted. One exception to this is if the Alarm Zone is Bypassed. When an Alarm Zone is Bypassed the Indigo UI icon for the Keypad and the bypassed Alarm Zone device will change to the Fault icon but the actual state will not change.<br><br>The Keypad Device also has several Custom States that are described in a later section.
 Alarm Zone | Standard alarm zone such as window or door sensors. Add one Indigo Alarm Zone device for each sensor you have configured with your alarm panel that you want to integrate with Indigo. Each Alarm Zone device has these three state variables with possible values shown in parenthesis: `zoneState` (Fault or Clear), `onOffState` (On or Off), and `bypassState` (On or Off). States `zoneState` and `onOffState` are somewhat redundant since when an alarm zone changes state both change. They exist so you can create triggers on any changes of the state name of your preference.<br><br>In Basic Mode zones faults are updated from AlarmDecoder's keypad messages. This should be fine for most users. In Advanced Mode zone faults are updated from Expander, Relay, or Wireless messages received by the AlarmDecoder. Valid Alarm Zone numbers are between 1 and 99.
 Zone Group | Creates a group of Alarm Zones. This allows you to create a group of alarm zones devices that treated as single device within Indigo Triggers. Zone groups have the same states as Alarm Zones with the exception they do not have the `bypassState`. Zone Groups change to Fault (or On) when **ANY** of their Zone's change from Clear to Fault (or Off to On). Zone Groups change to Clear (or Off) once **ALL** of their Zones are Clear (or Off).
 Indigo Managed Virtual Zone | The AlarmDecoder's Zone Expander Emulation feature allows the AlarmDecoder to act in place of a physical expander board and make use of virtual zones with your panel. After enabling it on both the alarm panel and the AlarmDecoder you can begin opening and closing zones, which will be relayed back to the panel. [See the AlarmDecoder Protocol Documentation for more details.](https://www.alarmdecoder.com/wiki/index.php/Protocol#Zone_Emulation). You can create an Indigo Managed Virtual Zone to use this capability. After creating the Indigo Managed Virtual Zone, you call a specific Action, "Change a Virtual Zone's state", which will change the state of the device in Indigo and send Open or Close messages to your alarm panel. **CAUTION**: Do not set a trigger on a Virtual Zone's device change to call the "Change a Virtual Zone's state" or you will have an infinite loop. See the "Alarm Zone Actions" section.
@@ -89,22 +93,41 @@ The table and diagrams below offer several examples of how NuTech AlarmDecoder a
 
 Number of Partitions | NuTech AlarmDecoder Keypad Address and Partition | ad2usb Keypad Device Address and Partition |
 -------------------- | ------------------------------------------------ | -------------------- |
-1 | The AlarmDecoder has a default keypad address value of 18 but other values may be selected during the alarm panel programming. The keypad partition number programmed on the alarm panel has to be 1 for a single partition system. | Only Partition 1 will be available when configuring the device. Only one ad2usb Keypad is allowed and the address will be automatically set to the same keypad address as the NuTech AlarmDecoder when the AlarmDecoder's CONFIG settings are read (ex: Partition 1, Keypad Address 18)
-2 | NuTech AlarmDecoder programmed for Partition 1 and some available keypad address. | Two ad2usb Keypad devices can be created. An example setup could be: <br><br>First ad2usb Keypad device: set to partition 1 and a select the same keypad address as the NuTech AlarmDecoder (ex: Partition 1, Keypad Address 19). <br><br>Second ad2usb Keypad device: set to partition 2 and select an existing keypad address assigned to partition 2 (ex: Partition 2, Keypad Address 18).
-2 | NuTech AlarmDecoder programmed for Partition 2 and an available keypad address. | Two ad2usb Keypad devices can be created. An example setup could be: <br><br>First ad2usb Keypad device: set to partition 1 and a select an existing keypad address assigned to partition 1 (ex: Partition 1, Keypad Address 17). <br><br>Second ad2usb Keypad device set to partition 2 and a select the same keypad address as the NuTech AlarmDecoder (ex: Partition 2, Keypad Address 19).
+1 | The AlarmDecoder has a default keypad address value of 18 but other values may be selected during the alarm panel programming. The keypad partition number programmed on the alarm panel has to be 1 for a single partition system. | Only Partition 1 will be available when configuring the device. Only one ad2usb Keypad is allowed and the address will be automatically set to the same keypad address as the NuTech AlarmDecoder when the AlarmDecoder's CONFIG settings are read (ex: Partition 1, Keypad Address 18). See Figure 1.
+2 | NuTech AlarmDecoder programmed for Partition 1 and some available keypad address. | Two ad2usb Keypad devices can be created. An example setup could be: <br><br>First ad2usb Keypad device: set to partition 1 and select the same keypad address as the NuTech AlarmDecoder (ex: Partition 1, Keypad Address 19). <br><br>Second ad2usb Keypad device: set to partition 2 and select an existing keypad address assigned to partition 2 (ex: Partition 2, Keypad Address 18). See Figure 2.
+2 | NuTech AlarmDecoder programmed for Partition 2 and an available keypad address. | Two ad2usb Keypad devices can be created. An example setup could be: <br><br>First ad2usb Keypad device: set to partition 1 and select an existing keypad address assigned to partition 1 (ex: Partition 1, Keypad Address 17). <br><br>Second ad2usb Keypad device set to partition 2 and a select the same keypad address as the NuTech AlarmDecoder (ex: Partition 2, Keypad Address 19).
 3 or more | NuTech AlarmDecoder programmed for Partition 1, or 2, or any valid partition and an available keypad address. | Example setup would be one ad2usb Keypad devices per partition: <br><br>One ad2usb Keypad device: set to the same partition and keypad address as the NuTech AlarmDecoder. <br><br>All other ad2usb Keypad devices: set to each of the remaining partitions and select a valid and programmed keypad address for that partition.
 
 | ![Basic Keypad Example Image](images/basic-keypad-example.png) |
 |:--:|
-| Basic single partition and single ad2usb Keypad setup |
+| Figure 1 - Basic single partition and single ad2usb Keypad setup |
 
-| ![Basic Keypad Example Image](images/advanced-keypad-example.png) |
+| ![Advanced Keypad Example Image](images/advanced-keypad-example.png) |
 |:--:|
-| Advanced multi-partition and multi-ad2usb Keypad setup |
+| Figure 2 - Advanced multi-partition and multi-ad2usb Keypad setup |
 
-### ad2usb Keypad Device Custom States
+### ad2usb Keypad Device Details
 
-Many of the Keypad Custom States described below come directly from the [AlarmDecoder Keypad Message bit fields](https://www.alarmdecoder.com/wiki/index.php/Protocol#Bit_field). You can use these custom states in Indigo Device Triggers.
+#### Keypad Device State
+
+Many of the Keypad's Device States described below come directly from the [AlarmDecoder Keypad Message bit fields](https://www.alarmdecoder.com/wiki/index.php/Protocol#Bit_field). You can use these custom states in Indigo Device Triggers. The table below shows relationship of the ad2usb Keypad device state (`panelState`), the panel armed mode (`armedMode`) state of the ad2usb Keypad device, and the HomeKit state (`homeKitState`):
+
+Keypad Device State (`panelState`) Value  | Keypad Device State (`panelState`) UI Display | Armed Mode (`armedMode`) Value  | Armed Mode (`armedMode`) UI Display | HomeKit (`homeKitState`) Value | HomeKit (`homeKitState`) UI Display
+---|---|---|---|---|---
+ready          | Ready            | unArmed        | Not Armed        | disarmed      | Disarmed
+Fault          | Fault            | unArmed        | Not Armed        | disarmed      | Disarmed
+armedStay      | Armed Stay       | armedStay      | Armed Stay       | armedStay     | Armed Stay
+armedNightStay | Armed Night Stay | armedNightStay | Armed Night Stay | armedNightStay| Armed Night Stay
+armedAway      | Armed Away       | armedAway      | Armed Away       | armedAway     | Armed Away
+armedInstant   | Armed Instant    | armedInstant   | Armed Instant    | armedStay     | Armed Stay 
+armedMax       | Armed Max        | armedMax       | Armed Max        | armedAway     | Armed Away
+alarmOccured   | Alarm Occurred   | *any*          | *any*            | alarmOccured  | Alarm Triggered
+alarmOn        | Alarm Sounding   | *any*          | *any*            | alarmOccured  | Alarm Triggered
+error          | Error            | *any*          | *any*            | disarmed      | Disarmed
+
+#### Keypad Device Additional States
+
+The ad2usb Keypad device has the following additional states:
 
 Custom State Name | Device Trigger State Name | Values | Description (AlarmDecoder Bit field number)
 ------------ | ----------- | ---- | ----
@@ -114,11 +137,12 @@ acPower | AC Power | On or Off | Indicates if the panel is on AC power. (8)
 alarmBellOn | Panel Alarm Bell On | True of False | Indicates that an alarm is currently sounding. (11)
 alarmOccurred | Alarm Occurred | True of False | Indicates that an alarm has occurred. (10)
 alarmedZone | Zone which tripped the alarm | Number or "N/A" | The Zone number which tripped the alarm or "N/A" if no alarm has been tripped.
-armedMode | Alarm Armed State | String | The alarm mode of the panel:
+armedMode | Alarm Armed State | String | The alarm mode of the panel (see the table above for Keypad States)
 batteryLow | Battery Low | True of False | Indicates the battery is low. (12)
 checkZones | Check Zones | True or False | Indicates a system issue. Check your keypad and devices. (15)
 chimeMode | Chime Mode | On or Off | Indicates if the chime is enabled. (9)
 fireAlarm | Fire Alarm On | True or False | Indicates that there is a fire issue. (14)
+homeKitState | HomeKit State | String | One of four (4) string values based on the keypad state (panelState). See table above.
 lastADMessage | Last AD2USB Msg Time | Date-Time | A date-time string of the last time a message was processed by the AlarmDecoder. This is useful when away for extended periods to confirm the Plugin is still processing messages.
 lastChgBy | Last change by | Number | For LRR messages is user code of the last change of the panel.
 lastChgTo | Last change to | String | For LRR messages is the last panel state changed by the user.
@@ -132,12 +156,12 @@ zoneFaultList | Faulted Zones | String | A list of faulted zones.
 
 ### Bypass Rules for Indigo Devices
 
-Indigo will behave the same as an alarm panel for Bypassed devices. The table below outlines Alarm Zone and Keypad devices behavior. These behaviors apply to Basic Mode only.
+Indigo will behave the same as an alarm panel for Bypassed devices. The table below outlines Alarm Zone and ad2usb Keypad devices behavior. These behaviors apply to Basic Mode only.
 
 Alarm Zone Bypassed Status | Alarm Zone State | Indigo Alarm Zone Device State | Indigo Alarm Zone Device UI Display | Indigo Keypad Device State | Indigo Keypad Device UI Display | Additional Info
 -------------------------- | ------------------ | ------------------------------ | ----------------------------------- | -------------------------- | ------------------------ | ---------------
 Bypassed | Clear | Bypassed | Grey Icon | Clear | Green Icon | Indigo, like the Alarm panel, does not detect changes in the Alarm Zone device's state when Bypassed. The grey icon is shown instead of the green, indicating the Alarm Zone is device Bypassed.
-Bypassed | Fault | Bypassed | Red Icon | Clear | Green Icon | Indigo, like the Alarm panel, does not detect changes in the Alarm Zone device's state when Bypassed. The Alarm Zone icon will change from grey to red when a Fault is detected on a bypassed zone, but the Keypad device will not recognize it as a Fault. The Alarm Zone Indigo device state will remain "Bypass", only the icon in the UI will change.
+Bypassed | Fault | Bypassed | Red Icon | Clear | Green Icon | Indigo, like the Alarm panel, does not detect changes in the Alarm Zone device's state when Bypassed. The Alarm Zone icon will change from grey to red when a Fault is detected on a bypassed zone, but the ad2usb Keypad device will not recognize it as a Fault. The Alarm Zone Indigo device state will remain "Bypass", only the icon in the UI will change.
 Not Bypassed | Clear | Clear | Green Icon | Clear | Green Icon | Both the Alarm Zone and Keypad Device will show Clear unless another Alarm Zone device on the same partition has Faulted. Keypad devices will Fault when **ANY** of their Alarm Zone devices Fault and are Clear when **ALL** of their devices are Clear.
 Not Bypassed | Fault | Fault | Red Icon | Fault | Red Icon | When an Alarm Zone device change to Fault, the Keypad Device will also change to Fault for the Keypad Device that is on the same partition as the Alarm Zone device. If you have multiple partitions, Keypad Devices with a partition number different from the Alarm Zone will not change state based on Alarm Zone devices on other partitions.
 
@@ -147,15 +171,21 @@ Not Bypassed | Fault | Fault | Red Icon | Fault | Red Icon | When an Alarm Zone 
 The ad2usb plugin adds several Actions for **ad2usb Keypad** and **Alarm Zone** devices.
 
 ### Keypad Actions
-You can use Indigo Actions to Arm & Disarm your panel and invoke panel events. Four types of Arm Actions are available. Refer to your Alarm Users Guide for description of each. You can also writes an arbitrary message to the panel via the keypad. By default panel messages are being sent ***from*** the keypad number and partition of the NuTech AlarmDecoder (e.g. Partition 1, Keypad address 18).  **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring the Write to Panel action.
+You can use Indigo Actions to Arm & Disarm your panel and invoke other customized panel events. Arm and Disarm Actions are available using either the Quick Arming (`#`) function or by providing a user code. Actions that require a use code are noted by the word "CODE" in parenthesis after the Action name. The code is determined based on the `Save Alarm Code` setting in the plugin's `Configure` menu described in this README [here](#saving-the-alarm-code). Refer to your Alarm Users Guide for description of each of these arm and disarm functions. You can also writes an arbitrary message to the panel via the keypad. By default panel messages are being sent ***from*** the keypad number and partition of the NuTech AlarmDecoder (e.g. Partition 1, Keypad address 18).  **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring the Write to Panel action.
 
-Keypad Actions | Description (refer to you Alarm Panel Users Guide)
--------------- | -----------
-Arm-Stay | Performs the keypad function STAY. Arms perimeter zones only and entry delay is on.
-Arm-Instant | Performs the keypad function INSTANT. Same as STAY, except entry delay is off.
-Arm-Away | Performs the keypad function AWAY. Arms the entire burglary system, perimeter and interior. Entry delay is on.
-Arm-Max | Performs the keypad function MAX. Same as AWAY, except entry delay is off.
-Write To Panel | Writes an arbitrary message to the panel via the keypad. By default panel messages are being sent ***from*** the keypad number and partition of the NuTech AlarmDecoder (e.g. Partition 1, Keypad address 18). You can prefix the message with 'K' to send the message from a specific keypad. See the [AlarmDecoder Protocol page](https://www.alarmdecoder.com/wiki/index.php/Protocol#Addressed_Message) for more details. The field `Text to send` contains the keypad entries to send to the Alarm Panel (e.g. `12345` = Alarm Code `1234` and keypad `5` places the alarm in Test Mode); or the field can contain an Indigo variable ID (ex: `%%v:1929322623%%`) whose value contains the keypad entries. **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring this action.
+Keypad Actions | Requires Alarm Code? | Description (refer to you Alarm Panel Users Guide)
+-------------- | ----------- | --------
+Quick Arm-Stay | No | Performs the alarm panel function by sending Quick Arming for STAY (`# + 3`) to the keypad. Arms perimeter zones only and entry delay is on.
+Quick Arm-Instant | No | Performs the alarm panel function by sending Quick Arming for INSTANT (`# + 7`) to the keypad. Same as STAY, except entry delay is off.
+Quick Arm-Away | No | Performs the alarm panel function by sending Quick Arming for AWAY (`# + 2`) to the keypad. Arms the entire burglary system, perimeter and interior. Entry delay is on.
+Quick Arm-Max | No | Performs the alarm panel function by sending Quick Arming for MAX (`# + 4`) to the keypad. Same as AWAY, except entry delay is off.
+Arm-Stay (CODE) | Yes | Performs the alarm panel function by sending a user code and STAY (`CODE + 3`) to the keypad. Arms perimeter zones only and entry delay is on.
+Arm-Night-Stay (CODE) | Yes | Performs the alarm panel function by sending a user code and NIGHT-STAY (`CODE + 33`) to the keypad. Arms same as STAY mode, but also arms preselected interior sensors (programmed by your installer), while other interior sensors are left disarmed.
+Arm-Away (CODE) | Yes | Performs the alarm panel function by sending a user code and AWAY (`CODE + 2`) to the keypad. Arms the entire burglary system, perimeter and interior. Entry delay is on.
+Arm-Instant (CODE) | Yes | Performs the alarm panel function by sending a user code and AWAY (`CODE + 7`) to the keypad. Same as STAY, except entry delay is off.
+Arm-Max (CODE) | Yes | Performs the alarm panel function by sending a user code and AWAY (`CODE + 4`) to the keypad. Same as AWAY, except entry delay is off.
+Disarm (CODE) | Yes | Performs the alarm panel function by sending a user code and OFF (`CODE + 1`) to the keypad. This disarms the system. 
+Write To Panel | Depends | Writes an arbitrary message to the panel via the keypad. To aid in visual appearance, you can add the character `+` in the string and/or variable and it will be ignored and not sent to the panel. For example, `1234+1` sends `12341` to the panel. By default panel messages are being sent ***from*** the keypad number and partition of the NuTech AlarmDecoder (e.g. Partition 1, Keypad address 18). You can prefix the message with 'K' to send the message from a specific keypad number. For example, `K19+1234+1` sends the alarm code of `1234` and the `1` (OFF) command. See the [AlarmDecoder Protocol page](https://www.alarmdecoder.com/wiki/index.php/Protocol#Addressed_Message) for more details. The field `Text to send` contains the keypad entries to send to the Alarm Panel (e.g. `12345` = Alarm Code `1234` and keypad `5` places the alarm in Test Mode); or the field can contain an Indigo variable ID (ex: `%%v:1929322623%%`) whose value contains the keypad entries.  **CAUTION:** Having detailed knowledge of your alarm panel's operation is recommended before configuring this action.
 
 ### Alarm Zone Actions
 Alarm Zone actions are less likely to be used but available since most Alarm Zone devices simply change state based on data being sent from your alarm panel.
@@ -296,6 +326,14 @@ It is recommended that you Disable and then Enable the Plugin after making Confi
 - **Log Panel Messages**: See Logging section.
 - **Mask Alarm Codes**: This setting (on by default) will attempt to replace anything that looks like an alarm code (4-digits) with `CODE` in all log files. This feature is intended to increase security of your alarm system.
 
+### Saving the Alarm Code
+This plugin ***does not require*** an alarm code to be saved. Only those functions on the panel that require a code, such as Disarming, Bypass, Night-Stay, etc. will not work unless an alarm code is available to the plugin. For remote monitoring only, an alarm code is not required and does not need to be saved in the plugin. Users of this plugin will need to assess their own security and risks, and what features they plan to use, in order to determine if they want to store an alarm code or not. 
+
+There are several ways to store the alarm code via the plugin. You can also store the code in an Indigo Variable, and seperate configuration file, or directly in the Preferences. To save your alarm code, use the `Configure` menu and enable `Save Alarm Code`. Once enabled, you have three options:
+1. Indigo Variable. You can use an Indigo Variable to store the code. Enter your variable in the in the format:`%%v:VARID%%` where `VARID` is the variable ID (ex: `%%v:1929322623%%`). 
+2. OTP Configuration File. See the [One Time Password Setup](#one-time-password-setup) section for more information. If you are using OTP, other plugin functions such as HomeKit integration can use the configuration file `AD2USB_OTP.cfg` that contains the alarm panel User Code for Bypassing, Disarming and Arming your panel. 
+3. In Preferences. Store the alarm panel User Code within the `Configure` preferences. Select this option and enter the 4-digit User Code for Bypassing, Disarming and Arming your panel that you wish to use.
+
 ### One Time Password Setup
 #### Overview
 This is an optional feature that requires the installation of additional Python modules and creation of several Indigo variables. Installing the additional modules is **not** required to use the rest of the features and capabilities of AD2USB; these module are only required for the OTP features.
@@ -306,7 +344,7 @@ One Time Passwords (OTP):
 - Is used as a second factor of authentication; your Reflector login is still secured with a password
 - Google Authenticator and other OTP client apps allow you to store multiple OTP secrets and provision those using a QR Code
 
-The One Time Password (OTP) features enhances security by allowing you to remotely Bypass Zones, Arm, and Disarm your panel while not passing the alarm panel code over the internet when accessing Indigo remotely or requiring you to store your alarm panel code within any of Indigo configuration items (Variables, Triggers, Actions, etc.) that can be accessed by an Indigo Client UI remotely. Instead, your alarm code is stored in a text configuration file in a folder of your choosing on your Indigo Server (NOTE: this plugin running on your Indigo server must be able to read and write to this file). Instead of passing the alarm code in a variable or embedding it elsewhere; this feature allows you to update one of several Indigo Variables (see Setup below for variable details) with a six-digit one time password provided by an OTP app such as Google Authenticator, Authy, or another compatible app on your smartphone. These OTPs expire every 30 seconds and can only be used once. When the Indigo variable's value is updated with a valid OTP the Plugin reads the alarm code from the file on your Indigo server and sends it to the AlarmDecoder as part of one of the limited pre-defined functions associated with each of the variables.
+The One Time Password (OTP) features enhances security by allowing you to remotely Bypass Zones, Arm, and Disarm your panel while not passing the alarm panel code over the internet when accessing Indigo remotely or requiring you to store your alarm panel code within any of Indigo configuration items (Variables, Preferences, Triggers, Actions, etc.) that can be accessed by an Indigo Client UI remotely. Instead, your alarm code is stored in a text configuration file in a folder of your choosing on your Indigo Server (NOTE: this plugin running on your Indigo server must be able to read and write to this file). Instead of passing the alarm code in a variable or embedding it elsewhere; this feature allows you to update one of several Indigo Variables (see Setup below for variable details) with a six-digit one time password provided by an OTP app such as Google Authenticator, Authy, or another compatible app on your smartphone. These OTPs expire every 30 seconds and can only be used once. When the Indigo variable's value is updated with a valid OTP the Plugin reads the alarm code from the file on your Indigo server and sends it to the AlarmDecoder as part of one of the limited pre-defined functions associated with each of the variables.
 
 #### Setup
 1. Install the needed pre-requisites Python module(s) and restart the Indigo Server:
@@ -320,7 +358,7 @@ The One Time Password (OTP) features enhances security by allowing you to remote
 
 4. Select “Configure…” under the AD2USB Alarm Interface Plugin Menu. Select the checkbox `Enable OTP` to enable the OTP feature. A new text field `OTP Configuration Folder` will now be visible. This field should contain a valid folder (full directory path - ex: "/Users/myusername/Alarm Panel Info") to store the security configuration file and the QR Code image file. Upon closing the Configure Dialog box the OTP Config file and the QR Code image file will be automatically created. If the files cannot be created - there will be an error message in the Event log. Common reasons are an incorrect folder path or not having permission to the folder. If created, the configuration file is named `AD2USB_OTP.cfg`. This file contains the shared OTP key and your alarm code to use. The QR Code image file named `AD2USB_OTP.png`.
 
-5. Find and edit the file `AD2USB_OTP.cfg` from Step 4 using a text editor. This file contains both the alarm panel User Code for Bypassing, Disarming and Arming your panel and a new random shared key generated during initial configuration. Update the User Code to the alarm panel code you want to use. Codes are four (4) digits. Save the file as a plain text file.
+5. Find and edit the file `AD2USB_OTP.cfg` from Step 4 using a text editor. This file contains both the alarm panel User Code for Bypassing, Disarming and Arming your panel and a new random shared key generated during initial configuration. Update the User Code to the alarm panel code you want to use. Codes are four (4) digits. Save the file as a plain text file. **NOTE:** Using OTP ***requires*** the code to be stored in the `AD2USB_OTP.cfg` configuration file. The OTP function cannot access an alarm code stored in either an Indigo Variable or the `Configure` preferences described in the previous section [Saving the Alarm Code](#saving-the-alarm-code).
 
 6. Further restrict permissions on these files (Optional). You can run the Unix `chmod` command to better secure these new files. From the command prompt `cd` in to the folder you selected and run these commands: `chmod 600 AD2USB_OTP.cfg` and `chmod 600 AD2USB_OTP.png`.
 
@@ -338,11 +376,37 @@ N/A |ZonesToBypassOTP | Enter a comma separated list of the zones to bypass when
 Bypass | BypassOTP | Update the variable value to a new OTP passcode to perform a Bypass function on your panel. The zones to Bypass are read from the ZonesToBypassOTP variable. | 665512
 Disarm | DisarmOTP | Update the variable value to a new OTP passcode to perform a Disarm function on your panel. | 441666
 
-### How to Use OTP
+#### How to Use OTP
 To use the OTP feature open the Google Authenticator app and copy the OTP from your smartphone app and paste the value into the respective variable in Indigo Touch (or the Indigo Client UI) and save the variable. This will automatically invoke the respective alarm function on the Indigo server. Be mindful of the 30 second timeout when using this feature remotely. It may take you a few seconds to copy the six digit code, switch to the Indigo Touch application, paste and update the Indigo variable with the new code, update the Reflector from Indigo Touch, receive the new variable value on the Indigo server, and then validate the OTP. If the 30 seconds has timed out when the Plugin validates the OTP, it will be invalid. OTPs can only be used once, so if you're performing two actions in sequence (e.g. Bypass, then Arm), you will need to wait for the OTP to change to a new code for each action.
 
-### Disabling OTP
+#### Disabling OTP
 If you've setup OTP and wish to disable it simply edit the OTP Configuration File and remove both the User Code and the Shared Key; or remove the file entirely. You should also remove/delete the variables created in during setup.
+
+### HomeKit Integration
+
+#### Overview
+HomeKit integration requires [HomeKitLink-Siri](https://www.indigodomo.com/pluginstore/270/) and the enabling of saving an alarm code within the plugin if you plan to use HomeKit to Disarm you panel. HomeKit allows you to view the state of the panel. HomeKit can also perform arming and disarming the panel by calling one of the plugin's built-in [Keypad Actions](#keypad-actions). The tables below describes the states HomeKit can recognize and the actions it can perform.
+
+Alarm Panel State | AD2USB Keypad State | HomeKit State | Notes 
+----------------- | ------------------- | ------------- | -----
+Armed Stay | Armed Stay | Stay Armed | 
+Armed Away | Armed Away | Away Armed | 
+Armed Night Stay | Armed Night Stay | Night Armed | 
+Ready | Ready | Disarmed | 
+N/A | N/A | Alarm Triggered |  
+Armed Instant | Armed Instant | Stay Armed | HomeKit does not support this state. Stay Armed will appear instead.
+Armed Max | Armed Max | Away Armed | HomeKit does not support this state. Away Armed will appear instead.
+
+HomeKit Action | Indigo Action |
+--------------| ------------- |
+Stay Armed | Arm-Stay
+Away Armed | Arm-Away
+Night Armed | Arm-Night-Stay
+Disarmed | Disarm (requires enabling of `Save Alarm Code`)
+Alarm Triggered | N/A - this happens when Alarm is triggered
+
+#### Setup
+In order to use the Disarm capability, select the checkbox in the plugin `Configure` menu to enable `Save Alarm Code` and follow this guide to setup your code in an Indigo Variable, the OTP Configuration file, or directly within preferences. If you have more than one partition, you will also need to designate the partition that HomeKit will be associated with. If you do no specify a partition in the `Configure` menu, partition `1` will be the default. For other configuration settings, refer to [HomeKitLink-Siri](https://www.indigodomo.com/pluginstore/270/).
 
 ## AlarmDecoder Configuration
 Once communication settings have been made in the Plugin Configure dialog, you can make changes to your AlarmDecoder from within the plugin. Select "AlarmDecoder Configuration" under the Plugin menu. AlarmDecoder settings are ***not*** stored in the Plugin for versions 3.1.0 and greater, however, each time a "CONFIG" message is read from the AlarmDecoder the current settings will be stored in memory while the plugin is running. These ***last read*** settings will be shown in the AlarmDecoder Configuration dialog window when it opens. Because AlarmDecoder settings can be made outside of the plugin the AlarmDecoder Configuration dialog is divided into two (2) sections or steps. The first section/step, "Step 1 - Retrieve the current AlarmDecoder configuration from the device", allows you to attempt to read the current configuration from the AlarmDecoder by pressing the button titled "Read Config". Once the configuration is read the dialog will be updated with a status message and the settings in Step 2 will be updated with the current values from the AlarmDecoder. You should always press the button in this first step before making changes to your AlarmDecoder configuration.
