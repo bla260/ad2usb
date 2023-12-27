@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>PluginVersion</key>
-	<string>3.4.0</string>
+	<string>3.4.1</string>
 	<key>ServerApiVersion</key>
 	<string>3.0.0</string>
 	<key>IwsApiVersion</key>
@@ -20,7 +20,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>https://forums.indigodomo.com/viewforum.php?f=371</string>
+			<string>https://forums.indigodomo.com/viewforum.php?f=395</string>
 		</dict>
 	</array>
 </dict>

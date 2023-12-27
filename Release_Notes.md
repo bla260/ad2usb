@@ -1,5 +1,10 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
+v 3.4.1 (December 27, 2023)
+- Fixed bug where the "About AD2USB Alarm Interface..." menu item still pointed to old user forum.
+- Fixed bug where enabling of Panel Logging would cause an error that required Plugin to be restarted. Panel logging can now be enabled and disabled without restarting the plugin.
+- Updated [README](https://github.com/bla260/ad2usb/blob/main/README.md) (documentation).
+
 v 3.4.0 (April 23, 2023)
 - **Panel Arming Events are deprecated and removed in this release**. ***Before*** upgrading, migrate any triggers using `Panel Arming Events` to `User Actions` as described in the Release Notes for version 3.3.1. To migrate your existing `Panel Arming Events` Triggers change the Event from `Panel Arming Events (deprecated)` to `User Actions`. The type of Alarm Event and Partition will be set based on the value of your Panel Arming Event setting and the new field "Any User" will be selected by default. Upon saving the Trigger as a `User Action` Trigger it will be migrated. After upgrading to version 3.4.0 an error message will show on startup if any `Panel Arming Events` are used in Triggers and those Triggers which were not migrated will need to be deleted to stop the error message.
 - Two new Keypad Device States:
