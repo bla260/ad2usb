@@ -639,8 +639,8 @@ class ad2usb(object):
                 # message Read was successful - log the raw message
                 self.logger.debug(u"Read ad2usb message:{}".format(repr(rawData)))
 
-                # write the message to the panel log too if panel logging is enabled
-                if self.plugin.isPanelLoggingEnabled:
+                # write the message to the panel log too if panel logging is enabled and the Logger object (attr) exists
+                if self.plugin.isPanelLoggingEnabled and hasattr(self.plugin, 'panelLogger'):
                     self.plugin.panelLogger.info(u"{}".format(rawData.rstrip()))
 
             # ############## New Message Parser ########################

@@ -967,6 +967,11 @@ class Plugin(indigo.PluginBase):
             self.isPanelLoggingEnabled = valuesDict.get("isPanelLoggingEnabled", False)
             self.isCodeMaskingEnabled = valuesDict.get("isCodeMaskingEnabled", True)
 
+            # if the PanelLogging is now on (True) and the object does not exist run the init for PanelLogging
+            if self.isPanelLoggingEnabled:
+                if not hasattr(self, 'panelLogger'):
+                    self.__initPanelLogging()
+
             # reset the logging levels
             self.__setLoggingLevels()
 
