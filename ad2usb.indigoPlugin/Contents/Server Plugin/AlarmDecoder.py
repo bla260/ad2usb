@@ -304,6 +304,8 @@ class Message(object):
                         # bit number to add = k * 8 - 0, 8, 16, 24
                         self.messageDetails['KPM']['keypadDestinations'].append(i+hexPair*8)
 
+            self.logger.debug('keypad destinations are:{}'.format(self.messageDetails['KPM']['keypadDestinations']))
+
             # ##########
             # parse the alphanumeric message for certain cases
             # akm = alphanumericKeypadMessage

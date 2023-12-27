@@ -84,7 +84,7 @@
 # Map codes to Plugin Events
 # Not all Plugin Events defined in Plugin - some are for future use
 cid_code_to_event = {
-    '110': {'1': 'ALARM_FIRE'},  # not verified
+    '110': {'1': 'ALARM_FIRE'},  # verified 1 - Smoke Tripped, 3 - Restored
     '120': {'1': 'ALARM_PANIC'},  # not verified
     '122': {'1': 'ALARM_SILENT'},  # not verified
     '123': {'1': 'ALARM_AUDIBLE'},  # not verified

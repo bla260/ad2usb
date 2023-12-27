@@ -431,7 +431,7 @@ The section titled, "Step 2 - Update the AlarmDecoder configuration" allows you 
 There are three log files in the standard Indigo Library directory. Each has its own purpose and is described below.
 1. **Indigo Event Log**: The first log is Indigo's event log file with file name format `YYYY-MM-DD Events`. The Indigo event log is used to log standard Indigo device events, actions, triggers, and plugins. It is configured and managed via Indigo and the plugin can write to it.
 2. **Plugin Log**: The second log is the plugin's log file which is in a subdirectory with the same name as the plugin: `com.berkinet.ad2usb`. The log files are named using the format `plugin.log.YYYY-MM-DD`. The plugin log can be used to record detailed debug info for panel messages, AD2USB configuration details, and other panel and plugin specific information.
-3. **Panel Message Log**: The third (optional) log file is in the same directory as the plugin log and named `panel.log`. It can be enabled via the Configuration menu. There are no logging levels associated with this log file. The panel log will log the messages received from your alarm panel by AlarmDecoder.
+3. **Panel Message Log**: The third (optional) log file is in the same directory as the plugin log and named `panelMessages.log`. It can be enabled via the Configuration menu. There are no logging levels associated with this log file. The panel log will log the messages received from your alarm panel by AlarmDecoder.
 
 Logging levels for the Indigo and plugin log file can be modified in the plugin's configuration dialog. The information captured in each log file varies based on the logging level specified. Having separate settings allows you to capture detailed DEBUG details in the plugin's log but only log INFO messages to the Indigo log. Or for less verbose setting you can log INFO messages and above to the plugin's log bug only WARNING and above to Indigo's log. A summary of logging is below.
 
@@ -454,7 +454,7 @@ To be able to be supported you'll need to have some level of logging enabled. Th
 2. Plugin Log Level - set to "Verbose Debugging", this produces about +/-50MB log daily on a typical system but is essential. The filename is plugin.log.
 3. Enable Log Panel Messages: Turn on. This log is +/-5MB daily. It is the raw panel messages from the decoder. The filename is panelMessages.log
 
-The path for logs is `/Library/Application Support/Perceptive Automation/<Indigo Version Number>/Logs/com.berkinet.ad2usb`. Note that part of the file path is dependent on your version of Indigo.
+The path for logs is `/Library/Application Support/Perceptive Automation/Indigo <Version Number>/Logs/com.berkinet.ad2usb`. Note that part of the file path indicated as `<Version Number>` is dependent on your version of Indigo (ex: 2023.1).
 
 ## Getting Help and Reporting Bugs
 Start by asking on the support forum. If more info is needed, I'll typically ask for this via a private message or email:
