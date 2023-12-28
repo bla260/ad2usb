@@ -1,5 +1,8 @@
 **IMPORTANT:** Version 3.0 and above requires Indigo 2022.1 or later and runs under Python 3. Read the version 3.0.0 release notes below first if you're upgrading from 1.x.
 
+v 3.4.2 (December 29, 2023)
+- This capability is experimental: allows for a duplicate of the plugin to run with a different name for scenarios where more than one alarm panel is being managed. Users would also need to edit the Info.plist file on their own and give each new instance a different name and pluginID. This change has no impact on existing installations with a single alarm panel.
+
 v 3.4.1 (December 27, 2023)
 - Fixed bug where the "About AD2USB Alarm Interface..." menu item still pointed to old user forum.
 - Fixed bug where enabling of Panel Logging would cause an error that required Plugin to be restarted. Panel logging can now be enabled and disabled without restarting the plugin.
